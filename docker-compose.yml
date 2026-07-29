@@ -1,0 +1,71 @@
+services:
+  nubeera-mysql:
+    image: mysql:8.0
+    container_name: nubeera-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root123
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - "3309:3306"
+    volumes:
+      - nubeera_mysql_data:/var/lib/mysql
+      - ./MySQL/Init/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    networks:
+      - nubeera-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot123"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  nubeera-api:
+    build:
+      context: ./Backend
+      dockerfile: NubeEra.API/Dockerfile
+    container_name: nubeera-api
+    depends_on:
+      nubeera-mysql:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://0.0.0.0:5000
+      ConnectionStrings__MySql: Server=nubeera-mysql;Port=3306;Database=${MYSQL_DATABASE};User=${MYSQL_USER};Password=${MYSQL_PASSWORD};SslMode=None;AllowPublicKeyRetrieval=True
+      Jwt__Key: ${JWT_KEY}
+      Jwt__Issuer: ${JWT_ISSUER}
+      Jwt__Audience: ${JWT_AUDIENCE}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./uploads:/app/wwwroot/uploads
+    restart: unless-stopped
+    networks:
+      - nubeera-network
+
+  nubeera-frontend:
+    build:
+      context: ./Frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL}
+    container_name: nubeera-frontend
+    depends_on:
+      - nubeera-api
+    ports:
+      - "5173:80"
+    volumes:
+      - ./uploads:/usr/share/nginx/html/uploads
+    restart: unless-stopped
+    networks:
+      - nubeera-network
+
+networks:
+  nubeera-network:
+    driver: bridge
+
+volumes:
+  nubeera_mysql_data:
+

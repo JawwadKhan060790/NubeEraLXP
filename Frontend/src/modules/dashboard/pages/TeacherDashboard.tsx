@@ -1,0 +1,697 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  BookOpen, Calendar, ClipboardList, Clock, FileText,
+  GraduationCap, Layers, Shield, Users, Activity, TrendingUp,
+  BarChart2, PieChart as PieIcon, Target, Award,
+  CheckCircle2, AlertTriangle, BookMarked, Route
+} from 'lucide-react';
+import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
+import api from '@/services/api';
+import { analyticsService } from '@/services/analyticsService';
+import type { TeacherAnalytics } from '@/services/analyticsService';
+import { teacherEnhancedService, type TeacherEnhancedDashboard } from '../../../services/teacherEnhancedService';
+import { ROUTES } from '../../../constants/routes';
+import StatGridCards, { SkeletonStatGrid } from '@/components/StatGrid';
+import {
+  DashboardPageShell, WelcomeBanner, StatGrid,
+  DashboardChartCard, DashboardWidgetCard, SectionHeader, EmptyState
+} from '@/components/dashboard/DashboardKit';
+import {
+  DashboardAreaChart, DashboardBarChart, DashboardPieChart,
+  DashboardDualChart, SkeletonChart, CHART_COLORS
+} from '@/components/dashboard/ChartKit';
+
+// ── Local interfaces ──────────────────────────────────────────────────────────
+
+interface GradeProgress {
+  grade_id: string;
+  grade_name: string;
+  total_students: number;
+  syllabus_completion_percentage: number;
+}
+
+interface RecentActivity {
+  description: string;
+  timestamp: string;
+}
+
+interface WeakArea {
+  grade_name: string;
+  student_name: string;
+  module_name: string;
+  exam_title: string;
+  obtained_marks: number;
+  total_marks: number;
+  passing_marks: number;
+}
+
+interface TeacherDashboardData {
+  teacher_name: string;
+  school_name: string;
+  employee_id: string;
+  total_students: number;
+  total_modules: number;
+  total_lessons: number;
+  total_exams: number;
+  grade_progress_list: GradeProgress[];
+  recent_activities: RecentActivity[];
+  weak_areas: WeakArea[];
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
+const TeacherDashboard: React.FC = () => {
+  const navigate = useNavigate();
+
+  const [rawData, setRawData]               = useState<TeacherDashboardData | null>(null);
+  const [rawSchedules, setRawSchedules]     = useState<any[]>([]);
+  const [analytics, setAnalytics]           = useState<TeacherAnalytics | null>(null);
+  const [enhancedDash, setEnhancedDash]     = useState<TeacherEnhancedDashboard | null>(null);
+  const [gradeFilter, setGradeFilter]       = useState('All');
+  const [loading, setLoading]               = useState(true);
+  const [analyticsLoading, setAnalyticsLoading] = useState(true);
+
+  // ── Filtered views ──────────────────────────────────────────────────────────
+
+  const data = useMemo(() => {
+    if (!rawData) return null;
+    if (gradeFilter === 'All') return rawData;
+    return {
+      ...rawData,
+      grade_progress_list: rawData.grade_progress_list.filter(g => g.grade_name === gradeFilter),
+      weak_areas: rawData.weak_areas.filter(w => w.grade_name === gradeFilter),
+    };
+  }, [rawData, gradeFilter]);
+
+  const schedules = useMemo(() => {
+    if (gradeFilter === 'All') return rawSchedules;
+    return rawSchedules.filter(s => s.grade_name === gradeFilter);
+  }, [rawSchedules, gradeFilter]);
+
+  // ── Data fetch ──────────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    fetchData();
+    fetchAnalytics();
+  }, []);
+
+  useEffect(() => {
+    const fetchFiltered = async () => {
+      try {
+        const res = await api.get(`/dashboard/teacher?gradeFilter=${gradeFilter}`);
+        setRawData(res.data);
+      } catch (err) {
+        console.error('Failed to fetch filtered teacher stats:', err);
+      }
+    };
+    fetchFiltered();
+  }, [gradeFilter]);
+
+  const fetchAnalytics = async () => {
+    try {
+      const data = await analyticsService.getTeacher();
+      setAnalytics(data);
+    } catch (err) {
+      console.error('Teacher analytics fetch failed:', err);
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  };
+
+  const fetchData = async () => {
+    try {
+      const savedUser  = localStorage.getItem('user');
+      const parsedUser = savedUser ? JSON.parse(savedUser) : null;
+
+      const [dashboardRes, schedulesRes] = await Promise.allSettled([
+        api.get('/dashboard/teacher'),
+        api.get('/schedulers'),
+      ]);
+
+      if (dashboardRes.status === 'fulfilled') {
+        setRawData(dashboardRes.value.data);
+      } else {
+        console.error('Dashboard fetch failed:', dashboardRes.reason);
+      }
+
+      // Load enhanced dashboard (non-blocking)
+      teacherEnhancedService.getEnhancedDashboard()
+        .then(d => setEnhancedDash(d))
+        .catch(() => { /* non-critical */ });
+
+      if (schedulesRes.status === 'fulfilled' && parsedUser) {
+        const d         = schedulesRes.value.data;
+        const rawScheds = Array.isArray(d) ? d : (d.value || []);
+        const teacherId = (parsedUser.teacher_id || parsedUser.id || parsedUser.Id || '')
+          .toString().toLowerCase().trim();
+
+        const mapped = rawScheds.map((s: any) => ({
+          ...s,
+          id:           s.id           || s.Id,
+          grade_id:     s.grade_id     || s.gradeId    || s.GradeId,
+          grade_name:   s.grade_name   || s.GradeName  || s.gradeName,
+          module_id:    s.module_id    || s.moduleId   || s.ModuleId,
+          module_name:  s.module_name  || s.ModuleName || s.moduleName,
+          teacher_id:   s.teacher_id   || s.teacherId  || s.TeacherId,
+          teacher_name: s.teacher_name || s.TeacherName || s.teacherName,
+        }));
+
+        const filtered = mapped.filter(
+          (s: any) => s.teacher_id?.toString().toLowerCase().trim() === teacherId
+        );
+
+        filtered.sort((a: any, b: any) => {
+          const diff = new Date(a.date || '').getTime() - new Date(b.date || '').getTime();
+          return diff !== 0 ? diff : (a.start_time || '').localeCompare(b.start_time || '');
+        });
+
+        setRawSchedules(filtered);
+      }
+    } catch (err) {
+      console.error('Teacher dashboard fetch failed:', err);
+      toast.error('Failed to load teacher statistics.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ── Skeleton ────────────────────────────────────────────────────────────────
+
+  if (loading) {
+    return (
+      <DashboardPageShell>
+        <div className="h-8 w-56 bg-slate-100 rounded-full animate-pulse" />
+        <StatGrid cols={4}>
+          <SkeletonStatGrid count={8} />
+        </StatGrid>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="lg:col-span-7 h-72 bg-slate-100 rounded-2xl animate-pulse" />
+          <div className="lg:col-span-5 h-72 bg-slate-100 rounded-2xl animate-pulse" />
+        </div>
+      </DashboardPageShell>
+    );
+  }
+
+  if (!data) {
+    return (
+      <DashboardPageShell>
+        <EmptyState
+          icon={<GraduationCap className="w-8 h-8" />}
+          title="No Associated Teacher Profile"
+          description="We couldn't load your teacher profile statistics. Please ensure the school has registered your teacher profile correctly in the database."
+        />
+      </DashboardPageShell>
+    );
+  }
+
+  // ── Grade filter selector ───────────────────────────────────────────────────
+
+  const gradeSelector = (
+    <div className="flex flex-col gap-1">
+      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Grade Filter</label>
+      <select
+        value={gradeFilter}
+        onChange={e => setGradeFilter(e.target.value)}
+        className="bg-white border border-slate-200 text-slate-700 font-bold text-xs rounded-xl px-3 py-1.5 outline-none cursor-pointer hover:border-slate-300 transition-all focus:ring-2 focus:ring-primary/20 shadow-sm"
+      >
+        <option value="All">All Grades / Classes</option>
+        {rawData?.grade_progress_list.map(g => (
+          <option key={g.grade_id} value={g.grade_name}>{g.grade_name}</option>
+        ))}
+      </select>
+    </div>
+  );
+
+  // ── Chart data mapping (snake_case API → PascalCase ChartKit) ──────────────
+
+  const attendanceTrend   = (analytics?.attendance_trend   ?? []).map(d => ({ Month: d.month, Value: d.value }));
+  const performanceTrend  = (analytics?.performance_trend  ?? []).map(d => ({ Month: d.month, Value: d.value }));
+  const examPerfTrend     = (analytics?.exam_performance_trend ?? []).map(d => ({ Month: d.month, Value: d.value }));
+  const marksDistribution = (analytics?.marks_distribution ?? []).map(d => ({ Label: d.label, Value: d.value }));
+  const weakStudents      = (analytics?.weak_students_analysis ?? []).map(d => ({ Label: d.label, Value: d.value }));
+  const syllabusProgress  = (analytics?.syllabus_progress  ?? []).map(d => ({ Label: d.label, Value: d.value }));
+  const assignmentStatus  = (analytics?.assignment_status  ?? []).map(d => ({ Label: d.label, Value: d.value }));
+
+  // ── Render ──────────────────────────────────────────────────────────────────
+
+  return (
+    <DashboardPageShell>
+
+      {/* Welcome Banner */}
+      <WelcomeBanner
+        badge="Authorized Educator"
+        badgeColor="indigo"
+        title={`Welcome, ${data.teacher_name}!`}
+        subtitle={`${data.school_name}  ·  Emp ID: ${data.employee_id}  —  Manage class lists, coordinate lessons, monitor syllabus completion, and generate reports.`}
+        actions={gradeSelector}
+      />
+
+      {/* KPI Cards — Row 1: base data */}
+      <StatGrid cols={4}>
+        <StatGridCards stats={[
+          { title: 'Total Students',     value: analytics?.total_students ?? data.total_students, icon: <Users        className="w-5 h-5" />, color: 'violet' , subtitle: 'Across your classes' },
+          { title: 'Topics (Modules)',   value: analytics?.total_modules  ?? data.total_modules,  icon: <Layers       className="w-5 h-5" />, color: 'emerald', subtitle: 'Assigned curriculum units' },
+          { title: 'Lessons Configured', value: analytics?.total_lessons  ?? data.total_lessons,  icon: <BookOpen     className="w-5 h-5" />, color: 'amber'  , subtitle: 'Topics ready to teach' },
+          { title: 'Active Exams',       value: analytics?.total_exams    ?? data.total_exams,    icon: <FileText     className="w-5 h-5" />, color: 'purple' , subtitle: 'Currently scheduled' },
+        ]} />
+      </StatGrid>
+
+      {/* KPI Cards — Row 2: analytics-derived metrics */}
+      <StatGrid cols={4}>
+        <StatGridCards stats={[
+          { title: 'Avg Attendance Rate', value: `${analytics?.avg_attendance_rate ?? 0}%`, icon: <ClipboardList className="w-5 h-5" />, color: 'teal'   , subtitle: 'Across your classes' },
+          { title: 'Avg Exam Score',      value: `${analytics?.avg_exam_score      ?? 0}%`, icon: <Award        className="w-5 h-5" />, color: 'sky'    , subtitle: 'Class average' },
+          { title: 'Weak Students',       value:  analytics?.weak_students_count   ?? 0,    icon: <Target       className="w-5 h-5" />, color: 'rose'   , subtitle: 'Need extra support' },
+          { title: 'Syllabus Complete',   value: `${analytics?.syllabus_completion ?? 0}%`, icon: <TrendingUp   className="w-5 h-5" />, color: 'indigo' , subtitle: 'Curriculum coverage' },
+        ]} />
+      </StatGrid>
+
+      {/* KPI Cards — Row 3: Today's Schedule (enhanced) */}
+      {enhancedDash && (
+        <StatGrid cols={4}>
+          <StatGridCards stats={[
+            { title: "Today's Periods",    value: enhancedDash.today_total_periods,     icon: <Calendar      className="w-5 h-5" />, color: 'sky'    , subtitle: 'Classes scheduled today' },
+            { title: 'Completed Today',    value: enhancedDash.today_completed_periods, icon: <CheckCircle2  className="w-5 h-5" />, color: 'emerald', subtitle: 'Periods finished' },
+            { title: 'Syllabus Complete',  value: `${enhancedDash.overall_syllabus_completion.toFixed(0)}%`, icon: <BookMarked className="w-5 h-5" />, color: 'indigo' , subtitle: 'Overall coverage' },
+            { title: 'Weak Students',      value: enhancedDash.weak_students_count,     icon: <AlertTriangle className="w-5 h-5" />, color: 'rose'   , subtitle: 'Need extra support' },
+          ]} />
+        </StatGrid>
+      )}
+
+      {/* Quick Links — Teacher Enhancement Modules */}
+      <DashboardWidgetCard>
+        <SectionHeader title="Teacher Enhancement Modules" className="mb-4" />
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          {[
+            { route: ROUTES.TEACHER_TEACHING_PATH,      color: 'violet',  icon: <BookOpen      className="w-5 h-5" />, label: 'Teaching Path',    sub: 'Grade-wise lesson workbench'},
+            { route: ROUTES.TEACHER_LEARNING_PATH,      color: 'indigo',  icon: <Route         className="w-5 h-5" />, label: 'Learning Path',    sub: 'Track syllabus by grade'    },
+            { route: ROUTES.TEACHER_SCHEDULE_CALENDAR,  color: 'sky',     icon: <Calendar      className="w-5 h-5" />, label: 'Schedule',         sub: 'Day / Week / Month view'    },
+            { route: ROUTES.TEACHER_GRADE_STUDENTS,     color: 'emerald', icon: <Users         className="w-5 h-5" />, label: 'Grade Students',   sub: 'Progress & attendance grid' },
+            { route: ROUTES.TEACHER_STUDENT_WEAKNESS,   color: 'rose',    icon: <AlertTriangle className="w-5 h-5" />, label: 'Weakness Analysis',sub: 'Identify weak topics'       },
+          ].map(({ route, color, icon, label, sub }) => {
+            const colorMap: Record<string, string> = {
+              violet:  'bg-violet-50/60 hover:bg-violet-50  text-violet-950 border-violet-100',
+              indigo:  'bg-indigo-50/60 hover:bg-indigo-50  text-indigo-950 border-indigo-100',
+              sky:     'bg-sky-50/60    hover:bg-sky-50     text-sky-950    border-sky-100',
+              emerald: 'bg-emerald-50/60 hover:bg-emerald-50 text-emerald-950 border-emerald-100',
+              rose:    'bg-rose-50/60   hover:bg-rose-50    text-rose-950   border-rose-100',
+              amber:   'bg-amber-50/60  hover:bg-amber-50   text-amber-950  border-amber-100',
+            };
+            const iconMap: Record<string, string> = {
+              violet:  'bg-violet-100/60  text-violet-600  group-hover:bg-violet-200/60',
+              indigo:  'bg-indigo-100/60  text-indigo-600  group-hover:bg-indigo-200/60',
+              sky:     'bg-sky-100/60     text-sky-600     group-hover:bg-sky-200/60',
+              emerald: 'bg-emerald-100/60 text-emerald-600 group-hover:bg-emerald-200/60',
+              rose:    'bg-rose-100/60    text-rose-600    group-hover:bg-rose-200/60',
+              amber:   'bg-amber-100/60   text-amber-600   group-hover:bg-amber-200/60',
+            };
+            const subMap: Record<string, string> = {
+              violet:  'text-violet-700/80',
+              indigo:  'text-indigo-700/80',
+              sky:     'text-sky-700/80',
+              emerald: 'text-emerald-700/80',
+              rose:    'text-rose-700/80',
+              amber:   'text-amber-700/80',
+            };
+            return (
+              <button
+                key={route}
+                onClick={() => navigate(route)}
+                className={`p-4 rounded-xl border text-left transition-all space-y-2 active:scale-95 group shadow-sm hover:shadow cursor-pointer ${colorMap[color]}`}
+              >
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${iconMap[color]}`}>
+                  {icon}
+                </div>
+                <span className="font-extrabold text-sm block tracking-tight pt-1">{label}</span>
+                <span className={`text-[9px] font-bold uppercase tracking-wider block ${subMap[color]}`}>{sub}</span>
+              </button>
+            );
+          })}
+        </div>
+      </DashboardWidgetCard>
+
+      {/* Charts Row 1 — Attendance Trend + Performance Trend */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <DashboardChartCard
+          className="lg:col-span-7"
+          title="Class Attendance Trend"
+          icon={<TrendingUp className="w-4.5 h-4.5 text-emerald-600" />}
+          badge="Monthly"
+          badgeVariant="emerald"
+        >
+          <DashboardAreaChart
+            data={attendanceTrend}
+            color={CHART_COLORS[1]}
+            height={220}
+            loading={analyticsLoading}
+            suffix="%"
+          />
+        </DashboardChartCard>
+
+        <DashboardChartCard
+          className="lg:col-span-5"
+          title="Student Performance Trend"
+          icon={<BarChart2 className="w-4.5 h-4.5 text-indigo-600" />}
+          badge="Avg Score"
+          badgeVariant="primary"
+        >
+          <DashboardAreaChart
+            data={performanceTrend}
+            color={CHART_COLORS[0]}
+            height={220}
+            loading={analyticsLoading}
+            suffix="%"
+          />
+        </DashboardChartCard>
+
+      </div>
+
+      {/* Charts Row 2 — Marks Distribution + Assignment Status */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <DashboardChartCard
+          className="lg:col-span-5"
+          title="Marks Distribution"
+          icon={<BarChart2 className="w-4.5 h-4.5 text-amber-600" />}
+          badge="Score Ranges"
+          badgeVariant="amber"
+        >
+          <DashboardBarChart
+            data={marksDistribution}
+            color={CHART_COLORS[2]}
+            height={220}
+            loading={analyticsLoading}
+            colorful
+          />
+        </DashboardChartCard>
+
+        <DashboardChartCard
+          className="lg:col-span-7"
+          title="Assignment Submission Status"
+          icon={<PieIcon className="w-4.5 h-4.5 text-primary" />}
+          badge="Current Period"
+          badgeVariant="primary"
+        >
+          <DashboardPieChart
+            data={assignmentStatus}
+            height={220}
+            loading={analyticsLoading}
+          />
+        </DashboardChartCard>
+
+      </div>
+
+      {/* Charts Row 3 — Weak Students + Syllabus Progress */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <DashboardChartCard
+          className="lg:col-span-6"
+          title="Weak Students Analysis"
+          icon={<Target className="w-4.5 h-4.5 text-rose-600" />}
+          badge="By Topic"
+          badgeVariant="rose"
+        >
+          <DashboardBarChart
+            data={weakStudents}
+            color={CHART_COLORS[8]}
+            height={220}
+            loading={analyticsLoading}
+            layout="horizontal"
+          />
+        </DashboardChartCard>
+
+        <DashboardChartCard
+          className="lg:col-span-6"
+          title="Syllabus Completion Progress"
+          icon={<PieIcon className="w-4.5 h-4.5 text-teal-600" />}
+          badge="By Module"
+          badgeVariant="teal"
+        >
+          <DashboardBarChart
+            data={syllabusProgress}
+            color={CHART_COLORS[5]}
+            height={220}
+            loading={analyticsLoading}
+            suffix="%"
+          />
+        </DashboardChartCard>
+
+      </div>
+
+      {/* Charts Row 4 — Exam Performance Trend */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <DashboardChartCard
+          className="lg:col-span-12"
+          title="Exam Performance Trend"
+          icon={<TrendingUp className="w-4.5 h-4.5 text-purple-600" />}
+          badge="Monthly Avg"
+          badgeVariant="violet"
+        >
+          <DashboardAreaChart
+            data={examPerfTrend}
+            color={CHART_COLORS[6]}
+            height={200}
+            loading={analyticsLoading}
+            suffix="%"
+          />
+        </DashboardChartCard>
+
+      </div>
+
+      {/* Quick Actions */}
+      <DashboardWidgetCard>
+        <SectionHeader title="Educator Quick Actions" className="mb-4" />
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          {[
+            { href: '/teacher/student-list',      color: 'emerald', icon: <Users className="w-5 h-5" />,          label: 'Student List',     sub: 'View & edit roll calls' },
+            { href: '/modules',                   color: 'primary',  icon: <Layers className="w-5 h-5" />,         label: 'Course Topics',    sub: 'Manage modules & slides' },
+            { href: '/teacher/exams',             color: 'rose',     icon: <FileText className="w-5 h-5" />,       label: 'Setup Exams',      sub: 'Add question sets & marks' },
+            { href: '/teacher/teacher-calender',  color: 'amber',    icon: <Calendar className="w-5 h-5" />,       label: 'Schedule',         sub: 'Class calendar & timetables' },
+            { href: '/teacher/attendance',        color: 'violet',   icon: <ClipboardList className="w-5 h-5" />,  label: 'Attendance Sheet', sub: 'Record daily attendance' },
+          ].map(({ href, color, icon, label, sub }) => {
+            const colorMap: Record<string, string> = {
+              emerald: 'bg-emerald-50/60 hover:bg-emerald-50 text-emerald-950 border-emerald-100',
+              primary: 'bg-primary/5 hover:bg-primary/10 text-slate-800 border-primary/20',
+              rose:    'bg-rose-50/60 hover:bg-rose-50 text-rose-950 border-rose-100',
+              amber:   'bg-amber-50/60 hover:bg-amber-50 text-amber-950 border-amber-100',
+              violet:  'bg-violet-50/60 hover:bg-violet-50 text-violet-950 border-violet-100',
+            };
+            const iconMap: Record<string, string> = {
+              emerald: 'bg-emerald-100/60 text-emerald-600 group-hover:bg-emerald-200/60',
+              primary: 'bg-primary/10 text-primary group-hover:bg-primary/25',
+              rose:    'bg-rose-100/60 text-rose-600 group-hover:bg-rose-200/60',
+              amber:   'bg-amber-100/60 text-amber-600 group-hover:bg-amber-200/60',
+              violet:  'bg-violet-100/60 text-violet-600 group-hover:bg-violet-200/60',
+            };
+            const subMap: Record<string, string> = {
+              emerald: 'text-emerald-700/80',
+              primary: 'text-primary',
+              rose:    'text-rose-700/80',
+              amber:   'text-amber-700/80',
+              violet:  'text-violet-700/80',
+            };
+            return (
+              <button
+                key={href}
+                onClick={() => window.location.href = href}
+                className={`p-4 rounded-xl border text-left transition-all space-y-2 active:scale-95 group shadow-sm hover:shadow cursor-pointer ${colorMap[color]}`}
+              >
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${iconMap[color]}`}>
+                  {icon}
+                </div>
+                <span className="font-extrabold text-sm block tracking-tight pt-1">{label}</span>
+                <span className={`text-[9px] font-bold uppercase tracking-wider block ${subMap[color]}`}>{sub}</span>
+              </button>
+            );
+          })}
+        </div>
+      </DashboardWidgetCard>
+
+      {/* My Lecture Schedule */}
+      <DashboardWidgetCard noPadding>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-6 border-b border-slate-100">
+          <div>
+            <SectionHeader title="My Lecture Schedule (Assigned by Staff)" icon={<Calendar className="w-4 h-4" />} />
+            <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider mt-1">Stay on top of your upcoming lessons and assignments</p>
+          </div>
+          <button
+            onClick={() => window.location.href = '/teacher/teacher-calender'}
+            className="px-4 py-2 bg-primary/5 hover:bg-primary/10 text-primary rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer self-start sm:self-auto shadow-sm"
+          >
+            View Full Calendar
+          </button>
+        </div>
+
+        <div className="p-6">
+          {schedules.length === 0 ? (
+            <EmptyState icon={<Calendar className="w-7 h-7" />} title="No classes scheduled at the moment" />
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {schedules.slice(0, 6).map((sched: any) => {
+                const schedDate  = new Date(sched.date);
+                const today      = new Date();
+                today.setHours(0, 0, 0, 0);
+                const isUpcoming = schedDate >= today;
+                return (
+                  <div key={sched.id} className="p-5 bg-slate-50 hover:bg-white border border-slate-200 rounded-xl transition-all flex flex-col justify-between gap-4 shadow-[0_2px_6px_rgba(15,30,60,0.07)] hover:shadow-[0_6px_18px_rgba(15,30,60,0.12)] relative overflow-hidden group">
+                    <div className="absolute top-0 left-0 bottom-0 w-1 bg-primary" />
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className={`px-2.5 py-0.5 rounded-[4px] text-[8px] font-black uppercase tracking-widest ${isUpcoming ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                          {isUpcoming ? 'Upcoming' : 'Completed'}
+                        </span>
+                        <div className="flex items-center gap-1 text-[9px] font-bold text-slate-400 uppercase tracking-wider font-mono">
+                          <Clock className="w-3.5 h-3.5 text-slate-400" />
+                          {sched.start_time.slice(0, 5)} - {sched.end_time.slice(0, 5)}
+                        </div>
+                      </div>
+                      <h4 className="font-black text-slate-800 text-sm group-hover:text-primary transition-colors uppercase tracking-tight">{sched.module_name || 'General Class'}</h4>
+                      <span className="inline-flex px-2 py-0.5 bg-primary/10 text-primary rounded-[4px] text-[9px] font-black uppercase tracking-widest">{sched.grade_name}</span>
+                    </div>
+                    <div className="flex items-center justify-between pt-3 border-t border-slate-200 text-[10px] font-bold text-slate-500">
+                      <span className="flex items-center gap-1.5 uppercase tracking-wider font-semibold">
+                        <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                        {sched.date ? new Date(sched.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : 'N/A'}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </DashboardWidgetCard>
+
+      {/* Weak / Focus Areas Table */}
+      {data.weak_areas && data.weak_areas.length > 0 && (
+        <DashboardWidgetCard noPadding className="border-rose-100">
+          <div className="flex items-center gap-2 p-6 border-b border-rose-100 bg-rose-50/60 rounded-t-2xl">
+            <div className="w-8 h-8 rounded-lg bg-rose-100 flex items-center justify-center text-rose-600">
+              <Shield className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="font-black text-rose-900 tracking-tight text-sm uppercase">🎯 Target Focus Areas — Failed Students Assessment</h3>
+              <p className="text-[10px] text-rose-500 font-semibold uppercase tracking-wider mt-0.5">Students scoring below passing marks. Schedule extra revision sessions.</p>
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[9px]">
+                  <th className="p-4">Student</th>
+                  <th className="p-4">Class</th>
+                  <th className="p-4">Topic (Module)</th>
+                  <th className="p-4">Unit Test</th>
+                  <th className="p-4 text-right">Marks Scored</th>
+                  <th className="p-4 text-center">Passing</th>
+                  <th className="p-4 text-center">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {data.weak_areas.map((area: any, idx: number) => (
+                  <tr key={idx} className="hover:bg-slate-50/50 transition-all">
+                    <td className="p-4 font-extrabold text-slate-800">{area.student_name}</td>
+                    <td className="p-4 font-bold text-slate-500">{area.grade_name}</td>
+                    <td className="p-4"><span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-[10px] font-semibold">{area.module_name}</span></td>
+                    <td className="p-4 font-bold text-slate-700">{area.exam_title}</td>
+                    <td className="p-4 text-right font-black text-rose-600">{area.obtained_marks} / {area.total_marks}</td>
+                    <td className="p-4 text-center font-bold text-slate-400">{area.passing_marks}</td>
+                    <td className="p-4 text-center">
+                      <span className="bg-rose-50 text-rose-600 font-black px-2 py-0.5 rounded text-[8px] uppercase tracking-wider">Support Needed</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </DashboardWidgetCard>
+      )}
+
+      {/* Grade Progress + Recent Activities */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        {/* Grade Syllabus Completion */}
+        <DashboardWidgetCard noPadding className="lg:col-span-8">
+          <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+            <div>
+              <SectionHeader title="Class / Grade Completion Status" icon={<TrendingUp className="w-4 h-4" />} />
+              <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider mt-1">Track syllabus completion rate across classes</p>
+            </div>
+          </div>
+          <div className="p-6 space-y-5">
+            {data.grade_progress_list.length === 0 ? (
+              <EmptyState title="No active classes mapped to your school profile." />
+            ) : (
+              data.grade_progress_list.map((grade: any) => {
+                const isFullyDone = grade.syllabus_completion_percentage === 100;
+                return (
+                  <div key={grade.grade_id} className="space-y-3 p-4 bg-slate-50/60 hover:bg-slate-50 rounded-xl transition-all shadow-sm">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="space-y-1">
+                        <span className="font-black text-slate-800 text-sm flex items-center gap-2 uppercase tracking-tight">
+                          <GraduationCap className="w-4 h-4 text-slate-400" /> {grade.grade_name}
+                        </span>
+                        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider flex flex-wrap items-center gap-3">
+                          <span>Students: {grade.total_students}</span>
+                          <span className="text-primary font-black">Completion: {grade.syllabus_completion_percentage}%</span>
+                        </div>
+                      </div>
+                      <span className={`text-[9px] font-black px-2.5 py-0.5 rounded-[4px] uppercase tracking-wider ${
+                        isFullyDone
+                          ? 'bg-emerald-50 text-emerald-700'
+                          : grade.syllabus_completion_percentage > 50
+                            ? 'bg-primary/10 text-primary'
+                            : 'bg-amber-50 text-amber-700'
+                      }`}>
+                        {grade.syllabus_completion_percentage}% Done
+                      </span>
+                    </div>
+                    <div className="w-full bg-slate-200/80 h-3 rounded-full overflow-hidden shadow-inner">
+                      <div
+                        className="h-full transition-all duration-700 ease-out rounded-full bg-gradient-to-r from-emerald-500 to-primary"
+                        style={{ width: `${grade.syllabus_completion_percentage}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </DashboardWidgetCard>
+
+        {/* Recent Student Activities */}
+        <DashboardWidgetCard noPadding className="lg:col-span-4">
+          <div className="p-5 border-b border-slate-100">
+            <SectionHeader title="Student Feed" icon={<Activity className="w-4 h-4" />} />
+          </div>
+          <div className="p-5 space-y-4">
+            {data.recent_activities.length === 0 ? (
+              <EmptyState title="No recent student activities logged." />
+            ) : (
+              <div className="relative border-l border-slate-200 pl-4 space-y-5">
+                {data.recent_activities.map((act: any, idx: number) => (
+                  <div key={idx} className="relative space-y-2 bg-slate-50 p-3.5 rounded-[8px] hover:bg-slate-100/50 transition-all shadow-sm">
+                    <div className="absolute -left-[27px] top-[18px] w-3 h-3 rounded-full bg-primary border-2 border-white ring-4 ring-primary/15">
+                      <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse mx-auto mt-[1px]" />
+                    </div>
+                    <span className="text-[11px] font-bold text-slate-700 block leading-normal">{act.description}</span>
+                    <span className="inline-block text-[8px] font-black text-slate-400 font-mono bg-white border border-slate-200/55 px-2 py-0.5 rounded-[4px] uppercase tracking-wider">
+                      {new Date(act.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} | {new Date(act.timestamp).toLocaleDateString()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </DashboardWidgetCard>
+
+      </div>
+
+    </DashboardPageShell>
+  );
+};
+
+export default TeacherDashboard;

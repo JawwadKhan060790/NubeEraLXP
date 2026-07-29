@@ -1,0 +1,121 @@
+-- ============================================================
+-- GRADE LEVELS DEDUPLICATION CLEANUP SCRIPT
+-- Purpose : Remove 70 duplicate grade_level rows, keeping only
+--           the 10 canonical rows with fixed GUIDs from EF seed.
+-- Root cause: BulkHelper.OpenAsync() disables unique_checks,
+--             so INSERT IGNORE inserted 10 new rows per seeder run
+--             (~8 runs = 80 rows instead of 10).
+-- Safe to run: grades table unaffected (all GradeLevels are 1-10).
+-- Run in  : MySQL Workbench — execute as a script (Ctrl+Shift+Enter)
+-- Date    : 2026-06-10
+-- ============================================================
+
+USE lmswithmysql;    -- adjust if your DB name differs
+
+-- ── 0. Verify current state ───────────────────────────────────────────
+SELECT 'Before cleanup' AS step, COUNT(*) AS grade_level_rows FROM grade_levels;
+SELECT COUNT(*) AS schools_total,
+       SUM(CASE WHEN from_grade_id NOT IN (
+           '00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000002',
+           '00000000-0000-0000-0000-000000000003','00000000-0000-0000-0000-000000000004',
+           '00000000-0000-0000-0000-000000000005','00000000-0000-0000-0000-000000000006',
+           '00000000-0000-0000-0000-000000000007','00000000-0000-0000-0000-000000000008',
+           '00000000-0000-0000-0000-000000000009','00000000-0000-0000-0000-000000000010'
+       ) THEN 1 ELSE 0 END) AS schools_with_non_canonical_from_grade,
+       SUM(CASE WHEN to_grade_id NOT IN (
+           '00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000002',
+           '00000000-0000-0000-0000-000000000003','00000000-0000-0000-0000-000000000004',
+           '00000000-0000-0000-0000-000000000005','00000000-0000-0000-0000-000000000006',
+           '00000000-0000-0000-0000-000000000007','00000000-0000-0000-0000-000000000008',
+           '00000000-0000-0000-0000-000000000009','00000000-0000-0000-0000-000000000010'
+       ) THEN 1 ELSE 0 END) AS schools_with_non_canonical_to_grade
+FROM schools
+WHERE from_grade_id IS NOT NULL OR to_grade_id IS NOT NULL;
+
+-- ── 1. Remap school from_grade_id references to canonical GUIDs ────────
+-- Joins through LevelNumber to find the canonical row for the same grade.
+UPDATE schools s
+INNER JOIN grade_levels gl_old    ON s.from_grade_id = gl_old.Id
+INNER JOIN grade_levels gl_new    ON gl_new.LevelNumber = gl_old.LevelNumber
+    AND gl_new.Id IN (
+        '00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000002',
+        '00000000-0000-0000-0000-000000000003','00000000-0000-0000-0000-000000000004',
+        '00000000-0000-0000-0000-000000000005','00000000-0000-0000-0000-000000000006',
+        '00000000-0000-0000-0000-000000000007','00000000-0000-0000-0000-000000000008',
+        '00000000-0000-0000-0000-000000000009','00000000-0000-0000-0000-000000000010'
+    )
+SET s.from_grade_id = gl_new.Id
+WHERE s.from_grade_id NOT IN (
+    '00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000002',
+    '00000000-0000-0000-0000-000000000003','00000000-0000-0000-0000-000000000004',
+    '00000000-0000-0000-0000-000000000005','00000000-0000-0000-0000-000000000006',
+    '00000000-0000-0000-0000-000000000007','00000000-0000-0000-0000-000000000008',
+    '00000000-0000-0000-0000-000000000009','00000000-0000-0000-0000-000000000010'
+);
+SELECT ROW_COUNT() AS schools_from_grade_remapped;
+
+-- ── 2. Remap school to_grade_id references to canonical GUIDs ──────────
+UPDATE schools s
+INNER JOIN grade_levels gl_old    ON s.to_grade_id = gl_old.Id
+INNER JOIN grade_levels gl_new    ON gl_new.LevelNumber = gl_old.LevelNumber
+    AND gl_new.Id IN (
+        '00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000002',
+        '00000000-0000-0000-0000-000000000003','00000000-0000-0000-0000-000000000004',
+        '00000000-0000-0000-0000-000000000005','00000000-0000-0000-0000-000000000006',
+        '00000000-0000-0000-0000-000000000007','00000000-0000-0000-0000-000000000008',
+        '00000000-0000-0000-0000-000000000009','00000000-0000-0000-0000-000000000010'
+    )
+SET s.to_grade_id = gl_new.Id
+WHERE s.to_grade_id NOT IN (
+    '00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000002',
+    '00000000-0000-0000-0000-000000000003','00000000-0000-0000-0000-000000000004',
+    '00000000-0000-0000-0000-000000000005','00000000-0000-0000-0000-000000000006',
+    '00000000-0000-0000-0000-000000000007','00000000-0000-0000-0000-000000000008',
+    '00000000-0000-0000-0000-000000000009','00000000-0000-0000-0000-000000000010'
+);
+SELECT ROW_COUNT() AS schools_to_grade_remapped;
+
+-- ── 3. Delete all 70 non-canonical duplicate grade_level rows ──────────
+-- Safe now that all school FKs point at canonical IDs.
+DELETE FROM grade_levels
+WHERE Id NOT IN (
+    '00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000002',
+    '00000000-0000-0000-0000-000000000003','00000000-0000-0000-0000-000000000004',
+    '00000000-0000-0000-0000-000000000005','00000000-0000-0000-0000-000000000006',
+    '00000000-0000-0000-0000-000000000007','00000000-0000-0000-0000-000000000008',
+    '00000000-0000-0000-0000-000000000009','00000000-0000-0000-0000-000000000010'
+);
+SELECT ROW_COUNT() AS duplicate_rows_deleted;
+
+-- ── 4. Verify final state ──────────────────────────────────────────────
+SELECT 'After cleanup' AS step, COUNT(*) AS grade_level_rows FROM grade_levels;
+SELECT * FROM grade_levels ORDER BY LevelNumber;
+
+-- All schools should now reference only canonical grade level IDs
+SELECT COUNT(*) AS schools_with_invalid_from_grade
+FROM schools
+WHERE from_grade_id IS NOT NULL
+  AND from_grade_id NOT IN (
+    '00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000002',
+    '00000000-0000-0000-0000-000000000003','00000000-0000-0000-0000-000000000004',
+    '00000000-0000-0000-0000-000000000005','00000000-0000-0000-0000-000000000006',
+    '00000000-0000-0000-0000-000000000007','00000000-0000-0000-0000-000000000008',
+    '00000000-0000-0000-0000-000000000009','00000000-0000-0000-0000-000000000010'
+  );
+
+SELECT COUNT(*) AS schools_with_invalid_to_grade
+FROM schools
+WHERE to_grade_id IS NOT NULL
+  AND to_grade_id NOT IN (
+    '00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000002',
+    '00000000-0000-0000-0000-000000000003','00000000-0000-0000-0000-000000000004',
+    '00000000-0000-0000-0000-000000000005','00000000-0000-0000-0000-000000000006',
+    '00000000-0000-0000-0000-000000000007','00000000-0000-0000-0000-000000000008',
+    '00000000-0000-0000-0000-000000000009','00000000-0000-0000-0000-000000000010'
+  );
+
+-- ── 5. Add CHECK constraint on grades.GradeLevel (optional if EF migration not run) ──
+-- Run this only if you're applying the DB constraint directly instead of via EF.
+-- ALTER TABLE `grades`
+-- ADD CONSTRAINT `CK_grades_GradeLevel_1_to_10`
+-- CHECK (`GradeLevel` REGEXP '^(10|[1-9])(st|nd|rd|th)?$');

@@ -1,0 +1,30 @@
+# Backend uploads
+Backend/NubeEra.API/wwwroot/uploads/*
+!Backend/NubeEra.API/wwwroot/uploads/.gitkeep
+
+# Node modules
+node_modules/
+Frontend/node_modules/
+
+# Build outputs
+bin/
+obj/
+dist/
+.vs/
+*.user
+*.suo
+*.base.user
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+*.log
+Backend/NubeEra.API/EF_log.txt
+Backend/server_err.txt
+Backend/server_logs.txt
+uploads/

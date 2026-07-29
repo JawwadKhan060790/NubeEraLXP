@@ -1,0 +1,15 @@
+/* typography.css */
+:root {
+  --font-family-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-size-page-title: 32px;   /* Page Title */
+  --font-size-section-title: 24px;/* Section Title */
+  --font-size-card-title: 16px;   /* Card Title */
+  --font-size-table-text: 14px;   /* Table Text */
+  --font-size-label: 12px;        /* Labels */
+  --line-height-normal: 1.5;
+}
+
+body {
+  font-family: var(--font-family-sans);
+  line-height: var(--line-height-normal);
+}

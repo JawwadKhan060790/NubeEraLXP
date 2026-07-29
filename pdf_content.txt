@@ -1,0 +1,465 @@
+A JOYFUL YEAR-LONG JOURNEY INTO THE WORLD OF TECHNOLOGY AND CREATIVITY
+Build, and improve AI- and robotics-based smart systems using rules and data in mBlock. They combine
+ multiple parts into working solutions while developing problem-solving and presentation skills.
+INVENTIVE MINDS
+GRADE1
+
+
+Grade – 1
+INVENTIVE MINDS
+TECH EXPLORERS
+Inspiring Future Innovators
+Published by
+NubeEra Tech Pvt. Ltd.
+Address
+T-9, Software Technology Park Of India,
+Chikalthana MIDC, Aurangabad (C.S.N) 
+Maharashtra- 431007, India
+Publishers
+Copyright © NubeEra Tech Pvt. Ltd.
+All rights reserved.
+No part of this publication may be reproduced, stored in 
+a retrieval system, adapted, or transmitted in any form or 
+by any means — electronic, mechanical, photocopying, 
+recording, or otherwise — without prior written permission 
+from the publisher.
+The authors and publisher have made every effort to en-
+sure that the information presented in this book is accurate 
+and appropriate for educational purposes. However, they 
+assume no responsibility for any errors or omissions or for 
+the results obtained from the use of the information con-
+tained in this publication.
+Disclaimer
+All product names, brand names, software names, and 
+logos mentioned or shown in this book are trademarks or 
+registered trademarks of their respective owners.
+Any references to proprietary software or platforms are 
+used strictly for educational purposes to support learning 
+in coding, robotics, artificial intelligence, and digital sys-
+tems. The use of these names and logos is intended solely 
+for educational and informational purposes.
+While every effort has been made to ensure the accuracy 
+of the content, the authors and publisher do not accept 
+responsibility for any errors or omissions. No liability is 
+assumed for any outcomes resulting from the use of this 
+content.Preface
+At NubeEra, learning begins with understanding how things 
+work.
+Young learners are naturally curious. They observe, ask 
+questions, and explore the world around them. This book 
+guides that curiosity by helping students recognise simple 
+systems in everyday life.
+Students learn that every system follows a pattern:
+Input → Process → Output
+Through real-life examples and guided activities, they 
+understand how actions start, how changes happen, and 
+how results are produced.
+Learning follows a simple path:
+Observe → Understand → Try → Improve
+Students first observe, then build understanding, and final-
+ly apply their ideas through simple activities.Technology is 
+used only as a support tool. The focus remains on thinking, 
+exploring, and making sense of systems.This book intro-
+duces learners to four connected areas:
+Digital Modelling — exploring ideas safely before building
+Robotics Smart Systems — recognising how devices 
+respond to signals
+Coding — understanding instructions and sequences
+Artificial Intelligence — using digital tools as assistants
+The aim is to help students become thoughtful learners 
+who understand systems, not just use technology.Grade – 1
+1. Digital Design and Virtual Modelling
+2. Signals and Smart Objects Around Us
+4. Digital Creativity and Story Building3. Coding Through Instructions and Actions
+5. AI Tools for Learning and LanguageStudents learn how ideas can be tested using digital models before 
+building real systems.
+ They explore simple virtual circuits and understand how real objects 
+are represented on a computer.
+Students observe how everyday objects respond to signals such as 
+buttons, light, and touch.
+ They understand how devices perform actions based on input and how 
+sensors enable automatic behaviour.
+Students create simple animations using characters, backgrounds, 
+movement, and sound.
+ They learn how visual elements and actions combine to express ideas.Students learn how computers follow instructions.
+ They explore sequence, triggers, and repetition to create simple 
+movements and behaviours in digital characters.
+Students use AI tools to improve sentences and translate words.
+ They understand that AI supports learning but must be used carefully 
+and checked by humans.Key Features
+Unit 1 - My First Digital Model ��������������������������������������������������� 1
+1. How design works: .................................................................................................................................................... 1
+About the tool: Tinkercad Circuits ............................................................................................................................ 3
+Activity 1  - Virtual vs Real LED Comparison ................................................................................................ 3
+2. Light and switch in virtual space ........................................................................................................................... 5
+Activity 2  - Build a Virtual LED Circuit ............................................................................................................ 6
+3. Understanding basic circuit flow .......................................................................................................................... 9
+Activity 3  -  Add a Switch to Control Light ................................................................................................. 10
+4. Creating simple digital models ............................................................................................................................ 12
+Activity 4  - Build a Virtual Fan ........................................................................................................................ 13
+Unit 2 - Playing with Smart Objects Around Us ������������������ 17
+Aarav and Meera Explore Smart Objects .............................................................................................................. 17
+Activity 1  - Push and Glow Board .................................................................................................................. 19
+Manual Control and Automatic Response ............................................................................................................ 22
+Activity 2  - LED Pattern Board ........................................................................................................................ 24
+Buttons Send Commands ......................................................................................................................................... 26
+Activity 3  - Sound Alert Box ............................................................................................................................ 27
+Lights and Sound as Signals .................................................................................................................................... 30
+Activity 4  - Colour Light Selector .................................................................................................................. 31
+Sensors Detect Changes .......................................................................................................................................... 34
+Activity 5 - Traffic Light Model ....................................................................................................................... 36
+Activity 6  - Rain Alert System ......................................................................................................................... 39Table of
+CONTENTS
+Unit 3 - Creating Digital Behaviours �������������������������������������� 43
+Digital Actions Follow Instructions ......................................................................................................................... 43
+Activity 1  - Click-Response Animation ....................................................................................................... 45
+Order Creates Behaviour ......................................................................................................................................... 50
+Activity 2 - Movement Story ........................................................................................................................... 51
+Triggers Start Actions ................................................................................................................................................ 54
+Activity 3  - Mini Story ....................................................................................................................................... 55
+Repeating Creates Patterns ...................................................................................................................................... 59
+Activity 4  - Repeating Motion Pattern ........................................................................................................ 60
+Unit 4 - Exploring Digital Creativity ��������������������������������������� 65
+Characters and B ackgrounds ................................................................................................................................. 65
+Activity 1  - Create an Animated Greeting Card ........................................................................................ 67
+Choices Change Behaviour ...................................................................................................................................... 71
+Activity 2  - Choice-Based Animation ........................................................................................................... 72
+Sound Effects ............................................................................................................................................................... 75
+Activity 3  - Add Sound Reaction Project .................................................................................................... 77
+Visual Storytelling ....................................................................................................................................................... 80
+Combining sound and movement .......................................................................................................................... 81
+Activity 4 - Build a Dialogue Scene ............................................................................................................... 82Table of
+CONTENTS
+Unit 5 - AI Helpers for Words �������������������������������������������������� 88
+What Is an AI Helper? ................................................................................................................................................. 88
+QuillBot ......................................................................................................................................................................... 90
+Activity 1 - Improve a Sentence ..................................................................................................................... 91
+AI Helps Improve Sentences .................................................................................................................................... 93
+Activity 2 - Improve Another Sentence ..................................................................................................... 94
+Translating Words Between Languages ................................................................................................................ 97
+About the AI Tool DeepL Translator ........................................................................................................................ 98
+Activity 3 : Translate a Word ............................................................................................................................. 98Table of
+CONTENTS
+1
+1Objectives
+1. Understand how digital designs help us 
+test ideas.
+2. Identify basic electronic parts such as 
+LED, battery, and switch.
+3. Understand how light and switches 
+work in a virtual circuit.
+4. Learn how electricity flows in a simple 
+circuit.
+5. Build a simple digital model using an 
+online design tool.
+1. How design works:
+Real-life example
+Before building a real house, architects first 
+create drawings and models. 
+ These designs help them test ideas safely.
+In the same way, engineers often design circuits 
+on a computer first. 
+This helps them understand how things will work.
+1.1 What is design
+Definition
+Design means planning how something should 
+look or work. 
+People often draw or model their ideas before 
+building them.
+This helps them test ideas and fix mistakes. 
+Design makes building easier and more 
+organised.
+Unit - 1
+My First Digital Model
+2
+UNIT 1 My First Digital ModelExample
+A student designs a lamp model before building a real one.
+1.2 Real objects and digital models
+Definition
+A digital model is a computer version of a real 
+object.
+It shows how the object looks or works. 
+Students can experiment with the model safely. 
+Digital models help us learn about real systems.
+Example
+A digital LED model represents a real LED light.
+Summary
+ »Design helps us plan ideas before building.
+ »Digital models represent real objects on a computer.
+Let’s think about this
+Teacher shows a real torch.
+Students identify the parts inside the torch such 
+as the battery, switch, and light.
+Did You Know?
+Engineers often design machines and circuits 
+digitally before building them in real life.
+About the tool: Tinkercad Circuits
+What this tool does
+Tinkercad Circuits is an online design tool. 
+It allows students to build electronic circuits on a computer. 
+The tool provides virtual parts such as batteries, LEDs, and switches. 
+Students can connect these parts and test how the circuit works.
+
+3
+3
+UNIT 1 My First Digital ModelHow it works
+Students drag components into the workspace. 
+They connect the components using virtual wires. 
+The program simulates electricity flow in the 
+circuit. 
+When the circuit is complete, the device starts 
+working.
+Challenge Scenario
+In class, we can see a small LED light. On the computer, we see a digital LED. Are they the same or 
+different?
+Goal of the Activity
+We will look at a digital LED in Tinkercad and learn how it works.
+Materials Required
+ »LED
+Simulation Setup
+Step 1: Access the Platform
+ »Open a web browser
+ »Go to https://www.tinkercad.com
+ »Click on Circuits
+ »Click on Create New Circuit
+Activity 1
+Virtual vs Real LED Comparison
+
+4
+UNIT 1 My First Digital ModelStep 2: Arrange Components
+ »Find “LED” in the components panel
+ »Drag the LED into the workspace
+ »Place it in the centre
+Step 3: Build the Circuit
+ »We will not connect anything in this 
+activity
+ »Just look at the LED
+Step 4: Run the Simulation
+ »Click Start Simulation
+ »Watch what happens
+ »Click Stop Simulation
+Conclusion
+The LED on the screen is like a real LED, but it will only glow when we connect it properly.
+Key Learnings
+ »A digital LED is like a real LED
+It needs connections to glow
+ »We can learn safely using Tinkercad
+2. Light and switch in virtual space
+Real-life example
+When we press a lamp switch, the light turns on. 
+The switch controls the electricity flowing to the 
+bulb.
+In a digital circuit, the same idea works using virtual 
+
+5
+5
+UNIT 1 My First Digital Modelparts.
+2.1 What is an LED
+Definition
+An LED is a small electronic light. 
+It glows when electricity flows through it. 
+LEDs are used in toys, indicators, and electronic devices.
+They are commonly used in simple circuits.
+Example
+An LED lights up when connected to a battery.
+2.2 What is a switch
+Definition
+A switch controls the flow of electricity 
+in a circuit. 
+ It can turn the circuit on or off. 
+ When the switch is closed, electricity flows. 
+ When the switch is open, electricity stops.
+Example
+Pressing the switch turns the light on.
+Summary
+ »An LED produces light in a circuit.
+ »A switch controls the light.
+Did You Know?
+LED lights use less electricity and last longer than 
+many other types of bulbs.
+
+6
+UNIT 1 My First Digital ModelChallenge Scenario
+We want to make a small light glow on the computer. How can we do this using Tinkercad?
+Goal of the Activity
+We will build a simple LED circuit in Tinkercad and make the LED glow.
+Materials Required
+ »LED
+ »Battery
+ »Register
+Simulation Setup
+Step 1: Access the Platform
+ »Open a web browser
+ »Go to https://www.tinkercad.com
+ »Click on Circuits
+ »Click on Create New CircuitActivity 2
+Build a Virtual LED Circuit
+
+7
+7
+UNIT 1 My First Digital ModelStep 2: Arrange Components
+ »Find “LED” in the components panel
+ »Drag it into the workspace
+ »Find “Battery” and drag it into the 
+workspace
+ »Find “Register” and drag it into the 
+workspace
+ »Place both neatly
+Step 3: Build the Circuit
+ »Click on the battery positive (+) terminal 
+ »Drag a wire to one end of the resistor 
+ »Connect the other end of the resistor to 
+the long leg (anode) of the LED 
+ »Click on the short leg (cathode) of the LED 
+ »Drag a wire back to the battery negative (–) terminal 
+Note: 
+The resistor is important because it limits the current and prevents the LED from burning out.
+Step 4: Run the Simulation
+ »Click Start Simulation
+ »Watch the LED glow
+ »Click Stop Simulation
+Before and After Simulation :
+
+8
+UNIT 1 My First Digital ModelConclusion
+The LED glows because we made a complete path for electricity using the battery and wires.
+Key Learnings
+ »An LED needs a power source to glow
+ »Wires help make a complete path
+ »A circuit must be complete to work
+3. Understanding basic circuit flow
+Real-life example
+A torch lights up because electricity flows from 
+the battery to the bulb. 
+If the connection breaks, the light stops.
+Electricity always needs a path to travel.
+3.1 What is a circuit
+Definition
+A circuit is a path through which electricity flows. 
+The path connects the battery and electronic parts. 
+Electricity moves through this path to power 
+devices. 
+If the path breaks, the circuit stops working.
+Example
+A battery connected to an LED creates a working 
+circuit.
+Summary
+ »Electricity flows through a circuit.
+ »A complete circuit allows devices to 
+work.
+Did You Know?
+Every electronic device in your home works 
+because of circuits inside it.
+
+9
+9
+UNIT 1 My First Digital ModelChallenge Scenario
+Our LED is always on. How can we turn it on and off when we want?
+Goal of the Activity
+We will add a switch in Tinkercad to control the LED.
+Materials Required
+ »LED
+ »Battery
+ »Switch
+ »Register
+Simulation Setup
+Step 1: Access the Platform
+ »Open a web browser
+ »Go to https://www.tinkercad.com
+ »Click on Circuits
+ »Open your saved circuit or click Create New Circuit
+Step 2: Arrange and Connect Components
+ »Click on the battery positive (+) terminal 
+ »Drag a wire to one terminal of the switch 
+ »Connect the other terminal of the switch to one end of the resistor 
+ »Connect the other end of the resistor to the long leg (anode) of the LED 
+ »Click on the short leg (cathode) of the LED 
+ »Drag a wire back to the battery negative (–) terminal 
+This keeps everything
+in a proper series circuit: Battery → Switch → Resistor → LED → Battery Activity 3
+Add a Switch to Control Light
+10
+UNIT 1 My First Digital ModelAfter Connecting wires :
+Step 3: Run the Simulation
+ »Click Start Simulation
+ »Click the switch to turn it ON and OFF
+ »Click Stop Simulation
+Switch off and on mode :
+Conclusion
+The switch controls the flow of electricity. When the switch is ON, the LED glows. When it is OFF, 
+the LED turns off.
+Key Learnings
+ »A switch can control a circuit
+ »Electricity flows only when the switch is ON
+ »We can turn devices on and off safely
+
+11
+11
+UNIT 1 My First Digital Model4. Creating simple digital models
+Real-life example
+Electric fans use electricity to spin their blades. 
+A motor inside the fan makes the blades move.
+We can design a simple fan model in a digital 
+circuit tool.
+4.1 Designing a simple digital model
+Definition
+“Digital models are created using virtual parts.” 
+Students connect components to design 
+systems. 
+The tool shows how the system behaves. 
+Digital models help test ideas safely.
+Example
+A digital fan model shows how electricity powers movement.
+Summary
+ »Digital models help us test design 
+ideas.
+ »Virtual circuits allow safe 
+experimentation.
+Did You Know?
+Many engineers test their designs on computers 
+before building real machines.
+Challenge Scenario
+We use a fan to feel cool. Can we make a fan work on the computer using Tinkercad?
+Activity 4
+Build a Virtual Fan
+12
+UNIT 1 My First Digital ModelGoal of the Activity
+We will build a simple circuit to make a motor spin like a fan.
+Materials Required
+ »Battery
+ »Switch
+ »DC Motor
+Simulation Setup
+Step 1: Access the Platform
+ »Open a web browser
+ »Go to https://www.tinkercad.com
+ »Click on Circuits
+ »Click on Create New Circuit
+Step 2: Arrange Components
+ »Find “Battery” and drag it into the workspace
+ »Find “Switch” and place it near the battery
+ »Find “DC Motor” and place it next to the switch
+ »Arrange all parts neatly
+Step 3: Build the Circuit
+ »Connect battery positive (+) to one side of the switch
+ »Connect the other side of the switch to one terminal of 
+the motor
+ »Connect the second terminal of the motor to battery 
+negative (–)
+Step 4: Run the Simulation
+ »Click Start Simulation
+ »Click the switch to turn it ON
+ »Watch the motor spin
+ »Click Stop Simulation
+
+13
+13
+UNIT 1 My First Digital ModelSwitch off and on Mode:
+Conclusion
+The motor spins when electricity flows through the circuit. The switch helps us control when the 
+fan turns on and off.
+Key Learnings
+ »A motor can spin when it gets power
+ »A switch can control the motor
+ »We can build a simple fan using a circuit
+

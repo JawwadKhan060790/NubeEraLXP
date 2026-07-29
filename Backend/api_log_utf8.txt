@@ -1,0 +1,269 @@
+﻿Using launch settings from NubeEra.API\Properties\launchSettings.json...
+Building...
+E:\nubeera\LMSWithMySQL\Backend\NubeEra.Application\NubeEra.Application.csproj : warning NU1510: PackageReference Microsoft.Extensions.DependencyInjection.Abstractions will not be pruned. Consider removing this package from your dependencies, as it is likely unnecessary. [E:\nubeera\LMSWithMySQL\Backend\NubeEra.API\NubeEra.API.csproj]
+E:\nubeera\LMSWithMySQL\Backend\NubeEra.Application\NubeEra.Application.csproj : warning NU1510: PackageReference Microsoft.Extensions.DependencyInjection.Abstractions will not be pruned. Consider removing this package from your dependencies, as it is likely unnecessary.
+info: Microsoft.EntityFrameworkCore.Migrations[20411]
+      Acquiring an exclusive lock for migration application. See https://aka.ms/efcore-docs-migrations-lock for more information if this takes too long.
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (3ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT GET_LOCK('__nubeera_db_EFMigrationsLock', 259200)
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (7ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      CREATE TABLE IF NOT EXISTS `__EFMigrationsHistory` (
+          `MigrationId` varchar(150) CHARACTER SET utf8mb4 NOT NULL,
+          `ProductVersion` varchar(32) CHARACTER SET utf8mb4 NOT NULL,
+          CONSTRAINT `PK___EFMigrationsHistory` PRIMARY KEY (`MigrationId`)
+      ) CHARACTER SET=utf8mb4;
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (27ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA='nubeera_db' AND TABLE_NAME='__EFMigrationsHistory';
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT `MigrationId`, `ProductVersion`
+      FROM `__EFMigrationsHistory`
+      ORDER BY `MigrationId`;
+info: Microsoft.EntityFrameworkCore.Migrations[20405]
+      No migrations were applied. The database is already up to date.
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT RELEASE_LOCK('__nubeera_db_EFMigrationsLock')
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      
+                  CREATE TABLE IF NOT EXISTS WebsiteRegistrations (
+                      Id char(36) NOT NULL,
+                      CreatedAt datetime(6) NOT NULL,
+                      StudentFullName longtext NOT NULL,
+                      MobileNumber longtext NOT NULL,
+                      EmailAddress longtext NULL,
+                      City longtext NULL,
+                      GradeInterestedIn longtext NULL,
+                      InterestedProgram longtext NOT NULL,
+                      ParentName longtext NOT NULL,
+                      ParentMobileNumber longtext NOT NULL,
+                      Message longtext NULL,
+                      Consent tinyint(1) NOT NULL DEFAULT 0,
+                      Status longtext NOT NULL,
+                      PRIMARY KEY (Id)
+                  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (17ms) [Parameters=[@__roleName_0='?' (Size = 100)], CommandType='Text', CommandTimeout='30']
+      SELECT EXISTS (
+          SELECT 1
+          FROM `roles` AS `r`
+          WHERE `r`.`RoleName` = @__roleName_0)
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[@__roleName_0='?' (Size = 100)], CommandType='Text', CommandTimeout='30']
+      SELECT EXISTS (
+          SELECT 1
+          FROM `roles` AS `r`
+          WHERE `r`.`RoleName` = @__roleName_0)
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[@__roleName_0='?' (Size = 100)], CommandType='Text', CommandTimeout='30']
+      SELECT EXISTS (
+          SELECT 1
+          FROM `roles` AS `r`
+          WHERE `r`.`RoleName` = @__roleName_0)
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[@__roleName_0='?' (Size = 100)], CommandType='Text', CommandTimeout='30']
+      SELECT EXISTS (
+          SELECT 1
+          FROM `roles` AS `r`
+          WHERE `r`.`RoleName` = @__roleName_0)
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[@__roleName_0='?' (Size = 100)], CommandType='Text', CommandTimeout='30']
+      SELECT EXISTS (
+          SELECT 1
+          FROM `roles` AS `r`
+          WHERE `r`.`RoleName` = @__roleName_0)
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[@__roleName_0='?' (Size = 100)], CommandType='Text', CommandTimeout='30']
+      SELECT EXISTS (
+          SELECT 1
+          FROM `roles` AS `r`
+          WHERE `r`.`RoleName` = @__roleName_0)
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[@__roleName_0='?' (Size = 100)], CommandType='Text', CommandTimeout='30']
+      SELECT EXISTS (
+          SELECT 1
+          FROM `roles` AS `r`
+          WHERE `r`.`RoleName` = @__roleName_0)
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT EXISTS (
+          SELECT 1
+          FROM `schools` AS `s`)
+warn: Microsoft.EntityFrameworkCore.Query[10103]
+      The query uses the 'First'/'FirstOrDefault' operator without 'OrderBy' and filter operators. This may lead to unpredictable results.
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT `s`.`Id`, `s`.`Address`, `s`.`City`, `s`.`ContactEmail`, `s`.`ContactPhone`, `s`.`Country`, `s`.`CreatedAt`, `s`.`EstablishedDate`, `s`.`IsActive`, `s`.`LogoUrl`, `s`.`Name`, `s`.`PostalCode`, `s`.`PrincipalEmail`, `s`.`PrincipalName`, `s`.`PrincipalPhone`, `s`.`SchoolCode`, `s`.`State`, `s`.`Website`
+      FROM `schools` AS `s`
+      LIMIT 1
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT `s`.`Id`, `s`.`Address`, `s`.`City`, `s`.`ContactEmail`, `s`.`ContactPhone`, `s`.`Country`, `s`.`CreatedAt`, `s`.`EstablishedDate`, `s`.`IsActive`, `s`.`LogoUrl`, `s`.`Name`, `s`.`PostalCode`, `s`.`PrincipalEmail`, `s`.`PrincipalName`, `s`.`PrincipalPhone`, `s`.`SchoolCode`, `s`.`State`, `s`.`Website`
+      FROM `schools` AS `s`
+      WHERE `s`.`SchoolCode` = 'NUBEERA-SCHOOL'
+      LIMIT 1
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (1ms) [Parameters=[@__b2cSchool_Id_0='?' (DbType = Guid)], CommandType='Text', CommandTimeout='30']
+      SELECT EXISTS (
+          SELECT 1
+          FROM `grades` AS `g`
+          WHERE `g`.`SchoolId` = @__b2cSchool_Id_0)
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[@__role_0='?' (Size = 100)], CommandType='Text', CommandTimeout='30']
+      SELECT `r`.`Id`, `r`.`CreatedAt`, `r`.`IsActive`, `r`.`RoleName`
+      FROM `roles` AS `r`
+      WHERE `r`.`RoleName` = @__role_0
+      LIMIT 1
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[@__email_0='?' (Size = 150)], CommandType='Text', CommandTimeout='30']
+      SELECT `u`.`Id`, `u`.`CreatedAt`, `u`.`Email`, `u`.`FirstName`, `u`.`IsActive`, `u`.`LastLoginAt`, `u`.`LastName`, `u`.`PasswordHash`, `u`.`Phone`, `u`.`ProfileImageUrl`, `u`.`RoleId`, `u`.`SchoolId`
+      FROM `users` AS `u`
+      WHERE `u`.`Email` = @__email_0
+      LIMIT 1
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[@__role_0='?' (Size = 100)], CommandType='Text', CommandTimeout='30']
+      SELECT `r`.`Id`, `r`.`CreatedAt`, `r`.`IsActive`, `r`.`RoleName`
+      FROM `roles` AS `r`
+      WHERE `r`.`RoleName` = @__role_0
+      LIMIT 1
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (1ms) [Parameters=[@__email_0='?' (Size = 150)], CommandType='Text', CommandTimeout='30']
+      SELECT `u`.`Id`, `u`.`CreatedAt`, `u`.`Email`, `u`.`FirstName`, `u`.`IsActive`, `u`.`LastLoginAt`, `u`.`LastName`, `u`.`PasswordHash`, `u`.`Phone`, `u`.`ProfileImageUrl`, `u`.`RoleId`, `u`.`SchoolId`
+      FROM `users` AS `u`
+      WHERE `u`.`Email` = @__email_0
+      LIMIT 1
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[@__role_0='?' (Size = 100)], CommandType='Text', CommandTimeout='30']
+      SELECT `r`.`Id`, `r`.`CreatedAt`, `r`.`IsActive`, `r`.`RoleName`
+      FROM `roles` AS `r`
+      WHERE `r`.`RoleName` = @__role_0
+      LIMIT 1
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[@__email_0='?' (Size = 150)], CommandType='Text', CommandTimeout='30']
+      SELECT `u`.`Id`, `u`.`CreatedAt`, `u`.`Email`, `u`.`FirstName`, `u`.`IsActive`, `u`.`LastLoginAt`, `u`.`LastName`, `u`.`PasswordHash`, `u`.`Phone`, `u`.`ProfileImageUrl`, `u`.`RoleId`, `u`.`SchoolId`
+      FROM `users` AS `u`
+      WHERE `u`.`Email` = @__email_0
+      LIMIT 1
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[@__role_0='?' (Size = 100)], CommandType='Text', CommandTimeout='30']
+      SELECT `r`.`Id`, `r`.`CreatedAt`, `r`.`IsActive`, `r`.`RoleName`
+      FROM `roles` AS `r`
+      WHERE `r`.`RoleName` = @__role_0
+      LIMIT 1
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[@__email_0='?' (Size = 150)], CommandType='Text', CommandTimeout='30']
+      SELECT `u`.`Id`, `u`.`CreatedAt`, `u`.`Email`, `u`.`FirstName`, `u`.`IsActive`, `u`.`LastLoginAt`, `u`.`LastName`, `u`.`PasswordHash`, `u`.`Phone`, `u`.`ProfileImageUrl`, `u`.`RoleId`, `u`.`SchoolId`
+      FROM `users` AS `u`
+      WHERE `u`.`Email` = @__email_0
+      LIMIT 1
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT EXISTS (
+          SELECT 1
+          FROM `grades` AS `g`)
+warn: Microsoft.EntityFrameworkCore.Query[10103]
+      The query uses the 'First'/'FirstOrDefault' operator without 'OrderBy' and filter operators. This may lead to unpredictable results.
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT `g`.`Id`, `g`.`AcademicYear`, `g`.`Capacity`, `g`.`ClassRoom`, `g`.`ClassTeacherId`, `g`.`CreatedAt`, `g`.`GradeLevel`, `g`.`GradeName`, `g`.`IsActive`, `g`.`SchoolId`
+      FROM `grades` AS `g`
+      LIMIT 1
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT `r`.`Id`, `r`.`CreatedAt`, `r`.`IsActive`, `r`.`RoleName`
+      FROM `roles` AS `r`
+      WHERE `r`.`RoleName` = 'Teacher'
+      LIMIT 1
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[@__email_0='?' (Size = 150)], CommandType='Text', CommandTimeout='30']
+      SELECT `u`.`Id`, `u`.`CreatedAt`, `u`.`Email`, `u`.`FirstName`, `u`.`IsActive`, `u`.`LastLoginAt`, `u`.`LastName`, `u`.`PasswordHash`, `u`.`Phone`, `u`.`ProfileImageUrl`, `u`.`RoleId`, `u`.`SchoolId`
+      FROM `users` AS `u`
+      WHERE `u`.`Email` = @__email_0
+      LIMIT 1
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT `r`.`Id`, `r`.`CreatedAt`, `r`.`IsActive`, `r`.`RoleName`
+      FROM `roles` AS `r`
+      WHERE `r`.`RoleName` = 'Student'
+      LIMIT 1
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[@__email_0='?' (Size = 150)], CommandType='Text', CommandTimeout='30']
+      SELECT `u`.`Id`, `u`.`CreatedAt`, `u`.`Email`, `u`.`FirstName`, `u`.`IsActive`, `u`.`LastLoginAt`, `u`.`LastName`, `u`.`PasswordHash`, `u`.`Phone`, `u`.`ProfileImageUrl`, `u`.`RoleId`, `u`.`SchoolId`
+      FROM `users` AS `u`
+      WHERE `u`.`Email` = @__email_0
+      LIMIT 1
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (1ms) [Parameters=[@__user_Id_0='?' (DbType = Guid)], CommandType='Text', CommandTimeout='30']
+      SELECT `s`.`Id`, `s`.`Address`, `s`.`AdmissionDate`, `s`.`BloodGroup`, `s`.`CreatedAt`, `s`.`DateOfBirth`, `s`.`Email`, `s`.`EmergencyContact`, `s`.`FirstName`, `s`.`Gender`, `s`.`GradeId`, `s`.`IsActive`, `s`.`LastName`, `s`.`ParentGuardianEmail`, `s`.`ParentGuardianName`, `s`.`ParentGuardianPhone`, `s`.`PersonalNote`, `s`.`Phone`, `s`.`ProfilePictureUrl`, `s`.`RollNo`, `s`.`SchoolId`, `s`.`StudentId`, `s`.`UserId`
+      FROM `students` AS `s`
+      WHERE `s`.`UserId` = @__user_Id_0
+      LIMIT 1
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT `r`.`Id`, `r`.`CreatedAt`, `r`.`IsActive`, `r`.`RoleName`
+      FROM `roles` AS `r`
+      WHERE `r`.`RoleName` = 'Parent'
+      LIMIT 1
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[@__email_0='?' (Size = 150)], CommandType='Text', CommandTimeout='30']
+      SELECT `u`.`Id`, `u`.`CreatedAt`, `u`.`Email`, `u`.`FirstName`, `u`.`IsActive`, `u`.`LastLoginAt`, `u`.`LastName`, `u`.`PasswordHash`, `u`.`Phone`, `u`.`ProfileImageUrl`, `u`.`RoleId`, `u`.`SchoolId`
+      FROM `users` AS `u`
+      WHERE `u`.`Email` = @__email_0
+      LIMIT 1
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (1ms) [Parameters=[@p11='?' (DbType = Guid), @p0='?' (DbType = DateTime), @p1='?' (Size = 150), @p2='?' (Size = 100), @p3='?' (DbType = Boolean), @p4='?' (DbType = DateTime), @p5='?' (Size = 100), @p6='?' (Size = 4000), @p7='?' (Size = 20), @p8='?' (Size = 4000), @p9='?' (DbType = Guid), @p10='?' (DbType = Guid), @p23='?' (DbType = Guid), @p12='?' (DbType = DateTime), @p13='?' (Size = 150), @p14='?' (Size = 100), @p15='?' (DbType = Boolean), @p16='?' (DbType = DateTime), @p17='?' (Size = 100), @p18='?' (Size = 4000), @p19='?' (Size = 20), @p20='?' (Size = 4000), @p21='?' (DbType = Guid), @p22='?' (DbType = Guid), @p35='?' (DbType = Guid), @p24='?' (DbType = DateTime), @p25='?' (Size = 150), @p26='?' (Size = 100), @p27='?' (DbType = Boolean), @p28='?' (DbType = DateTime), @p29='?' (Size = 100), @p30='?' (Size = 4000), @p31='?' (Size = 20), @p32='?' (Size = 4000), @p33='?' (DbType = Guid), @p34='?' (DbType = Guid), @p47='?' (DbType = Guid), @p36='?' (DbType = DateTime), @p37='?' (Size = 150), @p38='?' (Size = 100), @p39='?' (DbType = Boolean), @p40='?' (DbType = DateTime), @p41='?' (Size = 100), @p42='?' (Size = 4000), @p43='?' (Size = 20), @p44='?' (Size = 4000), @p45='?' (DbType = Guid), @p46='?' (DbType = Guid)], CommandType='Text', CommandTimeout='30']
+      UPDATE `users` SET `CreatedAt` = @p0, `Email` = @p1, `FirstName` = @p2, `IsActive` = @p3, `LastLoginAt` = @p4, `LastName` = @p5, `PasswordHash` = @p6, `Phone` = @p7, `ProfileImageUrl` = @p8, `RoleId` = @p9, `SchoolId` = @p10
+      WHERE `Id` = @p11;
+      SELECT ROW_COUNT();
+      
+      UPDATE `users` SET `CreatedAt` = @p12, `Email` = @p13, `FirstName` = @p14, `IsActive` = @p15, `LastLoginAt` = @p16, `LastName` = @p17, `PasswordHash` = @p18, `Phone` = @p19, `ProfileImageUrl` = @p20, `RoleId` = @p21, `SchoolId` = @p22
+      WHERE `Id` = @p23;
+      SELECT ROW_COUNT();
+      
+      UPDATE `users` SET `CreatedAt` = @p24, `Email` = @p25, `FirstName` = @p26, `IsActive` = @p27, `LastLoginAt` = @p28, `LastName` = @p29, `PasswordHash` = @p30, `Phone` = @p31, `ProfileImageUrl` = @p32, `RoleId` = @p33, `SchoolId` = @p34
+      WHERE `Id` = @p35;
+      SELECT ROW_COUNT();
+      
+      UPDATE `users` SET `CreatedAt` = @p36, `Email` = @p37, `FirstName` = @p38, `IsActive` = @p39, `LastLoginAt` = @p40, `LastName` = @p41, `PasswordHash` = @p42, `Phone` = @p43, `ProfileImageUrl` = @p44, `RoleId` = @p45, `SchoolId` = @p46
+      WHERE `Id` = @p47;
+      SELECT ROW_COUNT();
+info: Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager[63]
+      User profile is available. Using 'C:\Users\admin\AppData\Local\ASP.NET\DataProtection-Keys' as key repository and Windows DPAPI to encrypt keys at rest.
+info: Microsoft.Hosting.Lifetime[14]
+      Now listening on: http://0.0.0.0:5000
+info: Microsoft.Hosting.Lifetime[0]
+      Application started. Press Ctrl+C to shut down.
+info: Microsoft.Hosting.Lifetime[0]
+      Hosting environment: Development
+info: Microsoft.Hosting.Lifetime[0]
+      Content root path: E:\nubeera\LMSWithMySQL\Backend\NubeEra.API
+info: Microsoft.AspNetCore.Hosting.Diagnostics[1]
+      Request starting HTTP/1.1 OPTIONS http://localhost:5000/api/support/notifications - - -
+info: Microsoft.AspNetCore.Hosting.Diagnostics[2]
+      Request finished HTTP/1.1 OPTIONS http://localhost:5000/api/support/notifications - 204 - - 14.1398ms
+info: Microsoft.AspNetCore.Hosting.Diagnostics[1]
+      Request starting HTTP/1.1 GET http://localhost:5000/api/support/notifications - - -
+info: Microsoft.AspNetCore.Cors.Infrastructure.CorsService[4]
+      CORS policy execution successful.
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]
+      Executing endpoint 'NubeEra.API.Controllers.SupportTicket.TicketsController.GetNotifications (NubeEra.API)'
+info: Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker[102]
+      Route matched with {action = "GetNotifications", controller = "Tickets"}. Executing controller action with signature System.Threading.Tasks.Task`1[Microsoft.AspNetCore.Mvc.IActionResult] GetNotifications() on controller NubeEra.API.Controllers.SupportTicket.TicketsController (NubeEra.API).
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (23ms) [Parameters=[@__userId_0='?' (DbType = Guid)], CommandType='Text', CommandTimeout='30']
+      SELECT `i`.`Id`, `i`.`CreatedAt`, `i`.`IsRead`, `i`.`LinkUrl`, `i`.`Message`, `i`.`UserId`
+      FROM `InAppNotifications` AS `i`
+      WHERE (`i`.`UserId` = @__userId_0) AND NOT (`i`.`IsRead`)
+      ORDER BY `i`.`CreatedAt` DESC
+info: Microsoft.AspNetCore.Mvc.Infrastructure.ObjectResultExecutor[1]
+      Executing OkObjectResult, writing value of type 'NubeEra.Application.Common.Responses.ApiResponse`1[[System.Object, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+info: Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker[105]
+      Executed action NubeEra.API.Controllers.SupportTicket.TicketsController.GetNotifications (NubeEra.API) in 238.8959ms
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]
+      Executed endpoint 'NubeEra.API.Controllers.SupportTicket.TicketsController.GetNotifications (NubeEra.API)'
+info: Microsoft.AspNetCore.Hosting.Diagnostics[2]
+      Request finished HTTP/1.1 GET http://localhost:5000/api/support/notifications - 200 - application/json;+charset=utf-8 516.2499ms

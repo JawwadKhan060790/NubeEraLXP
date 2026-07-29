@@ -1,0 +1,54 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+
+    <ProjectReference Include="..\NubeEra.Domain\NubeEra.Domain.csproj" />
+    <ProjectReference Include="..\NubeEra.Application\NubeEra.Application.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
+
+    <!-- Generic Excel Export framework (IExcelExportService / ExcelExportService) -->
+    <PackageReference Include="ClosedXML" Version="0.105.0" />
+
+    <!-- EF Core -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="9.0.0">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+
+    <!-- Pomelo MySQL -->
+    <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="9.0.0" />
+
+    <!-- Configuration (MATCH .NET / EF VERSION) -->
+
+    <!-- JWT -->
+    <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.15.0" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.15.0" />
+
+    <!-- Certificate PDF generation (QuestPDF) + QR code (QRCoder) -->
+    <PackageReference Include="QuestPDF" Version="2024.10.0" />
+    <PackageReference Include="QRCoder" Version="1.6.0" />
+
+    <!-- Structured logging -->
+    <PackageReference Include="Serilog" Version="4.2.0" />
+    <PackageReference Include="Serilog.Extensions.Hosting" Version="9.0.0" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
+    <PackageReference Include="Serilog.Enrichers.Environment" Version="3.0.1" />
+    <PackageReference Include="Serilog.Enrichers.Thread" Version="4.0.0" />
+    <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
+
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,10 @@
+/* palette.css */
+:root {
+  --color-primary: #1E3A8A; /* Primary */
+  --color-secondary: #6D28D9; /* Secondary */
+  --color-accent: #D4AF37; /* Accent */
+  --color-success: #16A34A; /* Success */
+  --color-warning: #F59E0B; /* Warning */
+  --color-error: #DC2626;   /* Error */
+  --color-background: #F8FAFC; /* Background */
+}

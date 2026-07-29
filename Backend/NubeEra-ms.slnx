@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="NubeEra.API/NubeEra.API.csproj" Id="f0cd6591-85f0-4413-833b-e416c897d0e6" />
+  <Project Path="NubeEra.Application/NubeEra.Application.csproj" Id="1ae2634f-f647-4ae0-9fd5-0446f6d10262" />
+  <Project Path="NubeEra.Domain/NubeEra.Domain.csproj" Id="a2c8b2ae-6766-4af5-b2b5-42acbba5986d" />
+  <Project Path="NubeEra.Infrastructure/NubeEra.Infrastructure.csproj" Id="bbacd731-e79a-43f3-ab87-45c55c1586e4" />
+  <Project Path="NubeEra.Tests/NubeEra.Tests.csproj" Id="d4f8a6c1-9e2b-4f7a-8c3d-5b1e9a7f2d4c" />
+</Solution>

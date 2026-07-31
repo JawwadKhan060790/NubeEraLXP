@@ -372,38 +372,46 @@ const Subjects: React.FC = () => {
                 No subjects found.
               </div>
             ) : (
-              subjects.map((sub) => (
-                <div
-                  key={sub.id}
-                  onClick={() => setSelectedSubject(sub)}
-                  className={`p-4 cursor-pointer transition-all flex items-center justify-between group relative ${
-                    selectedSubject?.id === sub.id
-                      ? 'bg-indigo-50/50 dark:bg-indigo-500/10'
-                      : 'hover:bg-slate-50 dark:hover:bg-[#1e293b]/40'
-                  }`}
-                >
-                  <div className="min-w-0 flex-1 pr-4">
-                    <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                      <span className="text-[10px] font-extrabold uppercase tracking-widest text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/15 px-2 py-0.5 rounded">
-                        {sub.grade_level_name}
-                      </span>
-                      <StatusBadge active={sub.is_active} />
+              subjects.map((sub) => {
+                const isSelected = selectedSubject?.id === sub.id;
+                const initials = sub.name.substring(0, 2).toUpperCase();
+                return (
+                  <div
+                    key={sub.id}
+                    onClick={() => setSelectedSubject(sub)}
+                    className={`relative px-4 py-3.5 cursor-pointer flex items-center gap-3.5 transition-all duration-200 border-l-4 group ${
+                      isSelected
+                        ? 'bg-indigo-50/80 dark:bg-indigo-500/15 border-l-indigo-600 dark:border-l-indigo-400 shadow-xs'
+                        : 'border-l-transparent hover:bg-slate-50 dark:hover:bg-[#283548] hover:border-l-slate-300'
+                    }`}
+                  >
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-extrabold text-xs uppercase flex-shrink-0 border transition-all ${
+                      isSelected
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                        : 'bg-indigo-50 dark:bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-100 dark:border-indigo-400/25 group-hover:bg-indigo-100 dark:group-hover:bg-indigo-500/25'
+                    }`}>
+                      {initials}
                     </div>
-                    <h3 className="text-sm font-bold text-slate-800 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors truncate">
-                      {sub.name}
-                    </h3>
-                    <p className="text-[11px] text-slate-400 dark:text-[#64748b] truncate mt-0.5">
-                      {sub.description || 'No description'}
-                    </p>
-                    <div className="flex items-center gap-3 mt-2 text-[10px] font-bold text-slate-500 dark:text-[#94a3b8]">
-                      <span>{sub.unit_count} Units</span>
-                      <span>•</span>
-                      <span>{sub.topic_count} Topics</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <span className="text-[9px] font-extrabold uppercase tracking-widest text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/15 px-1.5 py-0.5 rounded border border-indigo-100 dark:border-indigo-400/20">
+                          {sub.grade_level_name}
+                        </span>
+                        <StatusBadge active={sub.is_active} />
+                      </div>
+                      <h3 className="text-xs font-black text-slate-800 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors truncate">
+                        {sub.name}
+                      </h3>
+                      <div className="flex items-center gap-3 mt-1 text-[10px] font-semibold text-slate-500 dark:text-[#94a3b8]">
+                        <span>{sub.unit_count} Units</span>
+                        <span>·</span>
+                        <span>{sub.topic_count} Topics</span>
+                      </div>
                     </div>
+                    <ChevronRight className={`w-4 h-4 transition-transform ${isSelected ? 'translate-x-1 text-indigo-600 dark:text-indigo-400' : 'text-slate-300 group-hover:text-slate-400'}`} />
                   </div>
-                  <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform ${selectedSubject?.id === sub.id ? 'translate-x-1 text-indigo-500' : 'group-hover:translate-x-0.5'}`} />
-                </div>
-              ))
+                );
+              })
             )}
           </div>
 
@@ -426,35 +434,40 @@ const Subjects: React.FC = () => {
           {selectedSubject ? (
             <>
               {/* Card 1: Subject Info */}
-              <div className="bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] rounded-2xl p-6 shadow-sm space-y-6 relative overflow-hidden">
+              <div className="bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] rounded-2xl p-5 shadow-sm space-y-5 relative overflow-hidden">
                 <div className="flex justify-between items-start gap-4">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-[10px] font-extrabold uppercase tracking-widest text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/15 px-2 py-0.5 rounded">
-                        {selectedSubject.grade_level_name}
-                      </span>
-                      <StatusBadge active={selectedSubject.is_active} size="md" />
+                  <div className="flex items-center gap-4 min-w-0">
+                    <div className="w-16 h-16 rounded-2xl bg-indigo-600 text-white border-2 border-indigo-200 dark:border-indigo-400/30 flex items-center justify-center text-xl font-black uppercase shadow-sm flex-shrink-0">
+                      {selectedSubject.name.substring(0, 2).toUpperCase()}
                     </div>
-                    <h2 className="text-lg md:text-xl font-black text-slate-800 dark:text-white leading-tight break-words">
-                      {selectedSubject.name}
-                    </h2>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-[10px] font-extrabold uppercase tracking-widest text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/15 px-2 py-0.5 rounded border border-indigo-100 dark:border-indigo-400/25">
+                          {selectedSubject.grade_level_name}
+                        </span>
+                        <StatusBadge active={selectedSubject.is_active} size="md" />
+                      </div>
+                      <h2 className="text-lg font-black text-slate-900 dark:text-white leading-tight break-words">
+                        {selectedSubject.name}
+                      </h2>
+                    </div>
                   </div>
 
                   {user?.utype !== 'student' && user?.utype !== 'teacher' && (
-                    <div className="flex gap-1.5 flex-shrink-0">
+                    <div className="flex items-center gap-2 flex-shrink-0">
                       <button
                         onClick={() => handleEdit(selectedSubject)}
-                        className="p-2 text-slate-600 dark:text-[#94a3b8] hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-50 dark:hover:bg-[#283548] rounded-xl transition-all border border-slate-100 dark:border-[#334155]"
+                        className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-extrabold text-xs transition-all flex items-center gap-1.5 shadow-xs active:scale-95 cursor-pointer"
                         title="Edit Subject"
                       >
-                        <Edit className="w-4 h-4" />
+                        <Edit className="w-3.5 h-3.5" /> Edit
                       </button>
                       <button
                         onClick={() => handleDelete(selectedSubject.id, selectedSubject.name)}
-                        className="p-2 text-slate-600 dark:text-[#94a3b8] hover:text-rose-600 dark:hover:text-rose-400 hover:bg-slate-50 dark:hover:bg-[#283548] rounded-xl transition-all border border-slate-100 dark:border-[#334155]"
+                        className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-extrabold text-xs transition-all flex items-center gap-1.5 shadow-xs active:scale-95 cursor-pointer"
                         title="Delete Subject"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-3.5 h-3.5" /> Delete
                       </button>
                     </div>
                   )}

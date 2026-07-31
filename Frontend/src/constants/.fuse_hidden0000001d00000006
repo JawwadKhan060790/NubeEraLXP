@@ -1,0 +1,104 @@
+/**
+ * Route Constants
+ *
+ * Centralised path strings for the entire application.
+ * Import from here instead of repeating literal strings across files so a
+ * single rename stays consistent everywhere.
+ */
+
+export const ROUTES = {
+  // ── Public ──────────────────────────────────────────────────────────────────
+  LOGIN:        '/login',
+  UNAUTHORIZED: '/unauthorized',
+
+  // ── Dashboards ──────────────────────────────────────────────────────────────
+  ADMIN_DASHBOARD:     '/admin/dashboard',
+  PRINCIPAL_DASHBOARD: '/principal/dashboard',
+  STAFF_DASHBOARD:     '/staff/dashboard',
+  TEACHER_DASHBOARD:   '/teacher/dashboard',
+  STUDENT_DASHBOARD:   '/student/dashboard',
+  PARENT_DASHBOARD:    '/parent/dashboard',
+
+  // ── Institution Management ────────────────────────────────────────────────
+  SCHOOLS:  '/schools',
+  TEACHERS: '/teachers',
+  STUDENTS: '/students',
+  GRADES:   '/grades',
+  USERS:    '/users',
+
+  // ── Academics ────────────────────────────────────────────────────────────
+  MODULES: '/modules',
+  LESSONS: '/lessons',
+  EXAMS:   '/exams',
+  EVENTS:  '/events',
+
+  // ── Reporting ────────────────────────────────────────────────────────────
+  REPORTS:      '/reports',
+  REPORT_VIEW:  '/reports/:key',
+
+  // ── User Account ──────────────────────────────────────────────────────────
+  UPDATE_PROFILE:  '/update-profile',
+  CHANGE_PASSWORD: '/change-password',
+
+  // ── Admin Management ─────────────────────────────────────────────────────
+  CREATE_STAFF:         '/create-staff',
+  CREATE_TEACHER:       '/create-teacher',
+  ADMIN_SETTINGS:       '/admin/settings',
+  ADMIN_BACKUP_RESTORE: '/admin/backup-restore',
+  TEACHER_FEE_SETTING:  '/teacher/fee-setting',
+  PENDING_TEACHERS:     '/pending-teachers',
+  WEBSITE_REGISTRATIONS:'/admissions/registrations',
+
+  // ── Staff Extended ────────────────────────────────────────────────────────
+  STAFF_SCHOOLS:        '/staff/schools',
+  STAFF_GRADES:         '/staff/grades',
+  STAFF_MODULES:        '/staff/modules',
+  STAFF_LESSONS:        '/staff/lessons',
+  STAFF_EXAMS:          '/staff/exams',
+  STAFF_QUESTIONS:      '/staff/modulequestion',
+  STAFF_SCHEDULER:      '/staff/scheduler',
+
+  // ── Teacher Extended ─────────────────────────────────────────────────────
+  TEACHER_STUDENTS:   '/teacher/student-list',
+  TEACHER_EXAMS:      '/teacher/exams',
+  TEACHER_QUESTIONS:  '/teacher/examquestion',
+  TEACHER_SCHEDULER:  '/teacher/schedulerstatus',
+  TEACHER_CALENDAR:   '/teacher/teacher-calender',
+  TEACHER_ATTENDANCE: '/teacher/attendance',
+
+  // ── Student ───────────────────────────────────────────────────────────────
+  STUDENT_LEARNING: '/student/learning',
+
+  // ── Certificates ─────────────────────────────────────────────────────────
+  CERTIFICATES_HUB:  '/certificates/admin',
+  MY_CERTIFICATES:   '/certificates/my',
+  CERTIFICATES_GENERATE: '/certificates/generate',
+  CERTIFICATES_BULK:     '/certificates/bulk',
+
+  // ── Report Cards ─────────────────────────────────────────────────────────
+  REPORT_CARDS_HUB:     '/report-cards/admin',
+  GENERATE_REPORT_CARD: '/report-cards/generate',
+  REPORT_CARD_PREVIEW:  '/report-cards/preview/:id',
+  MY_REPORT_CARDS:      '/report-cards/my',
+  CHILD_REPORT_CARDS:   '/report-cards/child',
+
+  // ── Equipment Hub (E-Commerce) ────────────────────────────────────────────
+  SHOP_HOME:           '/shop',
+  SHOP_PRODUCTS:       '/shop/products',
+  SHOP_PRODUCT_DETAIL: '/shop/products/:id',
+  SHOP_CART:           '/shop/cart',
+  SHOP_WISHLIST:       '/shop/wishlist',
+  SHOP_CHECKOUT:       '/shop/checkout',
+  SHOP_ORDER_SUCCESS:  '/shop/orders/success',
+  SHOP_ORDER_TRACKING: '/shop/orders/tracking/:id',
+  SHOP_ORDERS:         '/shop/orders',
+  SHOP_ADMIN:          '/shop/admin',
+
+  // ── Support Tickets ────────────────────────────────────────────────────────
+  SUPPORT_TICKETS:       '/support/tickets',
+  SUPPORT_RAISE_TICKET:  '/support/raise-ticket',
+  SUPPORT_TICKET_DETAIL: '/support/tickets/:id',
+  SUPPORT_ANALYTICS:     '/support/analytics',
+} as const;
+
+export type RouteKey = keyof typeof ROUTES;

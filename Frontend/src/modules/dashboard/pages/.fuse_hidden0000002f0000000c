@@ -1,0 +1,790 @@
+import React, { useState, useEffect } from 'react';
+import {
+  Award, Bookmark, CheckCircle, Clock, GraduationCap, PlayCircle,
+  Shield, TrendingUp, X, BarChart2, PieChart as PieIcon,
+  Target, BookOpen, Activity
+} from 'lucide-react';
+import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
+import api from '@/services/api';
+import { useConfirm } from '@/hooks/useConfirm';
+import { analyticsService, StudentAnalytics } from '@/services/analyticsService';
+import ConfirmModal from '@/components/ConfirmModal';
+import StatsCard, { SkeletonStatCard } from '@/components/StatsCard';
+import {
+  DashboardPageShell, WelcomeBanner, StatGrid,
+  DashboardChartCard, DashboardWidgetCard, SectionHeader, EmptyState
+} from '@/components/dashboard/DashboardKit';
+import {
+  DashboardAreaChart, DashboardBarChart, DashboardPieChart,
+  SkeletonChart, CHART_COLORS
+} from '@/components/dashboard/ChartKit';
+
+interface StudentModuleProgress {
+  module_id: string;
+  module_name: string;
+  total_lessons: number;
+  completed_lessons: number;
+  pending_lessons: number;
+  completion_percentage: number;
+}
+
+interface RecentCompletion {
+  lesson_name: string;
+  module_name: string;
+  completed_at: string;
+}
+
+interface FailedUnit {
+  module_id: string;
+  module_name: string;
+  lesson_id?: string;
+  lesson_name?: string;
+  exam_title: string;
+  obtained_marks: number;
+  total_marks: number;
+  passing_marks: number;
+}
+
+interface ExamResult {
+  exam_id: string;
+  obtained_marks: number;
+  passing_marks: number;
+  is_passed: boolean;
+}
+
+interface StudentDashboardData {
+  student_name: string;
+  grade_name: string;
+  school_name: string;
+  student_id: string;
+  roll_no: string;
+  total_modules: number;
+  completed_lessons: number;
+  pending_lessons: number;
+  syllabus_completion_percentage: number;
+  total_exams: number;
+  average_exam_score: number;
+  modules_progress: StudentModuleProgress[];
+  recent_completions: RecentCompletion[];
+  failed_units: FailedUnit[];
+  exam_results: ExamResult[];
+}
+
+const StudentDashboard: React.FC = () => {
+  const [rawData, setRawData]               = useState<StudentDashboardData | null>(null);
+  const [analytics, setAnalytics]           = useState<StudentAnalytics | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(true);
+  const [subjectFilter, setSubjectFilter]   = useState('All');
+  const [loading, setLoading]               = useState(true);
+  const navigate = useNavigate();
+  const { confirmState, requestConfirm } = useConfirm();
+
+  const data = React.useMemo(() => {
+    if (!rawData) return null;
+    if (subjectFilter === 'All') return rawData;
+    return {
+      ...rawData,
+      modules_progress: rawData.modules_progress.filter(m => m.module_name === subjectFilter),
+      recent_completions: rawData.recent_completions.filter(c => c.module_name === subjectFilter),
+      failed_units: rawData.failed_units.filter(f => f.module_name === subjectFilter)
+    };
+  }, [rawData, subjectFilter]);
+
+  // MCQ Interactive Exam States
+  const [exams, setExams] = useState<any[]>([]);
+  const [activeTest, setActiveTest] = useState<any | null>(null);
+  const [testQuestions, setTestQuestions] = useState<any[]>([]);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [testSubmitting, setTestSubmitting] = useState(false);
+  const [testResult, setTestResult] = useState<any | null>(null);
+
+  useEffect(() => {
+    fetchData();
+    fetchAnalytics();
+  }, []);
+
+  const fetchAnalytics = async () => {
+    try {
+      const data = await analyticsService.getStudent();
+      setAnalytics(data);
+    } catch (err) {
+      console.error('Student analytics fetch failed:', err);
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const fetchFilteredData = async () => {
+      try {
+        const response = await api.get(`/dashboard/student?subjectFilter=${subjectFilter}`);
+        setRawData(response.data);
+      } catch (error) {
+        console.error('Failed to fetch filtered student dashboard data', error);
+      }
+    };
+    fetchFilteredData();
+  }, [subjectFilter]);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const response = await api.get('/dashboard/student');
+      setRawData(response.data);
+      const examsResponse = await api.get('/exams');
+      setExams(examsResponse.data);
+    } catch (error) {
+      console.error('Failed to fetch student dashboard data', error);
+      toast.error('Failed to load dashboard metrics.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFailedUnitClick = async (unit: FailedUnit) => {
+    if (!unit.lesson_id) return;
+    try {
+      await api.delete(`/lessons/${unit.lesson_id}/complete`);
+      toast.success("Topic marked as incomplete. Redirecting to study material...");
+      navigate(`/student/learning?lessonId=${unit.lesson_id}`);
+    } catch (error) {
+      console.error('Error marking unit as incomplete', error);
+      toast.error("Could not process your request.");
+    }
+  };
+
+  const handleStartTest = async (exam: any) => {
+    setLoading(true);
+    try {
+      const response = await api.get('/questions');
+      const examQuestions = response.data.filter((q: any) => q.exam_id === exam.id);
+      if (examQuestions.length === 0) {
+        toast.error("This exam doesn't have any questions configured yet.");
+        return;
+      }
+      setActiveTest(exam);
+      setTestQuestions(examQuestions);
+      setAnswers({});
+      setTestResult(null);
+    } catch (error) {
+      console.error('Failed to fetch questions', error);
+      toast.error('Failed to load questions.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSelectOption = (questionId: string, option: string) => {
+    setAnswers(prev => ({ ...prev, [questionId]: option }));
+  };
+
+  const handleSubmitTest = async () => {
+    if (Object.keys(answers).length < testQuestions.length) {
+      const ok = await requestConfirm({
+        title: 'Unanswered Questions',
+        message: 'You have not answered all questions. Submit anyway?',
+        variant: 'warning',
+        confirmLabel: 'Submit Anyway'
+      });
+      if (!ok) return;
+    }
+
+    setTestSubmitting(true);
+    try {
+      const submission = {
+        answers: Object.keys(answers).map(qId => ({
+          question_id: qId,
+          selected_option: answers[qId]
+        }))
+      };
+      const response = await api.post(`/exams/${activeTest.id}/submit`, submission);
+      setTestResult(response.data);
+      toast.success('Exam graded successfully!');
+      fetchData();
+    } catch (error) {
+      console.error('Failed to submit test', error);
+      toast.error('Error submitting exam answers.');
+    } finally {
+      setTestSubmitting(false);
+    }
+  };
+
+  // ── Chart data mapping (snake_case API → PascalCase ChartKit) ──────────────
+  const performanceTrend  = (analytics?.performance_trend  ?? []).map(d => ({ Month: d.month, Value: d.value }));
+  const attendanceTrend   = (analytics?.attendance_trend   ?? []).map(d => ({ Month: d.month, Value: d.value }));
+  const achievementGrowth = (analytics?.achievement_growth ?? []).map(d => ({ Month: d.month, Value: d.value }));
+  const subjectPerf       = (analytics?.subject_performance ?? []).map(d => ({ Label: d.label, Value: d.value }));
+  const learningProgress  = (analytics?.learning_progress  ?? []).map(d => ({ Label: d.label, Value: d.value }));
+  const passFail          = (analytics?.pass_fail_pie       ?? []).map(d => ({ Label: d.label, Value: d.value }));
+
+  // ── Skeleton ────────────────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <DashboardPageShell>
+        <div className="h-8 w-48 bg-slate-100 rounded-full animate-pulse" />
+        <StatGrid cols={4}>
+          {Array.from({ length: 4 }).map((_, i) => <SkeletonStatCard key={i} />)}
+        </StatGrid>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="lg:col-span-7 h-72 bg-slate-100 rounded-2xl animate-pulse" />
+          <div className="lg:col-span-5 h-72 bg-slate-100 rounded-2xl animate-pulse" />
+        </div>
+      </DashboardPageShell>
+    );
+  }
+
+  // ── MCQ Modal (unchanged) ───────────────────────────────────────────────────
+  const mcqModal = activeTest && (
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 md:p-6">
+      <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl border-slate-100 flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        {/* Header */}
+        <div className="p-6 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+          <div>
+            <span className="text-[9px] font-black bg-primary/10 text-primary px-2.5 py-0.5 rounded-full tracking-wider">Unit test assessment</span>
+            <h3 className="text-lg font-black text-slate-900 tracking-tight pt-1">{activeTest.title || 'Module Assessment'}</h3>
+          </div>
+          {!testResult && (
+            <button
+              onClick={async () => {
+                const ok = await requestConfirm({
+                  title: 'Cancel Test',
+                  message: 'Are you sure you want to cancel the test? Progress will be lost.',
+                  variant: 'danger',
+                  confirmLabel: 'Yes, Cancel Test'
+                });
+                if (ok) setActiveTest(null);
+              }}
+              className="text-xs font-bold text-slate-400 hover:text-slate-600 tracking-widest cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" /> Cancel
+            </button>
+          )}
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-8">
+          {testResult ? (
+            <div className="flex flex-col items-center justify-center py-10 space-y-6 text-center">
+              <div className={`w-20 h-20 rounded-full flex items-center justify-center ${testResult.passed ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600 animate-bounce'}`}>
+                <Award className="w-10 h-10" />
+              </div>
+              <div className="space-y-2">
+                <h4 className="text-2xl font-black text-slate-900 tracking-tight">
+                  {testResult.passed ? '🎉 Congratulations! You Passed!' : '⚠️ Learning Focus Needed'}
+                </h4>
+                <p className="text-xs text-slate-500 font-semibold tracking-wider">Unit test evaluation completed successfully</p>
+              </div>
+              <div className="bg-slate-50 rounded-2xl p-6 border-slate-100 w-full max-w-sm grid grid-cols-2 gap-4">
+                <div className="flex flex-col">
+                  <span className="text-[10px] text-slate-400 font-bold tracking-wider">Obtained score</span>
+                  <span className="text-3xl font-black text-slate-800 pt-1">{testResult.obtained_marks} / {testResult.total_marks}</span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[10px] text-slate-400 font-bold tracking-wider">Letter grade</span>
+                  <span className={`text-3xl font-black pt-1 ${testResult.passed ? 'text-emerald-600' : 'text-rose-600'}`}>{testResult.grade}</span>
+                </div>
+              </div>
+              {!testResult.passed && (
+                <p className="text-xs text-rose-600 font-bold max-w-md bg-rose-50 border-rose-100 px-4 py-2.5 rounded-xl">
+                  Weak area identified in this unit. Your teacher and parent have been notified to assist you in this topic.
+                </p>
+              )}
+              <button
+                onClick={() => setActiveTest(null)}
+                className="bg-primary text-white hover:bg-primary/95 px-8 py-3 rounded-xl font-black text-xs tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                Done & Close
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-8">
+              {testQuestions.map((q, idx) => (
+                <div key={q.id} className="space-y-4 p-5 bg-slate-50/50 hover:bg-slate-50 rounded-2xl border-slate-100 transition-all">
+                  <h4 className="font-extrabold text-slate-800 text-sm md:text-base flex gap-2">
+                    <span className="text-primary font-black">Q{idx + 1}.</span>
+                    {q.question_text}
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                    {[
+                      { key: 'A', text: q.option_a }, { key: 'B', text: q.option_b },
+                      { key: 'C', text: q.option_c }, { key: 'D', text: q.option_d }
+                    ].map((opt) => {
+                      const isSelected = answers[q.id] === opt.key;
+                      return (
+                        <button
+                          key={opt.key}
+                          onClick={() => handleSelectOption(q.id, opt.key)}
+                          className={`p-4 rounded-xl text-left flex items-start gap-3 transition-all cursor-pointer border ${
+                            isSelected
+                              ? 'bg-primary/5 border-primary text-primary font-extrabold shadow-sm'
+                              : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
+                          }`}
+                        >
+                          <span className={`w-5 h-5 rounded-full border flex items-center justify-center text-[10px] font-black transition-all shrink-0 ${
+                            isSelected ? 'bg-primary border-primary text-white' : 'border-slate-300 text-slate-400'
+                          }`}>{opt.key}</span>
+                          <span className="text-xs md:text-sm font-medium">{opt.text}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        {!testResult && (
+          <div className="p-6 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+              Answered: {Object.keys(answers).length} / {testQuestions.length} questions
+            </span>
+            <button
+              onClick={handleSubmitTest}
+              disabled={testSubmitting}
+              className="bg-primary text-white hover:bg-primary/95 disabled:bg-slate-300 px-6 py-3 rounded-xl font-black text-xs tracking-wider shadow-md transition-all active:scale-[0.98] flex items-center gap-1.5 cursor-pointer"
+            >
+              {testSubmitting ? 'Grading test...' : 'Submit answers'}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // ── Empty profile state ─────────────────────────────────────────────────────
+  if (!data) {
+    return (
+      <>
+        {mcqModal}
+        <DashboardPageShell>
+          <EmptyState
+            icon={<GraduationCap className="w-8 h-8" />}
+            title="No Associated Student Profile"
+            description="We couldn't load your student profile statistics. Please ensure the school has registered your student profile correctly in the database."
+          />
+        </DashboardPageShell>
+        <ConfirmModal
+          open={confirmState.open}
+          title={confirmState.title ?? ''}
+          message={confirmState.message}
+          confirmLabel={confirmState.confirmLabel}
+          cancelLabel={confirmState.cancelLabel}
+          variant={confirmState.variant}
+          onConfirm={confirmState.resolve ? () => confirmState.resolve!(true) : () => {}}
+          onCancel={confirmState.resolve ? () => confirmState.resolve!(false) : () => {}}
+        />
+      </>
+    );
+  }
+
+  // ── Unit filter selector ───────────────────────────────────────────────────
+  const unitSelector = (
+    <div className="flex flex-col gap-1">
+      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Filter by Unit</label>
+      <select
+        value={subjectFilter}
+        onChange={(e) => setSubjectFilter(e.target.value)}
+        className="bg-white border border-slate-200 text-slate-700 font-bold text-xs rounded-xl px-3 py-1.5 outline-none cursor-pointer hover:border-slate-300 transition-all focus:ring-2 focus:ring-primary/20 shadow-sm"
+      >
+        <option value="All">All Units / Modules</option>
+        {rawData?.modules_progress.map(m => (
+          <option key={m.module_id} value={m.module_name}>{m.module_name}</option>
+        ))}
+      </select>
+    </div>
+  );
+
+  const pendingExams = exams.filter((exam: any) =>
+    new Date(exam.date) > new Date() && (!data.exam_results || !data.exam_results.find(r => r.exam_id === exam.id))
+  );
+
+  return (
+    <>
+      {mcqModal}
+
+      <DashboardPageShell>
+
+        {/* Welcome Banner */}
+        <WelcomeBanner
+          badge="Active Student"
+          badgeColor="indigo"
+          title={`Hi, ${data.student_name}!`}
+          subtitle={`${data.school_name}  ·  ${data.grade_name}  —  See your year-round curriculum achievements, pending sub-topics, and exam performances.`}
+          actions={unitSelector}
+        />
+
+        {/* Exam Announcements */}
+        {pendingExams.length > 0 && (
+          <div className="space-y-3">
+            {pendingExams.map((exam: any) => (
+              <div key={exam.id} className="bg-amber-50/90 border-l-4 border-amber-500 border border-amber-200/60 p-5 rounded-2xl shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 animate-in slide-in-from-top-4 duration-300">
+                <div className="flex items-start gap-3">
+                  <span className="text-xl flex-shrink-0 animate-bounce pt-0.5">🔔</span>
+                  <div className="space-y-1">
+                    <h4 className="text-xs font-black text-amber-800 tracking-widest">New assessment announced!</h4>
+                    <p className="text-xs text-amber-900 font-extrabold">"{exam.title}" has been announced for your grade level!</p>
+                    <p className="text-[10px] text-amber-700/80 font-semibold tracking-wider">
+                      Scheduled: {new Date(exam.date).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleStartTest(exam)}
+                  className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-[4px] text-[10px] font-black tracking-widest transition-all shadow-md hover:scale-[1.02] active:scale-[0.98] cursor-pointer whitespace-nowrap"
+                >
+                  Take exam now
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* KPI Cards — Row 1: base data */}
+        <StatGrid cols={4}>
+          <StatsCard title="Total Topics"       value={analytics?.total_modules ?? data.total_modules}         color="blue"    icon={<Bookmark className="w-5 h-5" />} />
+          <StatsCard title="Completed Lessons"  value={analytics?.completed_lessons ?? data.completed_lessons} color="emerald" icon={<CheckCircle className="w-5 h-5" />} />
+          <StatsCard title="Total Exams"        value={analytics?.total_exams ?? data.total_exams}             color="amber"   icon={<Clock className="w-5 h-5" />} />
+          <StatsCard title="Avg Exam Score"     value={`${analytics?.average_score ?? data.average_exam_score}%`} color="indigo" icon={<TrendingUp className="w-5 h-5" />} />
+        </StatGrid>
+
+        {/* KPI Cards — Row 2: analytics-derived */}
+        <StatGrid cols={4}>
+          <StatsCard title="Attendance Rate"    value={`${analytics?.attendance_rate ?? 0}%`}       color="teal"   icon={<Activity className="w-5 h-5" />} />
+          <StatsCard title="Syllabus Complete"  value={`${analytics?.syllabus_completion ?? 0}%`}   color="purple" icon={<BookOpen className="w-5 h-5" />} />
+          <StatsCard title="Exams Passed"       value={analytics?.exams_passed ?? 0}                color="green"  icon={<CheckCircle className="w-5 h-5" />} />
+          <StatsCard title="Exams Failed"       value={analytics?.exams_failed ?? 0}                color="rose"   icon={<Target className="w-5 h-5" />} />
+        </StatGrid>
+
+        {/* Charts Row 1 — Performance Trend + Pass/Fail Pie */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+          <DashboardChartCard
+            className="lg:col-span-7"
+            title="Academic Performance Trend"
+            icon={<TrendingUp className="w-4.5 h-4.5 text-emerald-500" />}
+            badge="Monthly Avg Score"
+            badgeVariant="emerald"
+          >
+            <DashboardAreaChart
+              data={performanceTrend}
+              color={CHART_COLORS[1]}
+              height={220}
+              loading={analyticsLoading}
+              suffix="%"
+            />
+          </DashboardChartCard>
+
+          <DashboardChartCard
+            className="lg:col-span-5"
+            title="Exam Pass / Fail Distribution"
+            icon={<PieIcon className="w-4.5 h-4.5 text-blue-600" />}
+            badge="All Time"
+            badgeVariant="blue"
+          >
+            <DashboardPieChart
+              data={passFail}
+              height={220}
+              loading={analyticsLoading}
+              colors={[CHART_COLORS[1], CHART_COLORS[8]]}
+            />
+          </DashboardChartCard>
+
+        </div>
+
+        {/* Charts Row 2 — Subject Performance + Attendance Trend */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+          <DashboardChartCard
+            className="lg:col-span-6"
+            title="Subject-wise Performance"
+            icon={<BarChart2 className="w-4.5 h-4.5 text-amber-600" />}
+            badge="Avg Score by Subject"
+            badgeVariant="amber"
+          >
+            <DashboardBarChart
+              data={subjectPerf}
+              color={CHART_COLORS[2]}
+              height={220}
+              loading={analyticsLoading}
+              suffix="%"
+              colorful
+            />
+          </DashboardChartCard>
+
+          <DashboardChartCard
+            className="lg:col-span-6"
+            title="Attendance Progress"
+            icon={<Activity className="w-4.5 h-4.5 text-teal-600" />}
+            badge="Monthly"
+            badgeVariant="teal"
+          >
+            <DashboardAreaChart
+              data={attendanceTrend}
+              color={CHART_COLORS[5]}
+              height={220}
+              loading={analyticsLoading}
+              suffix="%"
+            />
+          </DashboardChartCard>
+
+        </div>
+
+        {/* Charts Row 3 — Learning Progress + Achievement Growth */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+          <DashboardChartCard
+            className="lg:col-span-5"
+            title="Learning Progress by Topic"
+            icon={<PieIcon className="w-4.5 h-4.5 text-violet-600" />}
+            badge="Completion %"
+            badgeVariant="purple"
+          >
+            <DashboardPieChart
+              data={learningProgress}
+              height={220}
+              loading={analyticsLoading}
+            />
+          </DashboardChartCard>
+
+          <DashboardChartCard
+            className="lg:col-span-7"
+            title="Monthly Achievement Growth"
+            icon={<TrendingUp className="w-4.5 h-4.5 text-indigo-600" />}
+            badge="Score Trend"
+            badgeVariant="primary"
+          >
+            <DashboardAreaChart
+              data={achievementGrowth}
+              color={CHART_COLORS[0]}
+              height={220}
+              loading={analyticsLoading}
+              suffix="%"
+            />
+          </DashboardChartCard>
+
+        </div>
+
+        {/* Weak / Focus Areas */}
+        {data.failed_units && data.failed_units.length > 0 && (
+          <DashboardWidgetCard noPadding className="border-rose-100">
+            <div className="flex items-center gap-2 p-6 border-b border-rose-100 bg-rose-50/60 rounded-t-2xl">
+              <div className="w-8 h-8 rounded-lg bg-rose-100 flex items-center justify-center text-rose-600">
+                <Shield className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="font-black text-rose-900 tracking-tight text-sm">⚠️ Focus areas needed (weak areas highlighted)</h3>
+                <p className="text-[10px] text-rose-500 font-semibold tracking-wider mt-0.5">Please review these units. Scoring below passing marks has triggered extra teacher attention.</p>
+              </div>
+            </div>
+            <div className="p-6">
+              <div className="flex gap-4 overflow-x-auto pb-4 pt-1 snap-x snap-mandatory scrollbar-thin scrollbar-thumb-rose-200">
+                {data.failed_units.map((unit, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => handleFailedUnitClick(unit)}
+                    className={`min-w-[280px] sm:min-w-[320px] snap-start bg-white border border-rose-100 rounded-xl p-4 flex flex-col justify-between shadow-sm relative overflow-hidden transition-all ${unit.lesson_id ? 'cursor-pointer hover:shadow-md' : ''}`}
+                  >
+                    <div className="space-y-1 text-left">
+                      <span className="text-[9px] font-black text-rose-500 bg-rose-50 px-2.5 py-0.5 rounded-full tracking-wider block w-fit truncate max-w-full">
+                        {unit.module_name}{unit.lesson_name ? ` - ${unit.lesson_name}` : ''}
+                      </span>
+                      <h4 className="font-extrabold text-slate-800 text-sm pt-1.5 line-clamp-1">{unit.exam_title}</h4>
+                    </div>
+                    <div className="flex items-center justify-between pt-4 border-t border-slate-50 mt-3 text-xs">
+                      <span className="font-bold text-slate-400">Score: <strong className="text-rose-600 font-black">{unit.obtained_marks}</strong> / {unit.total_marks}</span>
+                      <span className="text-[10px] bg-rose-50 text-rose-600 font-black px-2 py-0.5 rounded border border-rose-100 tracking-widest">Passing: {unit.passing_marks}</span>
+                    </div>
+                    {unit.lesson_id && (
+                      <div className="absolute top-4 right-4 opacity-50 text-rose-500">
+                        <PlayCircle className="w-5 h-5" />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </DashboardWidgetCard>
+        )}
+
+        {/* Exam Assessment Center */}
+        <DashboardWidgetCard noPadding>
+          <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+            <div>
+              <h3 className="font-black text-slate-900 tracking-tight text-lg">📝 Unit Test Assessment Center</h3>
+              <p className="text-[11px] text-slate-400 font-semibold tracking-wider mt-0.5">MCQ-based unit tests & auto-graded performance</p>
+            </div>
+            {exams.filter(e => e.grade_name === data.grade_name).some(e => !data.exam_results?.find(r => r.exam_id === e.id)) && (
+              <span className="text-xs font-bold text-emerald-600 bg-emerald-100 px-3 py-1 rounded-full tracking-wider animate-pulse">Active tests</span>
+            )}
+          </div>
+
+          <div className="p-6 md:p-8">
+            {exams.filter(e => e.grade_name === data.grade_name).length === 0 ? (
+              <EmptyState title="No active examinations configured for your grade." />
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {exams.filter(e => e.grade_name === data.grade_name).map((exam) => {
+                  const result = data.exam_results?.find(r => r.exam_id === exam.id);
+                  const isPassed = result?.is_passed;
+                  return (
+                    <div key={exam.id} className={`${isPassed ? 'bg-emerald-100/50 border-emerald-300' : 'bg-slate-50/50 hover:bg-slate-50 border-slate-200'} rounded-2xl p-5 flex flex-col justify-between hover:shadow-md transition-all relative overflow-hidden border`}>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className={`text-[9px] font-black px-2.5 py-0.5 rounded-full tracking-wider ${isPassed ? 'text-emerald-800 bg-emerald-200' : 'text-blue-600 bg-blue-100'}`}>{exam.module_name}</span>
+                          <span className="text-[10px] text-slate-400 font-bold">Passing: {exam.passing_marks || '40'}</span>
+                        </div>
+                        <h4 className="font-extrabold text-slate-800 text-sm md:text-base pt-1">{exam.title || 'Unit Assessment'}</h4>
+                        <div className="text-[10px] text-slate-400 font-bold tracking-wider flex flex-wrap gap-x-4 gap-y-1">
+                          <span>Questions: {exam.question_count}</span>
+                          <span>Total marks: {exam.total_marks || exam.question_count}</span>
+                          {exam.duration_minutes && <span>Duration: {exam.duration_minutes} mins</span>}
+                        </div>
+                      </div>
+                      <div className="pt-5 border-t border-slate-200 mt-4 flex items-center justify-between gap-4">
+                        {isPassed ? (
+                          <div className="flex-1 bg-emerald-500 text-white shadow-sm text-center py-2.5 rounded-xl font-black text-xs tracking-wider flex items-center justify-center gap-1.5 cursor-default">
+                            <CheckCircle className="w-4 h-4" /> Passed
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => handleStartTest(exam)}
+                            className="flex-1 bg-blue-600 text-white hover:bg-blue-700 text-center py-2.5 rounded-xl font-black text-xs tracking-wider transition-all active:scale-[0.98] shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+                          >
+                            <PlayCircle className="w-4 h-4" /> Start unit test
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </DashboardWidgetCard>
+
+        {/* Year-Round Progress + Milestones */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+          {/* Module Progress */}
+          <DashboardWidgetCard noPadding className="lg:col-span-8">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h3 className="font-black text-slate-900 tracking-tight text-base">Year-Round Progress by Topics</h3>
+                <p className="text-[11px] text-slate-400 font-semibold tracking-wider mt-0.5">Chapters completion dashboard</p>
+              </div>
+              <span className="text-[10px] font-bold text-primary bg-primary/10 px-3 py-1 rounded-full tracking-wider">Interactive map</span>
+            </div>
+            <div className="p-6 md:p-8 space-y-4">
+              {data.modules_progress.length === 0 ? (
+                <EmptyState title="No active topics configured for this grade." />
+              ) : (
+                data.modules_progress.map((module) => {
+                  const isFullyDone = module.completion_percentage === 100;
+                  return (
+                    <div key={module.module_id} className="space-y-3 p-5 bg-slate-50/40 hover:bg-white rounded-[10px] shadow-sm hover:shadow-md transition-all duration-300">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="space-y-1">
+                          <span className="font-black text-slate-800 text-sm flex items-center gap-1.5">
+                            {module.module_name}
+                            {isFullyDone && <CheckCircle className="w-4 h-4 text-emerald-500 fill-emerald-50" />}
+                          </span>
+                          <div className="text-[10px] text-slate-400 font-extrabold tracking-wider flex items-center gap-3">
+                            <span>Total: {module.total_lessons}</span>
+                            <span className="text-emerald-600">Completed: {module.completed_lessons}</span>
+                            <span className="text-amber-600">Pending: {module.pending_lessons}</span>
+                          </div>
+                        </div>
+                        <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-[4px] shrink-0 ${isFullyDone ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                          {module.completion_percentage}% Completed
+                        </span>
+                      </div>
+                      <div className="w-full bg-slate-200/80 h-2.5 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full transition-all duration-700 ease-out rounded-full ${isFullyDone ? 'bg-gradient-to-r from-emerald-400 to-emerald-600' : 'bg-gradient-to-r from-emerald-500 to-primary'}`}
+                          style={{ width: `${module.completion_percentage}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </DashboardWidgetCard>
+
+          {/* Sidebar: Milestones + Study Center */}
+          <div className="lg:col-span-4 space-y-5">
+
+            {/* Recent Milestones */}
+            <DashboardWidgetCard noPadding>
+              <div className="p-5 border-b border-slate-100">
+                <SectionHeader title="Recent Milestones" icon={<Award className="w-4 h-4" />} />
+              </div>
+              <div className="p-5">
+                {data.recent_completions.length === 0 ? (
+                  <EmptyState title="No recent milestones. Start learning today!" />
+                ) : (
+                  <div className="relative border-l-2 border-emerald-100 pl-5 space-y-6 ml-2">
+                    {data.recent_completions.map((completion, idx) => (
+                      <div key={idx} className="relative">
+                        <div className="absolute -left-[27px] top-1.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white ring-4 ring-emerald-500/15 flex items-center justify-center">
+                          <div className="w-1.5 h-1.5 bg-white rounded-full" />
+                        </div>
+                        <div className="bg-slate-50 p-3.5 rounded-[8px] hover:bg-slate-100/50 transition-all shadow-sm">
+                          <div className="flex items-start justify-between gap-3">
+                            <span className="text-xs font-black text-slate-800 block leading-tight">{completion.lesson_name}</span>
+                            <span className="text-[8px] font-black font-mono bg-white border border-slate-200/55 px-2 py-0.5 rounded text-slate-400 tracking-wider shrink-0">
+                              {new Date(completion.completed_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                            </span>
+                          </div>
+                          <span className="text-[9px] font-black text-emerald-600 tracking-wider block pt-1.5">Topic: {completion.module_name}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </DashboardWidgetCard>
+
+            {/* Study Center CTA */}
+            <div
+              style={{ backgroundColor: 'color-mix(in oklab, var(--primary) 90%, transparent)' }}
+              className="text-white rounded-2xl p-6 shadow-md relative overflow-hidden space-y-4"
+            >
+              <div className="space-y-1">
+                <span className="text-[8px] font-black tracking-widest bg-white/20 px-2 py-0.5 rounded-full">Ready to learn?</span>
+                <h4 className="text-base font-black tracking-tight pt-1">Go to learning paths</h4>
+                <p className="text-[10px] text-blue-100/90 font-medium leading-relaxed">
+                  Access all subject contents, view interactive slides, watch video tutorials, and download resources directly.
+                </p>
+              </div>
+              <button
+                onClick={() => navigate('/student/learning')}
+                className="w-full bg-white text-blue-700 hover:bg-blue-50 py-2.5 rounded-xl font-black text-xs tracking-wider shadow-sm transition-all active:scale-[0.98] flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <PlayCircle className="w-4 h-4" /> Start learning now
+              </button>
+            </div>
+
+          </div>
+        </div>
+
+      </DashboardPageShell>
+
+      <ConfirmModal
+        open={confirmState.open}
+        title={confirmState.title ?? ''}
+        message={confirmState.message}
+        confirmLabel={confirmState.confirmLabel}
+        cancelLabel={confirmState.cancelLabel}
+        variant={confirmState.variant}
+        onConfirm={confirmState.resolve ? () => confirmState.resolve!(true) : () => {}}
+        onCancel={confirmState.resolve ? () => confirmState.resolve!(false) : () => {}}
+      />
+    </>
+  );
+};
+
+export default StudentDashboard;

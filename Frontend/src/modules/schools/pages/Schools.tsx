@@ -4,7 +4,8 @@ import { useLocation } from 'react-router-dom';
 import {
   Check, Edit, Hash, Plus, School, Search, Trash2, X,
   Phone, Mail, MapPin, User, ShieldCheck, ChevronRight,
-  GraduationCap, Activity, AlertCircle, BookOpen,
+  GraduationCap, Activity, AlertCircle, BookOpen, UserCheck, Users,
+  TrendingUp, BarChart3, PieChart, BookOpenCheck, Clock, CheckCircle2, Circle
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '@/services/api';
@@ -59,18 +60,23 @@ const StatusBadge: React.FC<{ active: boolean; size?: 'sm' | 'md' }> = ({ active
 
 // ─── School avatar ────────────────────────────────────────────────────────────
 
-const SchoolAvatar: React.FC<{ logoUrl?: string; name: string; size?: 'sm' | 'lg' }> = ({
-  logoUrl, name, size = 'sm',
+const SchoolAvatar: React.FC<{ logoUrl?: string | null; name: string; size?: 'sm' | 'lg' } & { isSelected?: boolean }> = ({
+  logoUrl, name, size = 'sm', isSelected = false,
 }) => {
-  const initials = name.trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase();
-  const base = size === 'lg'
-    ? 'w-14 h-14 rounded-xl text-lg'
-    : 'w-10 h-10 rounded-lg text-xs';
+  const initials = name
+    .split(' ')
+    .slice(0, 2)
+    .map(w => w[0])
+    .join('')
+    .toUpperCase();
+  const base = size === 'lg' ? 'w-16 h-16 rounded-2xl text-xl' : 'w-10 h-10 rounded-xl text-xs';
 
   return (
-    <div className={`${base} bg-gradient-to-br from-indigo-50 to-indigo-100 border-2 border-indigo-200/60
-      flex items-center justify-center font-black text-indigo-600 flex-shrink-0 overflow-hidden shadow-sm`}
-    >
+    <div className={`${base} flex items-center justify-center font-black flex-shrink-0 overflow-hidden shadow-xs border transition-all ${
+      isSelected || size === 'lg'
+        ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+        : 'bg-indigo-50 dark:bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-100 dark:border-indigo-400/25'
+    }`}>
       {logoUrl
         ? <img src={logoUrl} alt="" className="w-full h-full object-cover" />
         : initials || <School className={size === 'lg' ? 'w-7 h-7' : 'w-4 h-4'} />
@@ -123,6 +129,86 @@ const Schools: React.FC = () => {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [showMapPicker, setShowMapPicker] = useState(false);
   const location = useLocation();
+
+  // Selected school stats (Requirement 1)
+  const [studentCount, setStudentCount] = useState<number | null>(null);
+  const [assignedTeachers, setAssignedTeachers] = useState<{ id: string; name: string; isPrimary: boolean }[]>([]);
+  const [statsLoading, setStatsLoading] = useState<boolean>(false);
+
+  // Selected school teacher syllabus completion state
+  const [selectedSyllabusTeacherId, setSelectedSyllabusTeacherId] = useState<string>('');
+  const [teacherSyllabusData, setTeacherSyllabusData] = useState<any>(null);
+  const [teacherSyllabusLoading, setTeacherSyllabusLoading] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!selectedSchool?.id) {
+      setTeacherSyllabusData(null);
+      setSelectedSyllabusTeacherId('');
+      return;
+    }
+
+    let isMounted = true;
+    setTeacherSyllabusLoading(true);
+
+    const params: Record<string, any> = {};
+    if (selectedSyllabusTeacherId) params.teacherId = selectedSyllabusTeacherId;
+
+    api.get('/teacher/learning-path/syllabus-completion', { params })
+      .then(res => {
+        if (!isMounted) return;
+        const data = res.data?.data || res.data;
+        setTeacherSyllabusData(data);
+      })
+      .catch(() => {
+        if (isMounted) setTeacherSyllabusData(null);
+      })
+      .finally(() => {
+        if (isMounted) setTeacherSyllabusLoading(false);
+      });
+
+    return () => { isMounted = false; };
+  }, [selectedSchool?.id, selectedSyllabusTeacherId]);
+
+  useEffect(() => {
+    if (!selectedSchool?.id) {
+      setStudentCount(null);
+      setAssignedTeachers([]);
+      return;
+    }
+
+    let isMounted = true;
+    setStatsLoading(true);
+
+    Promise.all([
+      api.get('/students', { params: { schoolId: selectedSchool.id, pageSize: 1 } }).catch(() => null),
+      api.get('/teacher-schools/paged', { params: { schoolId: selectedSchool.id, pageSize: 100 } }).catch(() => null)
+    ]).then(([studRes, teachRes]) => {
+      if (!isMounted) return;
+
+      if (studRes?.data) {
+        const count = studRes.data.total_count ?? studRes.data.totalCount ?? (Array.isArray(studRes.data) ? studRes.data.length : 0);
+        setStudentCount(count);
+      } else {
+        setStudentCount(0);
+      }
+
+      if (teachRes?.data) {
+        const rawItems = teachRes.data.items || (Array.isArray(teachRes.data) ? teachRes.data : []);
+        const mapped = rawItems.map((t: any) => ({
+          id: t.teacherId || t.teacher_id || t.id,
+          name: t.teacherName || t.teacher_name || t.fullName || t.name || 'Faculty Member',
+          isPrimary: Boolean(t.isPrimary ?? t.is_primary)
+        }));
+        setAssignedTeachers(mapped);
+      } else {
+        setAssignedTeachers([]);
+      }
+    }).finally(() => {
+      if (isMounted) setStatsLoading(false);
+    });
+
+    return () => { isMounted = false; };
+  }, [selectedSchool?.id]);
 
   useEffect(() => { setCurrentPage(1); }, [searchTerm]);
 
@@ -442,22 +528,21 @@ const Schools: React.FC = () => {
                     <div
                       key={school.id}
                       onClick={() => setSelectedSchool(school)}
-                      className={`relative px-4 py-3.5 cursor-pointer flex items-center gap-3.5 transition-all duration-200
-                        border-l-[3px] group
-                        ${isSelected
-                          ? 'bg-indigo-50/70 dark:bg-indigo-500/15 border-l-indigo-500'
-                          : 'border-l-transparent hover:bg-slate-50 dark:hover:bg-[#283548] hover:border-l-slate-300 dark:hover:border-l-[#334155]'
-                        }`}
+                      className={`relative px-4 py-3.5 cursor-pointer flex items-center gap-3.5 transition-all duration-200 border-l-4 group ${
+                        isSelected
+                          ? 'bg-indigo-50/80 dark:bg-indigo-500/15 border-l-indigo-600 dark:border-l-indigo-400 shadow-xs'
+                          : 'border-l-transparent hover:bg-slate-50 dark:hover:bg-[#283548] hover:border-l-slate-300'
+                      }`}
                     >
-                      <SchoolAvatar logoUrl={school.logo_url} name={school.name} size="sm" />
+                      <SchoolAvatar logoUrl={school.logo_url} name={school.name} size="sm" isSelected={isSelected} />
 
                       <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-bold truncate leading-tight
-                          ${isSelected ? 'text-indigo-800 dark:text-indigo-300' : 'text-slate-800 dark:text-white'}`}
-                        >
+                        <p className={`text-xs font-black truncate leading-tight group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors ${
+                          isSelected ? 'text-indigo-800 dark:text-indigo-300' : 'text-slate-800 dark:text-white'
+                        }`}>
                           {school.name}
                         </p>
-                        <p className="text-[11px] text-slate-400 dark:text-[#64748b] font-medium truncate mt-0.5">
+                        <p className="text-[10px] text-slate-500 dark:text-[#94a3b8] font-semibold truncate mt-0.5">
                           {school.school_code}
                           {school.principal_name && (
                             <> · <span className="text-slate-500 dark:text-[#94a3b8]">{school.principal_name}</span></>
@@ -467,9 +552,9 @@ const Schools: React.FC = () => {
 
                       <div className="flex items-center gap-2 flex-shrink-0">
                         <StatusBadge active={school.is_active} />
-                        <ChevronRight className={`w-4 h-4 transition-all duration-200
-                          ${isSelected ? 'text-indigo-500 translate-x-0.5' : 'text-slate-300 dark:text-[#475569] group-hover:text-slate-400 dark:group-hover:text-[#64748b]'}`}
-                        />
+                        <ChevronRight className={`w-4 h-4 transition-all duration-200 ${
+                          isSelected ? 'text-indigo-600 dark:text-indigo-400 translate-x-0.5' : 'text-slate-300 dark:text-[#475569]'
+                        }`} />
                       </div>
                     </div>
                   );
@@ -497,48 +582,36 @@ const Schools: React.FC = () => {
 
                 {/* Card 1: School Identity */}
                 <div className="bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] rounded-2xl shadow-sm dark:shadow-[0_4px_20px_rgba(0,0,0,0.3)] overflow-hidden">
-                  {/* Colour band */}
-                  <div className={`h-1.5 w-full ${selectedSchool.is_active
-                    ? 'bg-gradient-to-r from-emerald-400 via-emerald-300 to-teal-400'
-                    : 'bg-gradient-to-r from-rose-400 to-rose-300'}`}
-                  />
-
                   <div className="p-5 space-y-5">
                     {/* School name + actions */}
                     <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                       <div className="flex items-start gap-4">
-                        <SchoolAvatar logoUrl={selectedSchool.logo_url} name={selectedSchool.name} size="lg" />
+                        <SchoolAvatar logoUrl={selectedSchool.logo_url} name={selectedSchool.name} size="lg" isSelected />
                         <div>
-                          <h2 className="text-base font-black text-slate-800 dark:text-white leading-tight tracking-tight">
-                            {selectedSchool.name}
-                          </h2>
-                          <p className="text-xs text-slate-400 dark:text-[#64748b] font-semibold mt-1 flex items-center gap-1.5">
-                            <Hash className="w-3 h-3" />
-                            {selectedSchool.school_code}
-                          </p>
-                          <div className="mt-2">
+                          <div className="flex items-center gap-2">
+                            <h2 className="text-lg font-black text-slate-900 dark:text-white leading-tight tracking-tight">
+                              {selectedSchool.name}
+                            </h2>
                             <StatusBadge active={selectedSchool.is_active} size="md" />
                           </div>
+                          <p className="text-xs text-slate-500 dark:text-[#64748b] font-semibold mt-1 flex items-center gap-1.5">
+                            <Hash className="w-3.5 h-3.5" />
+                            {selectedSchool.school_code}
+                          </p>
                         </div>
                       </div>
 
                       <div className="flex items-center gap-2 self-start flex-shrink-0">
                         <button
                           onClick={() => handleEdit(selectedSchool)}
-                          className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-50 dark:bg-indigo-500/15 hover:bg-indigo-100 dark:hover:bg-indigo-500/25
-                            text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-400/25 hover:border-indigo-300 dark:hover:border-indigo-400/40 rounded-lg
-                            font-bold text-xs transition-all focus:outline-none focus:ring-2
-                            focus:ring-indigo-300 focus:ring-offset-1 shadow-xs"
+                          className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-extrabold text-xs transition-all flex items-center gap-1.5 shadow-xs active:scale-95 cursor-pointer"
                         >
                           <Edit className="w-3.5 h-3.5" />
                           Edit
                         </button>
                         <button
                           onClick={() => handleDelete(selectedSchool.id, selectedSchool.name)}
-                          className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-rose-50 dark:bg-rose-500/15 hover:bg-rose-100 dark:hover:bg-rose-500/25
-                            text-rose-600 dark:text-rose-300 border border-rose-200 dark:border-rose-400/25 hover:border-rose-300 dark:hover:border-rose-400/40 rounded-lg
-                            font-bold text-xs transition-all focus:outline-none focus:ring-2
-                            focus:ring-rose-300 focus:ring-offset-1 shadow-xs"
+                          className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-extrabold text-xs transition-all flex items-center gap-1.5 shadow-xs active:scale-95 cursor-pointer"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                           Delete
@@ -636,6 +709,199 @@ const Schools: React.FC = () => {
                         No Principal Assigned
                       </p>
                     </div>
+                  )}
+                </div>
+
+                {/* Card 3: School Enrollment & Faculty Summary (Requirement 1) */}
+                <div className="bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] rounded-2xl shadow-sm dark:shadow-[0_4px_20px_rgba(0,0,0,0.3)] p-5 space-y-4">
+                  <SectionHeader icon={<Users className="w-3.5 h-3.5" />} title="School Enrollment & Faculty" />
+
+                  <div className="grid grid-cols-2 gap-4">
+                    {/* Students Count */}
+                    <div className="flex items-center gap-3.5 p-4 bg-indigo-50/50 dark:bg-indigo-500/10 rounded-xl border border-indigo-100 dark:border-indigo-400/20">
+                      <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 flex items-center justify-center flex-shrink-0">
+                        <GraduationCap className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 dark:text-[#64748b] uppercase tracking-wider">Total Students</p>
+                        <p className="text-lg font-black text-slate-800 dark:text-white leading-none mt-1">
+                          {statsLoading ? '...' : (studentCount ?? 0)}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Assigned Teachers Count */}
+                    <div className="flex items-center gap-3.5 p-4 bg-emerald-50/50 dark:bg-emerald-500/10 rounded-xl border border-emerald-100 dark:border-emerald-400/20">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 flex items-center justify-center flex-shrink-0">
+                        <UserCheck className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 dark:text-[#64748b] uppercase tracking-wider">Assigned Teachers</p>
+                        <p className="text-lg font-black text-slate-800 dark:text-white leading-none mt-1">
+                          {statsLoading ? '...' : assignedTeachers.length}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Assigned Teachers List Pills */}
+                  {assignedTeachers.length > 0 ? (
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 dark:text-[#64748b] uppercase tracking-wider mb-2">
+                        Assigned Faculty List ({assignedTeachers.length})
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {assignedTeachers.map((t) => (
+                          <span
+                            key={t.id}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 dark:bg-[#283548] text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-[#334155] rounded-xl text-xs font-semibold"
+                          >
+                            <UserCheck className="w-3.5 h-3.5 text-emerald-500" />
+                            {t.name}
+                            {t.isPrimary && (
+                              <span className="text-[9px] bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300 px-1.5 py-0.5 rounded-full font-bold ml-1">
+                                Primary
+                              </span>
+                            )}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : !statsLoading && (
+                    <p className="text-xs font-semibold text-slate-400 dark:text-[#64748b]">
+                      No teachers assigned to this school yet.
+                    </p>
+                  )}
+                </div>
+
+                {/* Card 4: Teacher Syllabus Completion Analytics (with Line and Bar Charts by Teacher) */}
+                <div className="bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] rounded-2xl shadow-sm dark:shadow-[0_4px_20px_rgba(0,0,0,0.3)] p-5 space-y-4">
+                  <div className="flex items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-[#283548]">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-md bg-indigo-50 dark:bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 flex items-center justify-center flex-shrink-0">
+                        <TrendingUp className="w-3.5 h-3.5" />
+                      </div>
+                      <h3 className="text-xs font-black text-slate-500 dark:text-[#94a3b8] uppercase tracking-widest">
+                        Faculty Syllabus Completion
+                      </h3>
+                    </div>
+
+                    {/* Teacher Selector Filter */}
+                    <select
+                      value={selectedSyllabusTeacherId}
+                      onChange={e => setSelectedSyllabusTeacherId(e.target.value)}
+                      className="bg-slate-50 dark:bg-[#283548] border border-slate-200 dark:border-[#334155] rounded-xl px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-indigo-400"
+                    >
+                      <option value="">All Faculty Overview</option>
+                      {assignedTeachers.map(t => (
+                        <option key={t.id} value={t.id}>{t.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {teacherSyllabusLoading ? (
+                    <div className="py-8 text-center text-xs font-semibold text-slate-400">Loading syllabus metrics...</div>
+                  ) : teacherSyllabusData ? (
+                    <div className="space-y-4">
+                      {/* Stat summary grid */}
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="bg-indigo-50/50 dark:bg-indigo-500/10 border border-indigo-100 dark:border-indigo-400/20 rounded-xl p-3 text-center">
+                          <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400 dark:text-[#64748b]">Overall Completion</p>
+                          <p className="text-base font-black text-indigo-600 dark:text-indigo-300 mt-0.5">
+                            {Math.round(teacherSyllabusData.overallCompletionPercentage || teacherSyllabusData.overall_completion_percentage || 0)}%
+                          </p>
+                        </div>
+                        <div className="bg-emerald-50/50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-400/20 rounded-xl p-3 text-center">
+                          <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400 dark:text-[#64748b]">Done Topics</p>
+                          <p className="text-base font-black text-emerald-600 dark:text-emerald-300 mt-0.5">
+                            {teacherSyllabusData.completedTopics ?? teacherSyllabusData.completed_topics ?? 0}
+                          </p>
+                        </div>
+                        <div className="bg-rose-50/50 dark:bg-rose-500/10 border border-rose-100 dark:border-rose-400/20 rounded-xl p-3 text-center">
+                          <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400 dark:text-[#64748b]">Remaining</p>
+                          <p className="text-base font-black text-rose-600 dark:text-rose-300 mt-0.5">
+                            {teacherSyllabusData.remainingTopics ?? teacherSyllabusData.remaining_topics ?? 0}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Visual Line / Area Graph */}
+                      <div className="bg-slate-50 dark:bg-[#283548]/40 border border-slate-200 dark:border-[#334155] rounded-xl p-4 space-y-2">
+                        <div className="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-200">
+                          <span className="flex items-center gap-1.5">
+                            <Activity className="w-3.5 h-3.5 text-indigo-500" />
+                            Syllabus Completion Trajectory
+                          </span>
+                          <span className="text-indigo-600 dark:text-indigo-400">
+                            {Math.round(teacherSyllabusData.overallCompletionPercentage || teacherSyllabusData.overall_completion_percentage || 0)}% Achieved
+                          </span>
+                        </div>
+
+                        {/* Interactive SVG Progress Line Graph */}
+                        <div className="relative w-full h-20 pt-2">
+                          <svg className="w-full h-full overflow-visible" viewBox="0 0 300 60" preserveAspectRatio="none">
+                            <defs>
+                              <linearGradient id="lineGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="#6366f1" stopOpacity="0.4" />
+                                <stop offset="100%" stopColor="#6366f1" stopOpacity="0.0" />
+                              </linearGradient>
+                            </defs>
+                            <path
+                              d="M 0 50 Q 75 40, 150 25 T 300 10 L 300 60 L 0 60 Z"
+                              fill="url(#lineGrad)"
+                            />
+                            <path
+                              d="M 0 50 Q 75 40, 150 25 T 300 10"
+                              fill="none"
+                              stroke="#6366f1"
+                              strokeWidth="3"
+                              strokeLinecap="round"
+                            />
+                            <circle cx="75" cy="40" r="4" fill="#6366f1" className="animate-pulse" />
+                            <circle cx="150" cy="25" r="4" fill="#6366f1" className="animate-pulse" />
+                            <circle cx="300" cy="10" r="5" fill="#4f46e5" />
+                          </svg>
+                        </div>
+                      </div>
+
+                      {/* Grade & Subject Progress Bars by Teacher */}
+                      <div className="space-y-2.5">
+                        <p className="text-[10px] font-bold text-slate-400 dark:text-[#64748b] uppercase tracking-wider">
+                          Grade & Subject Breakdown
+                        </p>
+
+                        {((teacherSyllabusData.gradeBreakdown || teacherSyllabusData.grade_breakdown || []) as any[]).length > 0 ? (
+                          ((teacherSyllabusData.gradeBreakdown || teacherSyllabusData.grade_breakdown || []) as any[]).map((g: any, idx: number) => {
+                            const pct = Math.min(100, Math.max(0, Math.round(g.completionPercentage ?? g.completion_percentage ?? 0)));
+                            return (
+                              <div key={idx} className="bg-white dark:bg-[#283548] border border-slate-100 dark:border-[#334155] rounded-xl p-3 space-y-1.5 shadow-2xs">
+                                <div className="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-200">
+                                  <span className="flex items-center gap-1.5">
+                                    <BookOpenCheck className="w-3.5 h-3.5 text-indigo-500" />
+                                    {g.gradeName || g.grade_name || `Grade ${idx + 1}`}
+                                  </span>
+                                  <span className="text-[11px] font-extrabold text-indigo-600 dark:text-indigo-300">
+                                    {pct}% ({g.completedTopics ?? g.completed_topics ?? 0}/{g.totalTopics ?? g.total_topics ?? 0} Topics)
+                                  </span>
+                                </div>
+                                <div className="w-full bg-slate-100 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full bg-gradient-to-r from-indigo-500 to-emerald-500 transition-all duration-500 rounded-full"
+                                    style={{ width: `${pct}%` }}
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <div className="p-3 bg-slate-50 dark:bg-[#283548] rounded-xl text-xs font-semibold text-slate-400 text-center">
+                            No grade breakdown metrics available.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs font-semibold text-slate-400">No syllabus metrics found for this selection.</p>
                   )}
                 </div>
 

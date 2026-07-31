@@ -15,9 +15,9 @@ import {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const LEVEL_STYLE: Record<string, { bg: string; text: string; border: string }> = {
-  High:   { bg: 'bg-rose-50/50',    text: 'text-rose-700',    border: 'border-rose-100'   },
-  Medium: { bg: 'bg-amber-50/50',  text: 'text-amber-700',  border: 'border-amber-100' },
-  Low:    { bg: 'bg-violet-50/50', text: 'text-violet-700', border: 'border-violet-100' },
+  High: { bg: 'bg-rose-50/50', text: 'text-rose-700', border: 'border-rose-100' },
+  Medium: { bg: 'bg-amber-50/50', text: 'text-amber-700', border: 'border-amber-100' },
+  Low: { bg: 'bg-violet-50/50', text: 'text-violet-700', border: 'border-violet-100' },
 };
 
 const WeaknessBadge: React.FC<{ level: StudentWeakTopic['weakness_level'] }> = ({ level }) => {
@@ -31,7 +31,7 @@ const WeaknessBadge: React.FC<{ level: StudentWeakTopic['weakness_level'] }> = (
 };
 
 const ScoreBar: React.FC<{ score: number; maxScore: number }> = ({ score, maxScore }) => {
-  const pct   = maxScore > 0 ? (score / maxScore) * 100 : 0;
+  const pct = maxScore > 0 ? (score / maxScore) * 100 : 0;
   const color = pct >= 60 ? 'bg-emerald-500' : pct >= 35 ? 'bg-amber-400' : 'bg-rose-500';
   return (
     <div className="flex items-center gap-3 text-[11px] font-bold">
@@ -180,22 +180,33 @@ const StudentWeaknessAnalysis: React.FC = () => {
   const [searchParams] = useSearchParams();
   const qStudentId = searchParams.get('studentId') ?? '';
 
-  const [grades, setGrades]         = useState<{ grade_id: string; grade_name: string }[]>([]);
-  const [selectedGradeId, setGid]   = useState<string>('');
-  const [gradeData, setGradeData]   = useState<GradeWeaknessAnalysis | null>(null);
-  const [studentFilter, setFilter]  = useState(qStudentId);
-  const [loading, setLoading]       = useState(false);
-  const [syncing, setSyncing]       = useState(false);
+  const [grades, setGrades] = useState<{ grade_id: string; grade_name: string; section_id?: string; section_name?: string }[]>([]);
+  const [selectedGradeId, setGid] = useState<string>('');
+  const [selectedSectionId, setSectionId] = useState<string | undefined>(undefined);
+  const [gradeData, setGradeData] = useState<GradeWeaknessAnalysis | null>(null);
+  const [studentFilter, setFilter] = useState(qStudentId);
+  const [loading, setLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [resolvingId, setResolving] = useState<string | null>(null);
-  const [gradesLoading, setGL]      = useState(true);
+  const [gradesLoading, setGL] = useState(true);
+
+  const tabKey = (g: { grade_id: string; section_id?: string }) => `${g.grade_id}::${g.section_id ?? 'none'}`;
 
   const loadGrades = useCallback(async () => {
     setGL(true);
     try {
       const paths = await teacherEnhancedService.getLearningPaths();
-      const gs    = paths.map(p => ({ grade_id: p.grade_id, grade_name: p.grade_name }));
+      const gs = paths.map((p: any) => ({
+        grade_id: p.grade_id || p.gradeId,
+        grade_name: p.grade_name || p.gradeName,
+        section_id: p.section_id || p.sectionId,
+        section_name: p.section_name || p.sectionName
+      }));
       setGrades(gs);
-      if (gs.length > 0) setGid(gs[0].grade_id);
+      if (gs.length > 0) {
+        setGid(gs[0].grade_id);
+        setSectionId(gs[0].section_id);
+      }
     } catch {
       toast.error('Failed to load grades.');
     } finally {
@@ -203,11 +214,11 @@ const StudentWeaknessAnalysis: React.FC = () => {
     }
   }, []);
 
-  const loadGradeData = useCallback(async (gradeId: string) => {
+  const loadGradeData = useCallback(async (gradeId: string, sectionId?: string) => {
     if (!gradeId) return;
     setLoading(true);
     try {
-      const d = await teacherEnhancedService.getGradeWeakness(gradeId);
+      const d = await teacherEnhancedService.getGradeWeakness(gradeId, sectionId);
       setGradeData(d);
     } catch {
       toast.error('Failed to load weakness data.');
@@ -217,7 +228,7 @@ const StudentWeaknessAnalysis: React.FC = () => {
   }, []);
 
   useEffect(() => { loadGrades(); }, [loadGrades]);
-  useEffect(() => { if (selectedGradeId) loadGradeData(selectedGradeId); }, [selectedGradeId, loadGradeData]);
+  useEffect(() => { if (selectedGradeId) loadGradeData(selectedGradeId, selectedSectionId); }, [selectedGradeId, selectedSectionId, loadGradeData]);
 
   const handleSync = async () => {
     if (!selectedGradeId) return;
@@ -296,14 +307,19 @@ const StudentWeaknessAnalysis: React.FC = () => {
             <div className="flex gap-2 overflow-x-auto pb-1">
               {grades.map(g => (
                 <button
-                  key={g.grade_id}
-                  onClick={() => { setGid(g.grade_id); setFilter(''); }}
+                  key={tabKey(g)}
+                  onClick={() => {
+                    setGid(g.grade_id);
+                    setSectionId(g.section_id);
+                    setFilter('');
+                    loadGradeData(g.grade_id, g.section_id);
+                  }}
                   className={`shrink-0 px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all border cursor-pointer
-                    ${selectedGradeId === g.grade_id
+                    ${selectedGradeId === g.grade_id && selectedSectionId === g.section_id
                       ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
                       : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-500 hover:text-indigo-600'}`}
                 >
-                  {g.grade_name}
+                  {g.grade_name}{g.section_name ? ` — ${g.section_name}` : ''}
                 </button>
               ))}
             </div>

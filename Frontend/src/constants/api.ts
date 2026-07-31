@@ -188,7 +188,7 @@ export const API_ENDPOINTS = {
     BY_GRADE:           (gradeId: string, sectionId?: string) => `/teacher/learning-path/${gradeId}` + (sectionId ? `?sectionId=${sectionId}` : ''),
     UPDATE_STATUS:      '/teacher/learning-path/topic-status',
     SYLLABUS:           '/teacher/learning-path/syllabus-completion',
-    GRADE_STUDENTS:     (gradeId: string) => `/teacher/learning-path/grade-students/${gradeId}`,
+    GRADE_STUDENTS:     (gradeId: string, sectionId?: string) => `/teacher/learning-path/grade-students/${gradeId}` + (sectionId ? `?sectionId=${sectionId}` : ''),
     ENHANCED_DASHBOARD: '/teacher/learning-path/enhanced-dashboard',
   },
 
@@ -249,7 +249,7 @@ export const API_ENDPOINTS = {
   // ── Student Weakness Analysis ─────────────────────────────────────────────
   STUDENT_WEAKNESS: {
     BY_STUDENT:       (studentId: string) => `/teacher/student-weakness/student/${studentId}`,
-    BY_GRADE:         (gradeId: string)   => `/teacher/student-weakness/grade/${gradeId}`,
+    BY_GRADE:         (gradeId: string, sectionId?: string)   => `/teacher/student-weakness/grade/${gradeId}` + (sectionId ? `?sectionId=${sectionId}` : ''),
     CREATE:           '/teacher/student-weakness',
     RESOLVE:          (id: string)        => `/teacher/student-weakness/${id}/resolve`,
     SYNC_FROM_RESULTS:(gradeId: string)   => `/teacher/student-weakness/sync-from-results/${gradeId}`,

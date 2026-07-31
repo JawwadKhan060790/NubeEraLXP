@@ -1,0 +1,35 @@
+/**
+ * Services barrel export.
+ *
+ * Import any service from this single entry-point:
+ *   import { authService, studentService } from '@/services'
+ */
+
+export { default as apiClient, get, post, put, patch, del } from './apiClient';
+export { authService }       from './authService';
+export { schoolService, gradeService } from './schoolService';
+export { studentService }    from './studentService';
+export { teacherService }    from './teacherService';
+export { moduleService, lessonService, examService, questionService, schedulerService, dashboardService } from './academicService';
+export { attendanceService } from './attendanceService';
+export { userService }       from './userService';
+
+// Re-export existing services (unchanged)
+export * from './aiService';
+export * from './exportService';
+export * from './reportService';
+export * from './reportCardService';
+export * from './certificateService';
+export * from './supportService';
+export * from './ecommerceService';
+
+export { analyticsService } from './analyticsService';
+export type {
+  ChartPoint, TrendPoint, DualTrendPoint,
+  SuperAdminAnalytics, AdminAnalytics, PrincipalAnalytics,
+  TeacherAnalytics, StudentAnalytics, ParentAnalytics, StaffAnalytics,
+} from './analyticsService';
+
+// Integrations
+export * from './integrations/fileUploadIntegration';
+export * from './integrations/notificationIntegration';

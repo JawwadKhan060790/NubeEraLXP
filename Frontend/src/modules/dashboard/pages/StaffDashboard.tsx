@@ -58,8 +58,8 @@ const StaffDashboard: React.FC = () => {
           { title: 'Students',     value: analytics?.total_students          ?? 0, icon: <Users         className="w-5 h-5" />, color: 'indigo' , subtitle: 'All enrolled learners' },
           { title: 'Teachers',     value: analytics?.total_teachers          ?? 0, icon: <GraduationCap className="w-5 h-5" />, color: 'violet' , subtitle: 'All registered faculty' },
           { title: 'Open Tickets', value: analytics?.total_open_tickets      ?? 0, icon: <Ticket        className="w-5 h-5" />, color: 'rose'   , subtitle: 'Awaiting resolution' },
-          { title: 'Certificates', value: analytics?.total_certificates      ?? 0, icon: <Award         className="w-5 h-5" />, color: 'amber'  , subtitle: 'Issued to date' },
-          { title: 'Report Cards', value: analytics?.total_report_cards      ?? 0, icon: <FileText      className="w-5 h-5" />, color: 'sky'    , subtitle: 'Generated to date' },
+          { title: 'Doubt Count',  value: analytics?.total_doubts            ?? 0, icon: <HelpCircle    className="w-5 h-5" />, color: 'amber'  , subtitle: 'Student doubts raised' },
+          { title: 'Total Units',  value: analytics?.total_units             ?? 0, icon: <BookText      className="w-5 h-5" />, color: 'sky'    , subtitle: 'Active curriculum units' },
           { title: 'Events',       value: analytics?.total_events            ?? 0, icon: <Calendar      className="w-5 h-5" />, color: 'teal'   , subtitle: 'Scheduled or held' },
           { title: 'Resolved',     value: analytics?.resolved_tickets        ?? 0, icon: <Check         className="w-5 h-5" />, color: 'emerald', subtitle: 'Tickets closed' },
           { title: 'New Students', value: analytics?.new_students_this_month ?? 0, icon: <TrendingUp    className="w-5 h-5" />, color: 'purple' , subtitle: 'last 30 days' },
@@ -77,7 +77,7 @@ const StaffDashboard: React.FC = () => {
         >
           <div className="min-h-[260px]">
             <DashboardBarChart
-              data={(analytics?.syllabus_completion_by_grade || (analytics as any)?.syllabusCompletionByGrade || []).map(d => ({
+              data={((analytics as any)?.syllabus_completion_by_grade || (analytics as any)?.syllabusCompletionByGrade || []).map((d: any) => ({
                 Label: d.label || d.Label || '',
                 Value: d.value ?? d.Value ?? 0,
               }))}
@@ -98,7 +98,7 @@ const StaffDashboard: React.FC = () => {
         >
           <div className="min-h-[260px]">
             <DashboardBarChart
-              data={(analytics?.subjectwise_performance || (analytics as any)?.subjectwisePerformance || []).map(d => ({
+              data={((analytics as any)?.subjectwise_performance || (analytics as any)?.subjectwisePerformance || []).map((d: any) => ({
                 Label: d.label || d.Label || '',
                 Value: d.value ?? d.Value ?? 0,
               }))}

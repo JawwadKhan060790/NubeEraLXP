@@ -17,7 +17,7 @@ const getApiBaseUrl = () => {
     host.startsWith('10.') ||
     host.startsWith('172.')
   ) {
-    return `${window.location.protocol}//${window.location.hostname}:5000/api`;
+    return `${window.location.protocol}//${window.location.hostname}:5001/api`;
   }
 
   return '/api';
@@ -38,7 +38,7 @@ api.interceptors.request.use((config) => {
     // Forward the school selected in the UI so the backend TenantService can use it.
     // Restricted roles (Principal/Student/Parent) never set this key, so the header
     // is only sent when a non-restricted role has picked a school.
-    const selectedSchoolId = localStorage.getItem('nubeera_selected_school_id');
+    const selectedSchoolId = localStorage.getItem('nubeera_selected_school_id') || localStorage.getItem('veriton_selected_school_id');
     if (selectedSchoolId) {
       config.headers['X-School-Id'] = selectedSchoolId;
     }
@@ -71,11 +71,15 @@ api.interceptors.response.use(
 
     if (error.response?.status === 401) {
       const currentPath = window.location.pathname;
+      const token = localStorage.getItem('token');
+      const reqUrl = error.config?.url || '';
 
-      if (currentPath !== '/login') {
+      // Only redirect to login if there is no token or if the 401 comes from explicit auth validation
+      if (currentPath !== '/login' && (!token || reqUrl.includes('/auth/me') || reqUrl.includes('/auth/refresh') || reqUrl.includes('/auth/validate'))) {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         localStorage.removeItem('nubeera_selected_school_id');
+        localStorage.removeItem('veriton_selected_school_id');
         window.location.href = '/login';
       }
     }

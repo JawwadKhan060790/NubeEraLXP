@@ -27,6 +27,7 @@ import {
   Settings2,
   ShoppingBag,
   Trash2,
+  Upload,
   UserCheck,
   Users,
   X,
@@ -293,9 +294,6 @@ const teacherGroups: NavGroup[] = [
     icon: BookOpen,
     items: [
       { to: '/teacher/student-list', icon: Users, label: 'Students' },
-      { to: '/subjects', icon: BookOpen, label: 'Subjects' },
-      { to: '/modules', icon: Layers, label: 'Units' },
-      { to: '/lessons', icon: MonitorPlay, label: 'Topics' },
       { to: '/teacher/exams/', icon: FileText, label: 'MCQ Exams' },
       { to: '/teacher/teaching-path', icon: BookOpenCheck, label: 'Teaching Path' },
       { to: '/teacher/doubt-hub', icon: HelpCircle, label: 'Doubt Hub' },
@@ -333,9 +331,9 @@ const studentGroups: NavGroup[] = [
     label: 'Overview',
     icon: LayoutDashboard,
     items: [
+      { to: '/student/learning', icon: BookOpen, label: 'Study Materials' },
       { to: '/student/dashboard', icon: LayoutDashboard, label: 'My Dashboard' },
       { to: '/student/calendar', icon: Calendar, label: 'My Calendar' },
-      { to: '/student/learning', icon: BookOpen, label: 'Study Materials' },
       { to: '/student/doubt-hub', icon: HelpCircle, label: 'Doubt Hub' },
     ],
   },

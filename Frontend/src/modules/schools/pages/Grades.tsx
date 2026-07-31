@@ -371,26 +371,31 @@ const Grades: React.FC = () => {
                   <div
                     key={grade.id}
                     onClick={() => setSelectedGrade(grade)}
-                    className={`relative px-4 py-3.5 cursor-pointer flex items-center gap-3.5 transition-all duration-200 border-l-[3px] group ${isSelected
-                        ? 'bg-indigo-50/70 border-l-indigo-500'
-                        : 'border-l-transparent hover:bg-slate-50 hover:border-l-slate-300'
-                      }`}
+                    className={`relative px-4 py-3.5 cursor-pointer flex items-center gap-3.5 transition-all duration-200 border-l-4 group ${
+                      isSelected
+                        ? 'bg-indigo-50/80 dark:bg-indigo-500/15 border-l-indigo-600 dark:border-l-indigo-400 shadow-xs'
+                        : 'border-l-transparent hover:bg-slate-50 dark:hover:bg-[#283548] hover:border-l-slate-300'
+                    }`}
                   >
-                    <div className="w-10 h-10 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center flex-shrink-0">
-                      <GraduationCap className="w-5 h-5 text-indigo-500" />
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-extrabold text-xs uppercase flex-shrink-0 border transition-all ${
+                      isSelected
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                        : 'bg-indigo-50 dark:bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-100 dark:border-indigo-400/25 group-hover:bg-indigo-100 dark:group-hover:bg-indigo-500/25'
+                    }`}>
+                      G{grade.grade_level}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-xs font-bold text-slate-800 tracking-tight truncate">
+                      <div className="text-xs font-black text-slate-800 dark:text-white tracking-tight truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                         {grade.grade_name}
                       </div>
-                      <div className="text-[10px] text-slate-500 font-medium truncate mt-0.5">
-                        Level: {grade.grade_level}{grade.school_name && ` | ${grade.school_name}`}
+                      <div className="text-[10px] text-slate-500 dark:text-[#94a3b8] font-semibold truncate mt-0.5">
+                        Level: {grade.grade_level}{grade.school_name && ` · ${grade.school_name}`}
                       </div>
                       {(() => {
                         const gradeSections = sections.filter(s => s.grade_id === grade.id);
                         if (gradeSections.length === 0) return null;
                         return (
-                          <div className="text-[9px] text-indigo-500 font-bold mt-0.5 truncate flex items-center gap-1">
+                          <div className="text-[9px] text-indigo-600 dark:text-indigo-400 font-bold mt-0.5 truncate flex items-center gap-1">
                             <Layers className="w-2.5 h-2.5 flex-shrink-0" />
                             <span>Divisions: {gradeSections.map(s => s.section_code).join(', ')}</span>
                           </div>
@@ -400,7 +405,7 @@ const Grades: React.FC = () => {
                     <div className="flex items-center gap-2 flex-shrink-0">
                       <StatusBadge active={grade.is_active} />
                       {isSelected && (
-                        <ChevronRight className="w-3.5 h-3.5 text-indigo-500 animate-in fade-in slide-in-from-left-2 duration-300" />
+                        <ChevronRight className="w-4 h-4 text-indigo-600 dark:text-indigo-400 animate-in fade-in slide-in-from-left-2 duration-300" />
                       )}
                     </div>
                   </div>
@@ -409,7 +414,7 @@ const Grades: React.FC = () => {
             )}
           </div>
 
-          <div className="p-4 border-t border-slate-100 bg-slate-50/40">
+          <div className="p-4 border-t border-slate-100 dark:border-[#283548] bg-slate-50/40 dark:bg-[#283548]/40">
             <Pagination
               currentPage={currentPage}
               totalPages={totalPages}
@@ -427,39 +432,34 @@ const Grades: React.FC = () => {
             <div className="space-y-6 animate-in fade-in slide-in-from-right-2 duration-300">
 
               {/* Grade Detail Card */}
-              <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-                {/* Color band */}
-                <div className={`h-1.5 w-full ${selectedGrade.is_active
-                  ? 'bg-gradient-to-r from-emerald-400 via-emerald-300 to-teal-400'
-                  : 'bg-gradient-to-r from-rose-400 to-rose-300'}`}
-                />
+              <div className="bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] rounded-2xl shadow-sm overflow-hidden">
                 <div className="p-5 space-y-5">
                   {/* Identity row */}
                   <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                    <div className="flex items-center gap-3.5">
-                      <div className="w-16 h-16 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-700 text-lg font-black flex-shrink-0">
+                    <div className="flex items-center gap-4">
+                      <div className="w-16 h-16 rounded-2xl bg-indigo-600 text-white border-2 border-indigo-200 dark:border-indigo-400/30 flex items-center justify-center text-xl font-black uppercase shadow-sm flex-shrink-0">
                         G{selectedGrade.grade_level}
                       </div>
                       <div>
-                        <h2 className="text-base font-black text-slate-800 tracking-tight leading-tight">{selectedGrade.grade_name}</h2>
-                        <p className="text-xs text-slate-500 font-medium mt-0.5">Grade Level {selectedGrade.grade_level}</p>
-                        <div className="mt-1.5">
+                        <div className="flex items-center gap-2">
+                          <h2 className="text-lg font-black text-slate-900 dark:text-white tracking-tight leading-tight">{selectedGrade.grade_name}</h2>
                           <StatusBadge active={selectedGrade.is_active} size="md" />
                         </div>
+                        <p className="text-xs text-slate-500 dark:text-[#94a3b8] font-semibold mt-1">Grade Level {selectedGrade.grade_level}</p>
                       </div>
                     </div>
                     {/* Action buttons */}
                     <div className="flex items-center gap-2 self-start flex-wrap flex-shrink-0">
                       <button
                         onClick={() => handleEdit(selectedGrade)}
-                        className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg font-bold text-xs transition-all flex items-center gap-1.5"
+                        className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-extrabold text-xs transition-all flex items-center gap-1.5 shadow-xs active:scale-95 cursor-pointer"
                         title="Edit Grade"
                       >
                         <Edit className="w-3.5 h-3.5" /> Edit
                       </button>
                       <button
                         onClick={() => handleDelete(selectedGrade.id, selectedGrade.grade_name)}
-                        className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg font-bold text-xs transition-all flex items-center gap-1.5"
+                        className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-extrabold text-xs transition-all flex items-center gap-1.5 shadow-xs active:scale-95 cursor-pointer"
                         title="Delete Grade"
                       >
                         <Trash2 className="w-3.5 h-3.5" /> Delete

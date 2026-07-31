@@ -1,0 +1,268 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { TrendingUp, TrendingDown } from 'lucide-react';
+
+interface StatsCardProps {
+  title: string;
+  /** Numbers trigger count-up animation; pre-formatted strings (e.g. "45%", "$1,234") render as-is. */
+  value: number | string;
+  icon?: React.ReactNode;
+  /** One of the named color keys below */
+  color?: keyof typeof colorConfig;
+  /** Legacy prop — mapped to the nearest color key */
+  colorClass?: string;
+  subtitle?: string;
+  trend?: { value: number; label: string };
+  /** Show skeleton shimmer (while loading) */
+  loading?: boolean;
+}
+
+// ─── Color system ─────────────────────────────────────────────────────────────
+const colorConfig = {
+  indigo: {
+    cardGradient: 'from-indigo-50/40 via-white to-white',
+    iconBg:       'bg-indigo-100',
+    iconText:     'text-indigo-600',
+    iconGlow:     'shadow-[0_2px_10px_rgba(79,70,229,0.12)]',
+    labelColor:   'text-indigo-500',
+    valueShadow:  '',
+    hoverGlow:    'hover:shadow-[0_6px_24px_rgba(79,70,229,0.12)]',
+    orb:          'bg-indigo-100/70',
+  },
+  violet: {
+    cardGradient: 'from-violet-50/40 via-white to-white',
+    iconBg:       'bg-violet-100',
+    iconText:     'text-violet-600',
+    iconGlow:     'shadow-[0_2px_10px_rgba(124,58,237,0.12)]',
+    labelColor:   'text-violet-500',
+    valueShadow:  '',
+    hoverGlow:    'hover:shadow-[0_6px_24px_rgba(124,58,237,0.12)]',
+    orb:          'bg-violet-100/70',
+  },
+  blue: {
+    cardGradient: 'from-blue-50/40 via-white to-white',
+    iconBg:       'bg-blue-100',
+    iconText:     'text-blue-600',
+    iconGlow:     'shadow-[0_2px_10px_rgba(37,99,235,0.12)]',
+    labelColor:   'text-blue-500',
+    valueShadow:  '',
+    hoverGlow:    'hover:shadow-[0_6px_24px_rgba(37,99,235,0.12)]',
+    orb:          'bg-blue-100/70',
+  },
+  cyan: {
+    cardGradient: 'from-cyan-50/40 via-white to-white',
+    iconBg:       'bg-cyan-100',
+    iconText:     'text-cyan-600',
+    iconGlow:     'shadow-[0_2px_10px_rgba(8,145,178,0.12)]',
+    labelColor:   'text-cyan-600',
+    valueShadow:  '',
+    hoverGlow:    'hover:shadow-[0_6px_24px_rgba(8,145,178,0.12)]',
+    orb:          'bg-cyan-100/70',
+  },
+  emerald: {
+    cardGradient: 'from-emerald-50/40 via-white to-white',
+    iconBg:       'bg-emerald-100',
+    iconText:     'text-emerald-600',
+    iconGlow:     'shadow-[0_2px_10px_rgba(5,150,105,0.12)]',
+    labelColor:   'text-emerald-600',
+    valueShadow:  '',
+    hoverGlow:    'hover:shadow-[0_6px_24px_rgba(5,150,105,0.12)]',
+    orb:          'bg-emerald-100/70',
+  },
+  amber: {
+    cardGradient: 'from-amber-50/40 via-white to-white',
+    iconBg:       'bg-amber-100',
+    iconText:     'text-amber-600',
+    iconGlow:     'shadow-[0_2px_10px_rgba(217,119,6,0.12)]',
+    labelColor:   'text-amber-600',
+    valueShadow:  '',
+    hoverGlow:    'hover:shadow-[0_6px_24px_rgba(217,119,6,0.12)]',
+    orb:          'bg-amber-100/70',
+  },
+  rose: {
+    cardGradient: 'from-rose-50/40 via-white to-white',
+    iconBg:       'bg-rose-100',
+    iconText:     'text-rose-500',
+    iconGlow:     'shadow-[0_2px_10px_rgba(225,29,72,0.12)]',
+    labelColor:   'text-rose-500',
+    valueShadow:  '',
+    hoverGlow:    'hover:shadow-[0_6px_24px_rgba(225,29,72,0.12)]',
+    orb:          'bg-rose-100/70',
+  },
+  teal: {
+    cardGradient: 'from-teal-50/40 via-white to-white',
+    iconBg:       'bg-teal-100',
+    iconText:     'text-teal-600',
+    iconGlow:     'shadow-[0_2px_10px_rgba(13,148,136,0.12)]',
+    labelColor:   'text-teal-600',
+    valueShadow:  '',
+    hoverGlow:    'hover:shadow-[0_6px_24px_rgba(13,148,136,0.12)]',
+    orb:          'bg-teal-100/70',
+  },
+  purple: {
+    cardGradient: 'from-purple-50/40 via-white to-white',
+    iconBg:       'bg-purple-100',
+    iconText:     'text-purple-600',
+    iconGlow:     'shadow-[0_2px_10px_rgba(147,51,234,0.12)]',
+    labelColor:   'text-purple-500',
+    valueShadow:  '',
+    hoverGlow:    'hover:shadow-[0_6px_24px_rgba(147,51,234,0.12)]',
+    orb:          'bg-purple-100/70',
+  },
+  slate: {
+    cardGradient: 'from-slate-50/60 via-white to-white',
+    iconBg:       'bg-slate-100',
+    iconText:     'text-slate-500',
+    iconGlow:     'shadow-[0_2px_10px_rgba(71,85,105,0.10)]',
+    labelColor:   'text-slate-500',
+    valueShadow:  '',
+    hoverGlow:    'hover:shadow-[0_6px_24px_rgba(71,85,105,0.10)]',
+    orb:          'bg-slate-100/80',
+  },
+} as const;
+
+// ─── Legacy colorClass → color mapping ───────────────────────────────────────
+const legacyMap: Record<string, keyof typeof colorConfig> = {
+  'bg-primary':     'indigo',
+  'bg-brand-500':   'purple',
+  'bg-brand-600':   'indigo',
+  'bg-brand-400':   'violet',
+  'bg-neutral-800': 'slate',
+  'bg-rose-500':    'rose',
+  'bg-emerald-600': 'emerald',
+  'bg-slate-500':   'slate',
+  'bg-amber-500':   'amber',
+  'bg-blue-500':    'blue',
+};
+
+const resolveColor = (
+  color?: keyof typeof colorConfig,
+  colorClass?: string,
+): keyof typeof colorConfig => {
+  if (color && color in colorConfig) return color;
+  if (colorClass && legacyMap[colorClass]) return legacyMap[colorClass];
+  return 'indigo';
+};
+
+// ─── Count-up hook ─────────────────────────────────────────────────────────────
+function useCountUp(target: number, duration = 900): number {
+  const [display, setDisplay] = useState(0);
+  const rafRef = useRef<number>(0);
+  const startRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (target === 0) { setDisplay(0); return; }
+    startRef.current = null;
+    const step = (timestamp: number) => {
+      if (!startRef.current) startRef.current = timestamp;
+      const elapsed = timestamp - startRef.current;
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setDisplay(Math.round(eased * target));
+      if (progress < 1) rafRef.current = requestAnimationFrame(step);
+    };
+    rafRef.current = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [target, duration]);
+
+  return display;
+}
+
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
+export const SkeletonStatCard: React.FC = () => (
+  <div className="relative bg-white rounded-2xl p-5 border border-slate-100 shadow-[0_2px_12px_rgba(15,30,60,0.06)] animate-pulse overflow-hidden">
+    <div className="absolute inset-0 bg-gradient-to-br from-white to-slate-50/80" />
+    <div className="relative flex items-start justify-between gap-3">
+      <div className="flex flex-col gap-2.5 flex-1">
+        <div className="h-2.5 w-24 bg-slate-100 rounded-full" />
+        <div className="h-8 w-20 bg-slate-100 rounded-lg" />
+        <div className="h-2 w-28 bg-slate-100 rounded-full" />
+      </div>
+      <div className="w-12 h-12 rounded-2xl bg-slate-100 shrink-0" />
+    </div>
+  </div>
+);
+
+// ─── Component ────────────────────────────────────────────────────────────────
+const StatsCard: React.FC<StatsCardProps> = ({
+  title,
+  value,
+  icon,
+  color,
+  colorClass,
+  subtitle,
+  trend,
+  loading = false,
+}) => {
+  const key = resolveColor(color, colorClass);
+  const c = colorConfig[key];
+
+  const numericTarget = typeof value === 'number' ? value : 0;
+  const animated = useCountUp(numericTarget);
+  const displayValue = typeof value === 'number'
+    ? animated.toLocaleString()
+    : value;
+
+  if (loading) return <SkeletonStatCard />;
+
+  return (
+    <div
+      className={`
+        relative overflow-hidden
+        bg-gradient-to-br ${c.cardGradient}
+        border border-slate-100/80
+        rounded-2xl p-5
+        shadow-[0_2px_12px_rgba(15,30,60,0.07)]
+        ${c.hoverGlow} hover:-translate-y-0.5
+        transition-all duration-300
+        cursor-default group
+      `}
+    >
+      {/* Decorative background orb */}
+      <div className={`absolute -top-4 -right-4 w-24 h-24 rounded-full ${c.orb} blur-2xl pointer-events-none`} />
+
+      <div className="relative flex items-start justify-between gap-3">
+
+        {/* Left: label + value + trend */}
+        <div className="flex flex-col min-w-0 space-y-1.5">
+          <span className={`text-[10.5px] font-bold tracking-widest uppercase leading-none truncate ${c.labelColor}`}>
+            {title}
+          </span>
+
+          <span className={`text-[30px] font-black leading-none tracking-tight text-slate-900 ${c.valueShadow}`}>
+            {displayValue}
+          </span>
+
+          {trend ? (
+            <div className="flex items-center gap-1.5 pt-0.5">
+              <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-black ${
+                trend.value >= 0
+                  ? 'bg-emerald-50 text-emerald-700'
+                  : 'bg-rose-50 text-rose-600'
+              }`}>
+                {trend.value >= 0 ? <TrendingUp className="w-2.5 h-2.5" /> : <TrendingDown className="w-2.5 h-2.5" />}
+                {trend.value >= 0 ? '+' : ''}{trend.value}%
+              </span>
+              <span className="text-[9.5px] text-slate-400 font-medium truncate">{trend.label}</span>
+            </div>
+          ) : subtitle ? (
+            <span className="text-[10px] text-slate-400 font-semibold truncate pt-0.5">{subtitle}</span>
+          ) : null}
+        </div>
+
+        {/* Right: icon */}
+        {icon && (
+          <div className={`
+            w-12 h-12 rounded-2xl flex items-center justify-center shrink-0
+            ${c.iconBg} ${c.iconText} ${c.iconGlow}
+            transition-all duration-300 group-hover:scale-110 group-hover:rotate-3
+          `}>
+            {icon}
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+};
+
+export default StatsCard;

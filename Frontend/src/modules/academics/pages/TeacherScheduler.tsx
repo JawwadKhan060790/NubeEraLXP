@@ -26,12 +26,19 @@ interface ScheduleEntry {
   start_time: string;
   end_time: string;
   is_active: boolean;
+  status?: string;
+  actual_start_time?: string;
+  actual_end_time?: string;
+  remarks?: string;
 }
 
 interface Grade {
   id: string;
+  Id?: string;
   grade_name: string;
   grade_level: string;
+  grade_level_id?: string;
+  gradeLevelId?: string;
   school_id?: string;
 }
 
@@ -165,7 +172,11 @@ const TeacherScheduler: React.FC = () => {
           teacher_name: s.teacher_name || s.TeacherName,
           start_time: s.start_time || s.startTime || s.StartTime || '',
           end_time: s.end_time || s.endTime || s.EndTime || '',
-          date: s.date || s.Date || ''
+          date: s.date || s.Date || '',
+          status: s.status || s.Status || 'NotStarted',
+          actual_start_time: s.actual_start_time || s.actualStartTime || s.ActualStartTime || null,
+          actual_end_time: s.actual_end_time || s.actualEndTime || s.ActualEndTime || null,
+          remarks: s.remarks || s.Remarks || ''
         }));
         setSchedules(scheds);
       }
@@ -329,17 +340,17 @@ const TeacherScheduler: React.FC = () => {
   // Isolate current teacher's schedules if user role is a teacher
   const isTeacher = user?.utype === 'teacher';
 
-  const getTeacherId = () => {
-    return user?.teacher_id || user?.id || '';
-  };
-
   const mySchedules = schedules.filter(s => {
     if (!isTeacher) return true; // Admins / Staff see all
-    const tid = getTeacherId();
-    const matchesId = s.teacher_id === tid;
-    const matchesName = user?.name && s.teacher_name?.toLowerCase().includes(user.name.toLowerCase());
+    const teacherId = (user?.teacher_id || user?.id || user?.teacherId || '').toString().toLowerCase();
+    const userId = (user?.id || '').toString().toLowerCase();
+    const schedTid = (s.teacher_id || '').toString().toLowerCase();
+
+    const matchesId = (schedTid.length > 0 && (schedTid === teacherId || schedTid === userId));
+    const matchesName = user?.full_name && s.teacher_name?.toLowerCase().includes(user.full_name.toLowerCase());
+    const matchesUserName = user?.name && s.teacher_name?.toLowerCase().includes(user.name.toLowerCase());
     const matchesTeacherName = user?.teacher_name && s.teacher_name?.toLowerCase().includes(user.teacher_name.toLowerCase());
-    return matchesId || matchesName || matchesTeacherName;
+    return matchesId || matchesName || matchesUserName || matchesTeacherName;
   });
 
   const filteredSchedules = mySchedules.filter(s => {
@@ -396,6 +407,36 @@ const TeacherScheduler: React.FC = () => {
   const selectedDaySchedules = selectedDay ? getSchedulesForDay(selectedDay) : [];
 
   const selectedSchedule = schedules.find(s => s.id === selectedScheduleId);
+
+  const renderStatusBadge = (status?: string) => {
+    const st = (status || 'NotStarted').toLowerCase();
+    switch (st) {
+      case 'completed':
+        return (
+          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-600 border border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800">
+            Completed
+          </span>
+        );
+      case 'inprogress':
+        return (
+          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-50 text-amber-600 border border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800">
+            In Progress
+          </span>
+        );
+      case 'missed':
+        return (
+          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-50 text-rose-600 border border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800">
+            Missed
+          </span>
+        );
+      default:
+        return (
+          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-sky-50 text-sky-600 border border-sky-200 dark:bg-sky-950/50 dark:text-sky-400 dark:border-sky-800">
+            Pending
+          </span>
+        );
+    }
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-10">
@@ -620,7 +661,8 @@ const TeacherScheduler: React.FC = () => {
                               <User className="w-3 h-3" /> {s.teacher_name}
                             </p>
                           </div>
-                          <div className="flex items-center gap-2 flex-shrink-0">
+                          <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
+                            {renderStatusBadge(s.status)}
                             <span className="text-[12px] font-bold text-indigo-600 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-500/15 border border-indigo-100 dark:border-indigo-400/25 px-2 py-0.5 rounded-full">
                               {s.grade_display || (s.section_code ? `${s.grade_name} - ${s.section_code}` : s.grade_name)}
                             </span>
@@ -630,8 +672,15 @@ const TeacherScheduler: React.FC = () => {
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-3 pt-2 mt-2 border-t border-slate-100 dark:border-[#283548]/50 text-[12px] text-slate-400 dark:text-[#64748b] font-mono">
-                          <Clock className="w-3 h-3" /> {s.date ? s.date.slice(0, 10) : ''} | {s.start_time.slice(0, 5)} - {s.end_time.slice(0, 5)}
+                        <div className="flex items-center justify-between gap-3 pt-2 mt-2 border-t border-slate-100 dark:border-[#283548]/50 text-[12px] text-slate-400 dark:text-[#64748b] font-mono">
+                          <div className="flex items-center gap-1.5">
+                            <Clock className="w-3 h-3 text-slate-400" /> {s.date ? s.date.slice(0, 10) : ''} | {s.start_time.slice(0, 5)} - {s.end_time.slice(0, 5)}
+                          </div>
+                          {s.actual_end_time && (
+                            <div className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                              Completed: {new Date(s.actual_end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
@@ -686,8 +735,11 @@ const TeacherScheduler: React.FC = () => {
                           <span className="text-[12px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-lg uppercase tracking-wide font-mono">
                             Class {idx + 1}
                           </span>
-                          <div className="flex items-center gap-1 text-[12px] font-bold text-slate-400 dark:text-[#64748b] font-mono">
-                            <Clock className="w-3.5 h-3.5 text-slate-400 dark:text-[#64748b]" /> {s.start_time.slice(0, 5)} - {s.end_time.slice(0, 5)}
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {renderStatusBadge(s.status)}
+                            <div className="flex items-center gap-1 text-[12px] font-bold text-slate-400 dark:text-[#64748b] font-mono">
+                              <Clock className="w-3.5 h-3.5 text-slate-400 dark:text-[#64748b]" /> {s.start_time.slice(0, 5)} - {s.end_time.slice(0, 5)}
+                            </div>
                           </div>
                         </div>
 
@@ -754,6 +806,20 @@ const TeacherScheduler: React.FC = () => {
                         {selectedSchedule.date ? selectedSchedule.date.slice(0, 10) : ''}
                       </span>
                     </div>
+
+                    <div className="space-y-1">
+                      <span className="text-[12px] font-black text-slate-400 dark:text-[#64748b] uppercase tracking-widest block">Session Status</span>
+                      <div>{renderStatusBadge(selectedSchedule.status)}</div>
+                    </div>
+
+                    {selectedSchedule.actual_end_time && (
+                      <div className="space-y-1">
+                        <span className="text-[12px] font-black text-slate-400 dark:text-[#64748b] uppercase tracking-widest block">Completed At</span>
+                        <span className="font-bold text-emerald-600 dark:text-emerald-400 font-mono text-xs">
+                          {new Date(selectedSchedule.actual_end_time).toLocaleString()}
+                        </span>
+                      </div>
+                    )}
 
                     <div className="space-y-1">
                       <span className="text-[12px] font-black text-slate-400 dark:text-[#64748b] uppercase tracking-widest block">Lesson Subtopic</span>

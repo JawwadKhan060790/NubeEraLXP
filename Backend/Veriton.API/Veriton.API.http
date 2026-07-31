@@ -1,0 +1,6 @@
+@Veriton.API_HostAddress = http://localhost:5228
+
+GET {{Veriton.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

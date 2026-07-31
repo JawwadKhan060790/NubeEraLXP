@@ -31,14 +31,14 @@ services:
         condition: service_healthy
     environment:
       ASPNETCORE_ENVIRONMENT: Development
-      ASPNETCORE_URLS: http://0.0.0.0:5000
+      ASPNETCORE_URLS: http://0.0.0.0:5001
       ConnectionStrings__MySql: Server=nubeera-mysql;Port=3306;Database=${MYSQL_DATABASE};User=${MYSQL_USER};Password=${MYSQL_PASSWORD};SslMode=None;AllowPublicKeyRetrieval=True
       Jwt__Key: ${JWT_KEY}
       Jwt__Issuer: ${JWT_ISSUER}
       Jwt__Audience: ${JWT_AUDIENCE}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
     ports:
-      - "5000:5000"
+      - "5001:5001"
     volumes:
       - ./uploads:/app/wwwroot/uploads
     restart: unless-stopped
@@ -55,7 +55,7 @@ services:
     depends_on:
       - nubeera-api
     ports:
-      - "5173:80"
+      - "5174:80"
     volumes:
       - ./uploads:/usr/share/nginx/html/uploads
     restart: unless-stopped

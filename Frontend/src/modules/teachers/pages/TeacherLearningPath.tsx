@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import React, { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import api from '@/services/api';
 import {
   teacherEnhancedService,
   type ModuleProgress,
@@ -20,8 +21,8 @@ import {
 
 const STATUS_CONFIG = {
   NotStarted: { label: 'Not Started', text: 'text-violet-700', border: 'border-violet-100', bg: 'bg-violet-50/50', icon: Circle },
-  InProgress: { label: 'In Progress', text: 'text-amber-700',  border: 'border-amber-100',  bg: 'bg-amber-50/50',  icon: Clock },
-  Completed:  { label: 'Completed',   text: 'text-emerald-700 border-emerald-100', bg: 'bg-emerald-50/50', icon: CheckCircle2 },
+  InProgress: { label: 'In Progress', text: 'text-amber-700', border: 'border-amber-100', bg: 'bg-amber-50/50', icon: Clock },
+  Completed: { label: 'Completed', text: 'text-emerald-700 border-emerald-100', bg: 'bg-emerald-50/50', icon: CheckCircle2 },
 };
 
 const StatusBadge: React.FC<{ status: TopicProgress['status'] }> = ({ status }) => {
@@ -155,46 +156,94 @@ const StatCard: React.FC<{ label: string; value: number | string; icon: React.El
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
+// ── Main page ─────────────────────────────────────────────────────────────────
+
 const TeacherLearningPath: React.FC = () => {
-  const [paths, setPaths]       = useState<TeacherLearningPath[]>([]);
+  const [user] = useState<any>(() => {
+    const s = localStorage.getItem('user');
+    return s ? JSON.parse(s) : null;
+  });
+  const roleStr = String(user?.utype || user?.role || user?.userType || user?.uType || '').toLowerCase();
+  const isManagement = ['admin', 'superadmin', 'staff', 'principal'].includes(roleStr) || Boolean(user && !user.teacher_id && !user.teacherId);
+
+  const [schools, setSchools] = useState<any[]>([]);
+  const [teachers, setTeachers] = useState<any[]>([]);
+  const [selectedSchoolId, setSelectedSchoolId] = useState<string>('');
+  const [selectedTeacherId, setSelectedTeacherId] = useState<string>('');
+
+  const [paths, setPaths] = useState<TeacherLearningPath[]>([]);
   const [selected, setSelected] = useState<TeacherLearningPath | null>(null);
-  const [loading, setLoading]   = useState(true);
+  const [loading, setLoading] = useState(true);
   const [updatingLesson, setUpdatingLesson] = useState<string | null>(null);
+
+  // Load schools & teachers for Management roles
+  useEffect(() => {
+    if (isManagement) {
+      api.get('/schools').then(res => {
+        const list = Array.isArray(res.data) ? res.data : (res.data?.data || res.data?.items || []);
+        setSchools(list);
+      }).catch(() => { });
+
+      api.get('/teachers').then(res => {
+        const list = Array.isArray(res.data) ? res.data : (res.data?.data || res.data?.items || []);
+        setTeachers(list);
+      }).catch(() => { });
+    }
+  }, [isManagement]);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await teacherEnhancedService.getLearningPaths();
+      const params: Record<string, any> = {};
+      if (selectedTeacherId) params.teacherId = selectedTeacherId;
+      const res = await api.get('/teacher/learning-path', { params });
+      const raw = res.data;
+      const data: TeacherLearningPath[] = Array.isArray(raw)
+        ? raw
+        : (Array.isArray(raw?.data) ? raw.data : (Array.isArray(raw?.items) ? raw.items : []));
+
       setPaths(data);
-      if (data.length > 0) setSelected(data[0]);
+      if (data && data.length > 0) setSelected(data[0]);
+      else setSelected(null);
     } catch {
-      toast.error('Failed to load learning path.');
+      toast.error('Failed to load syllabus completion tracking.');
+      setPaths([]);
+      setSelected(null);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedTeacherId]);
 
   useEffect(() => { load(); }, [load]);
 
   const handleGradeChange = async (gradeId: string) => {
     try {
-      const path = await teacherEnhancedService.getLearningPathByGrade(gradeId);
-      setSelected(path);
+      const params: Record<string, any> = {};
+      if (selectedTeacherId) params.teacherId = selectedTeacherId;
+      const res = await api.get(`/teacher/learning-path/${gradeId}`, { params });
+      const path = Array.isArray(res.data) ? res.data[0] : (res.data?.data || res.data);
+      if (path && typeof path === 'object') {
+        setSelected(path);
+      }
     } catch {
-      toast.error('Failed to load grade learning path.');
+      toast.error('Failed to load grade syllabus details.');
     }
   };
 
   const handleStatusChange = async (lessonId: string, gradeId: string, moduleId: string, status: string) => {
     setUpdatingLesson(lessonId);
     try {
+      const params: Record<string, any> = {};
+      if (selectedTeacherId) params.teacherId = selectedTeacherId;
       await teacherEnhancedService.updateTopicStatus({ lesson_id: lessonId, grade_id: gradeId, module_id: moduleId, status });
-      // Refresh the selected grade
+
       if (selected) {
-        const fresh = await teacherEnhancedService.getLearningPathByGrade(selected.grade_id);
-        setSelected(fresh);
-        // Also update the summary in paths list
-        setPaths(prev => prev.map(p => p.grade_id === fresh.grade_id ? fresh : p));
+        const res = await api.get(`/teacher/learning-path/${selected.grade_id}`, { params });
+        const fresh = Array.isArray(res.data) ? res.data[0] : (res.data?.data || res.data);
+        if (fresh && typeof fresh === 'object') {
+          setSelected(fresh);
+          setPaths(prev => prev.map(p => p.grade_id === fresh.grade_id ? fresh : p));
+        }
       }
       toast.success('Topic status updated.');
     } catch {
@@ -204,20 +253,21 @@ const TeacherLearningPath: React.FC = () => {
     }
   };
 
+  // Unit completion calculations for selected grade
+  const totalUnits = selected?.modules?.length || 0;
+  const completedUnits = selected?.modules?.filter(m => m.completion_percentage === 100).length || 0;
+  const inProgressUnits = selected?.modules?.filter(m => m.completion_percentage > 0 && m.completion_percentage < 100).length || 0;
+  const remainingUnits = totalUnits - completedUnits;
+
+  // Filter teachers by school if school is selected
+  const filteredTeachers = selectedSchoolId
+    ? teachers.filter(t => (t.school_id || t.schoolId) === selectedSchoolId)
+    : teachers;
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh] bg-white border border-slate-200/80 rounded-2xl shadow-sm max-w-6xl mx-auto p-20 animate-in fade-in">
-        <Loader2 size={32} className="animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  if (paths.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] text-slate-500 bg-white border border-slate-200/80 rounded-2xl shadow-sm max-w-6xl mx-auto p-20 animate-in fade-in">
-        <AlertCircle size={48} className="mb-4 text-slate-300" />
-        <p className="text-base font-bold">No grades assigned yet.</p>
-        <p className="text-xs text-slate-400 mt-1">Contact admin or staff to assign grades to your profile.</p>
+      <div className="flex items-center justify-center min-h-[60vh] bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] rounded-2xl shadow-sm max-w-6xl mx-auto p-20 animate-in fade-in">
+        <Loader2 size={32} className="animate-spin text-indigo-600 dark:text-indigo-400" />
       </div>
     );
   }
@@ -225,86 +275,150 @@ const TeacherLearningPath: React.FC = () => {
   return (
     <div className="space-y-6 mx-auto px-1 py-2 animate-in fade-in duration-300">
 
-      {/* Header */}
+      {/* Header section */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl md:text-2xl font-black text-slate-800 tracking-tight">My Learning Path</h1>
-          <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">
-            Track your syllabus progress grade by grade
+          <h1 className="text-xl md:text-2xl font-black text-slate-800 dark:text-white tracking-tight">Syllabus Completion Tracker</h1>
+          <p className="text-xs text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest mt-1">
+            Track completed & remaining units and topics by grade & school
           </p>
         </div>
         <button
           onClick={load}
-          className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-lg font-bold uppercase tracking-widest text-[10px] transition-all outline-none flex items-center justify-center gap-1.5 border border-slate-200 shadow-sm cursor-pointer"
+          className="bg-slate-100 dark:bg-[#283548] hover:bg-slate-200 dark:hover:bg-[#334155] text-slate-700 dark:text-slate-200 px-4 py-2.5 rounded-xl font-bold uppercase tracking-widest text-[10px] transition-all outline-none flex items-center justify-center gap-1.5 border border-slate-200 dark:border-[#334155] shadow-xs cursor-pointer"
         >
-          <RefreshCw size={12} /> Refresh
+          <RefreshCw size={12} /> Refresh Data
         </button>
       </div>
 
-      {/* Grade tabs */}
-      <div className="flex gap-2 overflow-x-auto pb-1.5">
-        {paths.map(p => (
-          <button
-            key={p.grade_id}
-            onClick={() => handleGradeChange(p.grade_id)}
-            className={`shrink-0 px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all border cursor-pointer
-              ${selected?.grade_id === p.grade_id
-                ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-500 hover:text-indigo-600'}`}
-          >
-            {p.grade_name}
-            <span className={`ml-2 text-[10px] font-black ${selected?.grade_id === p.grade_id ? 'text-white/70' : 'text-slate-400'}`}>
-              {p.completion_percentage.toFixed(0)}%
-            </span>
-          </button>
-        ))}
-      </div>
+      {/* Management Filters Bar (Admin, Staff, Principal) */}
+      {isManagement && (
+        <div className="bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] rounded-2xl p-4 shadow-sm grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 dark:text-[#64748b] uppercase tracking-wider mb-1.5">
+              Select Campus / School
+            </label>
+            <select
+              value={selectedSchoolId}
+              onChange={(e) => {
+                setSelectedSchoolId(e.target.value);
+                setSelectedTeacherId('');
+              }}
+              className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-[#334155] rounded-xl px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-indigo-400"
+            >
+              <option value="">All Schools</option>
+              {schools.map(s => (
+                <option key={s.id || s.Id} value={s.id || s.Id}>{s.name || s.Name}</option>
+              ))}
+            </select>
+          </div>
 
-      {selected && (
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 dark:text-[#64748b] uppercase tracking-wider mb-1.5">
+              Select Faculty Member
+            </label>
+            <select
+              value={selectedTeacherId}
+              onChange={(e) => setSelectedTeacherId(e.target.value)}
+              className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-[#334155] rounded-xl px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-indigo-400"
+            >
+              <option value="">Default Faculty View</option>
+              {filteredTeachers.map(t => (
+                <option key={t.id} value={t.id}>{t.full_name || t.fullName || `${t.first_name} ${t.last_name}`} ({t.school_name || t.schoolName || 'Faculty'})</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
+
+      {paths.length === 0 ? (
+        <div className="flex flex-col items-center justify-center min-h-[40vh] text-slate-500 bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] rounded-2xl shadow-sm max-w-6xl mx-auto p-12 animate-in fade-in">
+          <AlertCircle size={40} className="mb-3 text-slate-300 dark:text-[#64748b]" />
+          <p className="text-sm font-bold text-slate-700 dark:text-slate-200">No syllabus data found for this selection.</p>
+          <p className="text-xs text-slate-400 dark:text-[#64748b] mt-1">Select another teacher or campus from the filter bar above.</p>
+        </div>
+      ) : (
         <>
-          {/* Stat cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <StatCard label="Total Topics"      value={selected.total_topics}       icon={BookOpen}    iconColor="text-violet-600" iconBg="bg-violet-50" />
-            <StatCard label="Completed"         value={selected.completed_topics}   icon={CheckCircle2} iconColor="text-emerald-600" iconBg="bg-emerald-50" />
-            <StatCard label="In Progress"       value={selected.in_progress_topics} icon={Clock}       iconColor="text-amber-500" iconBg="bg-amber-50" />
-            <StatCard label="Pending"           value={selected.pending_topics}     icon={Circle}      iconColor="text-slate-500" iconBg="bg-slate-50" />
+          {/* Grade tabs */}
+          <div className="flex gap-2 overflow-x-auto pb-1.5 custom-scrollbar">
+            {paths.map(p => (
+              <button
+                key={p.grade_id}
+                onClick={() => handleGradeChange(p.grade_id)}
+                className={`shrink-0 px-4 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all border cursor-pointer flex items-center gap-2
+                  ${selected?.grade_id === p.grade_id
+                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                    : 'bg-white dark:bg-[#1e293b] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-[#334155] hover:border-indigo-500'}`}
+              >
+                {p.grade_name}
+                <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-md ${selected?.grade_id === p.grade_id ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-[#283548] text-indigo-600 dark:text-indigo-400'}`}>
+                  {p.completion_percentage.toFixed(0)}%
+                </span>
+              </button>
+            ))}
           </div>
 
-          {/* Progress bar + percentage */}
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm">
-            <div className="flex justify-between items-center mb-2">
-              <span className="font-extrabold text-slate-800 text-sm tracking-tight">{selected.grade_name} — Overall Progress</span>
-              <span className="text-2xl font-black text-indigo-600">
-                {selected.completion_percentage.toFixed(1)}%
-              </span>
-            </div>
-            <ProgressBar value={selected.completion_percentage} className="h-3" />
-            <div className="flex justify-between text-[11px] font-bold text-slate-400 mt-1.5">
-              <span>0%</span>
-              <span>Estimated remaining: {selected.estimated_remaining_topics} topics</span>
-              <span>100%</span>
-            </div>
-          </div>
+          {selected && (
+            <>
+              {/* Stat cards grid — Completed & Remaining Breakdown */}
+              <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+                <StatCard label="Total Units" value={totalUnits} icon={BookOpen} iconColor="text-violet-600 dark:text-violet-400" iconBg="bg-violet-50 dark:bg-violet-500/15" />
+                <StatCard label="Units Done" value={completedUnits} icon={CheckCircle2} iconColor="text-emerald-600 dark:text-emerald-400" iconBg="bg-emerald-50 dark:bg-emerald-500/15" />
+                <StatCard label="Units Remaining" value={remainingUnits} icon={Clock} iconColor="text-rose-500 dark:text-rose-400" iconBg="bg-rose-50 dark:bg-rose-500/15" />
 
-          {/* Module accordions */}
-          <div className="space-y-3">
-            <h2 className="font-extrabold text-slate-800 text-sm tracking-wide flex items-center gap-2 pl-1">
-              <BarChart2 size={16} className="text-primary" /> Topics by Module
-            </h2>
-            {selected.modules.length === 0 ? (
-              <p className="text-sm text-slate-400 py-8 text-center bg-white border border-slate-200/80 rounded-2xl shadow-sm">No modules found for {selected.grade_name}.</p>
-            ) : (
-              selected.modules.map(module => (
-                <ModuleCard
-                  key={module.module_id}
-                  module={module}
-                  gradeId={selected.grade_id}
-                  onStatusChange={handleStatusChange}
-                  updatingLesson={updatingLesson}
-                />
-              ))
-            )}
-          </div>
+                <StatCard label="Total Topics" value={selected.total_topics} icon={BookOpen} iconColor="text-indigo-600 dark:text-indigo-400" iconBg="bg-indigo-50 dark:bg-indigo-500/15" />
+                <StatCard label="Topics Done" value={selected.completed_topics} icon={CheckCircle2} iconColor="text-emerald-600 dark:text-emerald-400" iconBg="bg-emerald-50 dark:bg-emerald-500/15" />
+                <StatCard label="Topics Remaining" value={selected.estimated_remaining_topics} icon={Circle} iconColor="text-amber-500 dark:text-amber-400" iconBg="bg-amber-50 dark:bg-amber-500/15" />
+              </div>
+
+              {/* Progress Bar + Remaining Summary Card */}
+              <div className="bg-white dark:bg-[#1e293b] rounded-2xl border border-slate-200 dark:border-[#334155] p-5 shadow-sm space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <span className="font-extrabold text-slate-800 dark:text-white text-base tracking-tight">{selected.grade_name} — Overall Syllabus Status</span>
+                    <p className="text-xs font-semibold text-slate-400 dark:text-[#64748b] mt-0.5">
+                      {completedUnits} of {totalUnits} Units Completed ({inProgressUnits} in progress)
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl font-black text-indigo-600 dark:text-indigo-400">
+                      {selected.completion_percentage.toFixed(1)}%
+                    </span>
+                    <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                      Completed
+                    </span>
+                  </div>
+                </div>
+
+                <ProgressBar value={selected.completion_percentage} className="h-3" />
+
+                <div className="flex flex-wrap items-center justify-between text-xs font-bold text-slate-500 dark:text-slate-400 pt-1">
+                  <span className="text-emerald-600 dark:text-emerald-400">✓ {selected.completed_topics} Topics Completed</span>
+                  <span className="text-rose-500 dark:text-rose-400">⏳ {selected.estimated_remaining_topics} Topics Remaining ({(100 - selected.completion_percentage).toFixed(1)}% Syllabus Remaining)</span>
+                </div>
+              </div>
+
+              {/* Module accordions */}
+              <div className="space-y-3">
+                <h2 className="font-extrabold text-slate-800 dark:text-white text-sm tracking-wide flex items-center gap-2 pl-1">
+                  <BarChart2 size={16} className="text-indigo-600 dark:text-indigo-400" /> Units & Topics Breakdown
+                </h2>
+                {selected.modules.length === 0 ? (
+                  <p className="text-sm text-slate-400 py-8 text-center bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] rounded-2xl shadow-sm">No units found for {selected.grade_name}.</p>
+                ) : (
+                  selected.modules.map(module => (
+                    <ModuleCard
+                      key={module.module_id}
+                      module={module}
+                      gradeId={selected.grade_id}
+                      onStatusChange={handleStatusChange}
+                      updatingLesson={updatingLesson}
+                    />
+                  ))
+                )}
+              </div>
+            </>
+          )}
         </>
       )}
     </div>

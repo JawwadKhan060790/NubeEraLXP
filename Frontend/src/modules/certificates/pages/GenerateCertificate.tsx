@@ -36,7 +36,7 @@ const GenerateCertificate: React.FC = () => {
   const [templates, setTemplates] = useState<CertificateTemplate[]>([]);
 
   // Selected state
-  const [schoolId, setSchoolId] = useState(localStorage.getItem('nubeera_selected_school_id') || '');
+  const [schoolId, setSchoolId] = useState(localStorage.getItem('nubeera_selected_school_id') || localStorage.getItem('veriton_selected_school_id') || '');
   const [gradeId, setGradeId] = useState('');
   const [templateId, setTemplateId] = useState('');
   

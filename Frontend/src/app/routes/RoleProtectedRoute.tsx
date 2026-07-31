@@ -79,7 +79,8 @@ export const RoleProtectedRoute: React.FC<RoleProtectedRouteProps> = ({
       return <Navigate to={ROUTES.LOGIN} replace />;
     }
 
-    const userRole = (user?.utype || '').toLowerCase() as RoleValue;
+    const userObj  = user as any;
+    const userRole = (userObj?.utype || userObj?.role || userObj?.user_type || userObj?.userType || '').toLowerCase();
     if (!allowedRoles || !Array.isArray(allowedRoles)) {
       console.error('RoleProtectedRoute: allowedRoles is not an array:', allowedRoles);
       return <Navigate to={ROUTES.UNAUTHORIZED} replace />;
@@ -87,6 +88,7 @@ export const RoleProtectedRoute: React.FC<RoleProtectedRouteProps> = ({
     const hasRole  = allowedRoles.map((r) => r?.toLowerCase()).includes(userRole);
 
     if (!hasRole) {
+      console.warn(`RoleProtectedRoute: access denied for role '${userRole}'. Allowed:`, allowedRoles);
       return <Navigate to={ROUTES.UNAUTHORIZED} replace />;
     }
 

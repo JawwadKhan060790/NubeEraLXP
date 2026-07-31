@@ -1,4 +1,4 @@
-E:\nubeera\LMSWithMySQL\Frontend\node_modules\.bin\tsc:2
+E:\veriton\LMSWithMySQL\Frontend\node_modules\.bin\tsc:2
 basedir=$(dirname "$(echo "$0" | sed -e 's,\\,/,g')")
           ^^^^^^^
 

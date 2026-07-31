@@ -95,6 +95,53 @@ const Teachers: React.FC = () => {
   const [passwordTouched, setPasswordTouched] = useState(false);
   const [resetPasswordTouched, setResetPasswordTouched] = useState(false);
 
+  // Assigned Schools list & count (Requirement 2)
+  const [assignedTeacherSchools, setAssignedTeacherSchools] = useState<TeacherSchoolMembership[]>([]);
+  const [assignedSchoolsLoading, setAssignedSchoolsLoading] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!selectedTeacher?.id) {
+      setAssignedTeacherSchools([]);
+      return;
+    }
+
+    let isMounted = true;
+    setAssignedSchoolsLoading(true);
+
+    api.get(`/teacher-schools/by-teacher/${selectedTeacher.id}`)
+      .then(res => {
+        if (!isMounted) return;
+        const list = Array.isArray(res.data) ? res.data : (res.data?.value || []);
+        const mapped: TeacherSchoolMembership[] = list.map((item: any) => ({
+          school_id: item.schoolId || item.school_id,
+          school_name: item.schoolName || item.school_name || 'Institution',
+          is_primary: Boolean(item.isPrimary ?? item.is_primary),
+          is_active: item.isActive ?? item.is_active ?? true,
+        }));
+        setAssignedTeacherSchools(mapped);
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        if (selectedTeacher.schools && selectedTeacher.schools.length > 0) {
+          setAssignedTeacherSchools(selectedTeacher.schools);
+        } else if (selectedTeacher.school_id) {
+          setAssignedTeacherSchools([{
+            school_id: selectedTeacher.school_id,
+            school_name: selectedTeacher.school_name || 'Primary School',
+            is_primary: true,
+            is_active: true
+          }]);
+        } else {
+          setAssignedTeacherSchools([]);
+        }
+      })
+      .finally(() => {
+        if (isMounted) setAssignedSchoolsLoading(false);
+      });
+
+    return () => { isMounted = false; };
+  }, [selectedTeacher?.id]);
+
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm]);
@@ -499,27 +546,31 @@ const Teachers: React.FC = () => {
                     <div
                       key={teacher.id}
                       onClick={() => setSelectedTeacher(teacher)}
-                      className={`relative px-4 py-3.5 cursor-pointer flex items-center gap-3.5 transition-all duration-200 border-l-[3px] group ${
+                      className={`relative px-4 py-3.5 cursor-pointer flex items-center gap-3.5 transition-all duration-200 border-l-4 group ${
                         isSelected
-                          ? 'bg-indigo-50/70 dark:bg-indigo-500/15 border-l-indigo-500'
+                          ? 'bg-indigo-50/80 dark:bg-indigo-500/15 border-l-indigo-600 dark:border-l-indigo-400 shadow-xs'
                           : 'border-l-transparent hover:bg-slate-50 dark:hover:bg-[#283548] hover:border-l-slate-300'
                       }`}
                     >
-                      <div className="w-10 h-10 rounded-full bg-indigo-50 dark:bg-indigo-500/15 border border-indigo-100 dark:border-indigo-400/25 flex items-center justify-center font-bold text-indigo-600 dark:text-indigo-300 text-xs uppercase flex-shrink-0">
-                        {initials || <User className="w-4 h-4 text-indigo-400" />}
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-extrabold text-xs uppercase flex-shrink-0 border transition-all ${
+                        isSelected
+                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                          : 'bg-indigo-50 dark:bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-100 dark:border-indigo-400/25 group-hover:bg-indigo-100 dark:group-hover:bg-indigo-500/25'
+                      }`}>
+                        {initials || <User className="w-4 h-4" />}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="text-xs font-bold text-slate-800 dark:text-white tracking-tight truncate">
+                        <div className="text-xs font-black text-slate-800 dark:text-white tracking-tight truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                           {teacher.full_name}
                         </div>
-                        <div className="text-[10px] text-slate-500 dark:text-[#94a3b8] font-medium truncate mt-0.5">
+                        <div className="text-[10px] text-slate-500 dark:text-[#94a3b8] font-semibold truncate mt-0.5">
                           {teacher.specialization || 'Core Faculty'} · {teacher.employee_id}
                         </div>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
                         <StatusBadge active={teacher.is_active} />
                         {isSelected && (
-                          <ChevronRight className="w-3.5 h-3.5 text-indigo-500 animate-in fade-in slide-in-from-left-2 duration-300" />
+                          <ChevronRight className="w-4 h-4 text-indigo-600 dark:text-indigo-400 animate-in fade-in slide-in-from-left-2 duration-300" />
                         )}
                       </div>
                     </div>
@@ -547,45 +598,42 @@ const Teachers: React.FC = () => {
                 
                 {/* 1. Core Profile Details Card */}
                 <div className="bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] rounded-2xl shadow-sm dark:shadow-[0_4px_20px_rgba(0,0,0,0.3)] overflow-hidden animate-in fade-in slide-in-from-right-2 duration-300">
-                  {/* Color band */}
-                  <div className={`h-1.5 w-full ${selectedTeacher.is_active
-                    ? 'bg-gradient-to-r from-emerald-400 via-emerald-300 to-teal-400'
-                    : 'bg-gradient-to-r from-rose-400 to-rose-300'}`}
-                  />
                   <div className="p-5 space-y-5">
                     {/* Identity row */}
                     <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                      <div className="flex items-center gap-3.5">
-                        <div className="w-16 h-16 rounded-2xl bg-indigo-50 dark:bg-indigo-500/15 border border-indigo-100 dark:border-indigo-400/25 flex items-center justify-center text-indigo-700 dark:text-indigo-300 text-xl font-black uppercase flex-shrink-0">
+                      <div className="flex items-center gap-4">
+                        <div className="w-16 h-16 rounded-2xl bg-indigo-600 text-white border-2 border-indigo-200 dark:border-indigo-400/30 flex items-center justify-center text-xl font-black uppercase shadow-sm flex-shrink-0">
                           {selectedTeacher.first_name?.[0] || ''}{selectedTeacher.last_name?.[0] || ''}
                         </div>
                         <div>
-                          <h2 className="text-base font-black text-slate-800 dark:text-white tracking-tight leading-tight">{selectedTeacher.full_name}</h2>
-                          <p className="text-xs text-slate-500 dark:text-[#94a3b8] font-medium mt-0.5">{selectedTeacher.specialization || 'Core Faculty'}</p>
-                          <div className="mt-1.5">
+                          <div className="flex items-center gap-2">
+                            <h2 className="text-lg font-black text-slate-900 dark:text-white tracking-tight leading-tight">{selectedTeacher.full_name}</h2>
                             <StatusBadge active={selectedTeacher.is_active} size="md" />
                           </div>
+                          <p className="text-xs text-slate-500 dark:text-[#94a3b8] font-semibold mt-1">
+                            {selectedTeacher.specialization || 'Core Faculty'}
+                          </p>
                         </div>
                       </div>
                       {/* Action buttons */}
                       <div className="flex items-center gap-2 self-start flex-wrap flex-shrink-0">
                         <button
                           onClick={() => handleEdit(selectedTeacher)}
-                          className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-500/15 hover:bg-indigo-100 dark:hover:bg-indigo-500/25 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-400/25 rounded-lg font-bold text-xs transition-all flex items-center gap-1.5"
+                          className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-extrabold text-xs transition-all flex items-center gap-1.5 shadow-xs active:scale-95 cursor-pointer"
                           title="Edit Faculty Profile"
                         >
                           <Edit className="w-3.5 h-3.5" /> Edit
                         </button>
                         <button
                           onClick={() => handleResetPassword(selectedTeacher)}
-                          className="px-3 py-1.5 bg-amber-50 dark:bg-amber-500/15 hover:bg-amber-100 dark:hover:bg-amber-500/25 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-400/25 rounded-lg font-bold text-xs transition-all flex items-center gap-1.5"
+                          className="px-3.5 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-extrabold text-xs transition-all flex items-center gap-1.5 shadow-xs active:scale-95 cursor-pointer"
                           title="Reset Password"
                         >
                           <Key className="w-3.5 h-3.5" /> Reset
                         </button>
                         <button
                           onClick={() => handleDelete(selectedTeacher.id, selectedTeacher.full_name)}
-                          className="px-3 py-1.5 bg-rose-50 dark:bg-rose-500/15 hover:bg-rose-100 dark:hover:bg-rose-500/25 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-400/25 rounded-lg font-bold text-xs transition-all flex items-center gap-1.5"
+                          className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-extrabold text-xs transition-all flex items-center gap-1.5 shadow-xs active:scale-95 cursor-pointer"
                           title="Remove Teacher"
                         >
                           <Trash2 className="w-3.5 h-3.5" /> Delete
@@ -606,27 +654,52 @@ const Teachers: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Requirement 2/3: Multi-School Membership */}
-                    {(selectedTeacher.schools?.length || 0) > 1 && (
-                      <div>
-                        <SectionHeader icon={<School className="w-3.5 h-3.5" />} title="Assigned Schools" />
+                    {/* Requirement 2: Assigned Institutions & Multi-School Membership */}
+                    <div>
+                      <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-[#283548] mb-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-md bg-indigo-50 dark:bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 flex items-center justify-center flex-shrink-0">
+                            <School className="w-3.5 h-3.5" />
+                          </div>
+                          <h3 className="text-xs font-black text-slate-500 dark:text-[#94a3b8] uppercase tracking-widest">
+                            Assigned Schools
+                          </h3>
+                        </div>
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-400/30">
+                          {assignedSchoolsLoading ? '...' : `${assignedTeacherSchools.length} ${assignedTeacherSchools.length === 1 ? 'School' : 'Schools'} Assigned`}
+                        </span>
+                      </div>
+
+                      {assignedTeacherSchools.length > 0 ? (
                         <div className="flex flex-wrap gap-2">
-                          {selectedTeacher.schools!.map(s => (
+                          {assignedTeacherSchools.map(s => (
                             <span
                               key={s.school_id}
-                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border ${
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
                                 s.is_active
-                                  ? 'bg-indigo-50 dark:bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-400/25'
+                                  ? 'bg-indigo-50/70 dark:bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-400/25 shadow-2xs'
                                   : 'bg-gray-50 dark:bg-[#283548] text-gray-400 dark:text-[#64748b] border-gray-200 dark:border-[#334155] line-through'
                               }`}
                             >
-                              {s.is_primary && <Star className="w-3 h-3 fill-amber-500 text-amber-500" />}
+                              <School className="w-3.5 h-3.5 text-indigo-500" />
                               {s.school_name}
+                              {s.is_primary && (
+                                <span className="inline-flex items-center gap-1 text-[9px] bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300 px-1.5 py-0.5 rounded-full font-black uppercase tracking-wider ml-1">
+                                  <Star className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />
+                                  Primary
+                                </span>
+                              )}
                             </span>
                           ))}
                         </div>
-                      </div>
-                    )}
+                      ) : (
+                        <p className="text-xs font-medium text-slate-400 dark:text-[#64748b]">
+                          {selectedTeacher.school_name
+                            ? `Primary: ${selectedTeacher.school_name}`
+                            : 'No schools currently assigned to this teacher.'}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </div>
 

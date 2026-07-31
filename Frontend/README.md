@@ -1,4 +1,4 @@
-# NubeEra LMS — Frontend
+# NubeEra LXP — Frontend
 
 React 19 · TypeScript · Vite 7 · Tailwind v4 · react-router-dom v7
 
@@ -259,7 +259,7 @@ npm run build        # Production build
 Environment variables go in `.env.local` (not committed):
 
 ```env
-VITE_API_URL=http://localhost:5000/api
+VITE_API_URL=http://localhost:5001/api
 ```
 
 ---

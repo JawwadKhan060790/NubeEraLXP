@@ -1,0 +1,368 @@
+import React, { useEffect, useState } from 'react';
+import {
+  Award, BookOpen, BookText, Calendar, Check, FileText,
+  GraduationCap, HelpCircle, LayoutDashboard, School,
+  Search, Ticket, TrendingUp, Users, X,
+} from 'lucide-react';
+import { toast } from 'sonner';
+import api from '@/services/api';
+import analyticsService, { type StaffAnalytics } from '@/services/analyticsService';
+import StatsCard, { SkeletonStatCard } from '@/components/StatsCard';
+import {
+  DashboardPageShell, WelcomeBanner, StatGrid,
+  DashboardChartCard, DashboardWidgetCard, SectionHeader,
+} from '@/components/dashboard/DashboardKit';
+import {
+  DashboardDualChart, DashboardPieChart, DashboardBarChart,
+  DashboardAreaChart, SkeletonChart,
+} from '@/components/dashboard/ChartKit';
+
+const StaffDashboard: React.FC = () => {
+  const [analytics, setAnalytics] = useState<StaffAnalytics | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(true);
+  const [actionFilter, setActionFilter] = useState('All');
+  const [loading, setLoading] = useState(true);
+
+  // Teacher attendance states
+  const [teachers, setTeachers]         = useState<any[]>([]);
+  const [attendanceDate, setAttendanceDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [attendanceRecords, setAttendanceRecords] = useState<Record<string, 'present' | 'absent'>>({});
+  const [attendanceFilter, setAttendanceFilter]   = useState<'all' | 'present' | 'absent'>('all');
+  const [teacherSearch, setTeacherSearch]         = useState('');
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchTeacherAttendance = async (dateStr: string, activeTeachers?: any[]) => {
+    try {
+      const res = await api.get(`/attendance/teachers?date=${dateStr}`);
+      const records: Record<string, 'present' | 'absent'> = {};
+      res.data.forEach((att: any) => {
+        records[att.teacher_id] = (att.status || '').toLowerCase() === 'present' ? 'present' : 'absent';
+      });
+      setAttendanceRecords(records);
+    } catch {
+      const saved = localStorage.getItem(`attendance_${dateStr}`);
+      if (saved) {
+        setAttendanceRecords(JSON.parse(saved));
+      } else {
+        const initial: Record<string, 'present' | 'absent'> = {};
+        (activeTeachers || teachers).forEach((t: any) => { initial[t.id] = 'present'; });
+        setAttendanceRecords(initial);
+      }
+    }
+  };
+
+  const fetchData = async () => {
+    try {
+      const [teachersRes] = await Promise.allSettled([api.get('/teachers')]);
+      const fetchedTeachers = teachersRes.status === 'fulfilled' ? (teachersRes.value.data || []) : [];
+      setTeachers(fetchedTeachers);
+      const todayStr = new Date().toISOString().split('T')[0];
+      await fetchTeacherAttendance(todayStr, fetchedTeachers);
+    } catch {
+      /* non-blocking */
+    } finally {
+      setLoading(false);
+    }
+
+    // Analytics fetch (independent — doesn't block the page)
+    try {
+      const data = await analyticsService.getStaff();
+      setAnalytics(data);
+    } catch {
+      /* show zeros gracefully */
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  };
+
+  const handleToggleAttendance = async (teacherId: string, status: 'present' | 'absent') => {
+    const updated = { ...attendanceRecords, [teacherId]: status };
+    setAttendanceRecords(updated);
+    localStorage.setItem(`attendance_${attendanceDate}`, JSON.stringify(updated));
+    try {
+      await api.post('/attendance/teachers/save', [{
+        date: attendanceDate,
+        status: status === 'present' ? 'Present' : 'Absent',
+        teacher_id: teacherId,
+        student_id: null,
+        remarks: 'Marked from Staff Dashboard',
+      }]);
+      toast.success('Attendance synced to database');
+    } catch {
+      toast.success('Saved locally');
+    }
+  };
+
+  const handleAttendanceDateChange = (dateStr: string) => {
+    setAttendanceDate(dateStr);
+    fetchTeacherAttendance(dateStr);
+  };
+
+  const presentCount   = Object.values(attendanceRecords).filter(v => v === 'present').length;
+  const absentCount    = teachers.length ? (teachers.length - presentCount) : 0;
+  const attendancePct  = teachers.length ? Math.round((presentCount / teachers.length) * 100) : 100;
+  const radius         = 24;
+  const circumference  = 2 * Math.PI * radius;
+  const dashOffset     = circumference - (attendancePct / 100) * circumference;
+
+  const filteredTeachers = teachers.filter(t => {
+    const matchesSearch =
+      t.full_name?.toLowerCase().includes(teacherSearch.toLowerCase()) ||
+      t.employee_id?.toLowerCase().includes(teacherSearch.toLowerCase()) ||
+      t.email?.toLowerCase().includes(teacherSearch.toLowerCase());
+    const record = attendanceRecords[t.id] || 'present';
+    if (attendanceFilter === 'present') return matchesSearch && record === 'present';
+    if (attendanceFilter === 'absent')  return matchesSearch && record === 'absent';
+    return matchesSearch;
+  });
+
+  return (
+    <DashboardPageShell>
+      {/* ── Header ──────────────────────────────────────────── */}
+      <WelcomeBanner
+        badge="Staff Portal"
+        badgeColor="teal"
+        title="Staff Dashboard"
+        subtitle="Real-time operations: tickets, admissions, certificates, events and teacher attendance."
+      />
+
+      {/* ── KPI Cards ───────────────────────────────────────── */}
+      <StatGrid cols={4}>
+        <StatsCard loading={analyticsLoading} title="Students"      value={analytics?.total_students         ?? 0} icon={<Users         className="w-5 h-5" />} color="indigo"  />
+        <StatsCard loading={analyticsLoading} title="Teachers"      value={analytics?.total_teachers         ?? 0} icon={<GraduationCap className="w-5 h-5" />} color="violet"  />
+        <StatsCard loading={analyticsLoading} title="Open Tickets"  value={analytics?.total_open_tickets     ?? 0} icon={<Ticket        className="w-5 h-5" />} color="rose"    />
+        <StatsCard loading={analyticsLoading} title="Certificates"  value={analytics?.total_certificates     ?? 0} icon={<Award         className="w-5 h-5" />} color="amber"   />
+        <StatsCard loading={analyticsLoading} title="Report Cards"  value={analytics?.total_report_cards     ?? 0} icon={<FileText      className="w-5 h-5" />} color="blue"    />
+        <StatsCard loading={analyticsLoading} title="Events"        value={analytics?.total_events           ?? 0} icon={<Calendar      className="w-5 h-5" />} color="teal"    />
+        <StatsCard loading={analyticsLoading} title="Resolved"      value={analytics?.resolved_tickets       ?? 0} icon={<Check         className="w-5 h-5" />} color="emerald" />
+        <StatsCard loading={analyticsLoading} title="New Students"  value={analytics?.new_students_this_month ?? 0} icon={<TrendingUp   className="w-5 h-5" />} color="cyan"    subtitle="last 30 days" />
+      </StatGrid>
+
+      {/* ── Row 1: Ticket + Admissions dual trend | Ticket Status ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <DashboardChartCard
+          className="lg:col-span-7"
+          title="Ticket & Admissions Trend"
+          icon={<TrendingUp className="w-4.5 h-4.5 text-indigo-500" />}
+          badge="6 months"
+          badgeVariant="primary"
+        >
+          <DashboardDualChart
+            data={(analytics?.operations_summary ?? []).map(d => ({
+              Month: d.month, Primary: d.primary, Secondary: d.secondary,
+            }))}
+            primaryLabel="Tickets"
+            secondaryLabel="Certificates"
+            primaryColor="#6366f1"
+            secondaryColor="#10b981"
+            loading={analyticsLoading}
+          />
+        </DashboardChartCard>
+
+        <DashboardChartCard
+          className="lg:col-span-5"
+          title="Ticket Status Distribution"
+          icon={<Ticket className="w-4.5 h-4.5 text-rose-500" />}
+          badge="Live"
+          badgeVariant="emerald"
+        >
+          <DashboardPieChart
+            data={(analytics?.ticket_status_dist ?? []).map(d => ({
+              Label: d.label, Value: d.value,
+            }))}
+            loading={analyticsLoading}
+          />
+        </DashboardChartCard>
+      </div>
+
+      {/* ── Row 2: Admissions trend | Event Participation ─────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <DashboardChartCard
+          className="lg:col-span-6"
+          title="Student Admissions (6 months)"
+          icon={<Users className="w-4.5 h-4.5 text-violet-500" />}
+          badge="Admissions"
+          badgeVariant="primary"
+        >
+          <DashboardAreaChart
+            data={(analytics?.admissions_trend ?? []).map(d => ({ Month: d.month, Value: d.value }))}
+            color="#8b5cf6"
+            loading={analyticsLoading}
+          />
+        </DashboardChartCard>
+
+        <DashboardChartCard
+          className="lg:col-span-6"
+          title="Top Events by Registrations"
+          icon={<Calendar className="w-4.5 h-4.5 text-teal-500" />}
+          badge="Events"
+          badgeVariant="emerald"
+        >
+          <DashboardBarChart
+            data={(analytics?.event_participation ?? []).map(d => ({ Label: d.label, Value: d.value }))}
+            color="#14b8a6"
+            layout="horizontal"
+            loading={analyticsLoading}
+          />
+        </DashboardChartCard>
+      </div>
+
+      {/* ── Teacher Attendance Registry ──────────────────────── */}
+      <DashboardWidgetCard noPadding>
+        <div className="p-6 border-b border-slate-100 bg-slate-50 flex items-center justify-between gap-4 rounded-t-2xl">
+          <SectionHeader title="Teacher attendance registry" icon={<Calendar className="w-4.5 h-4.5" />} />
+          <input
+            type="date"
+            value={attendanceDate}
+            onChange={(e) => handleAttendanceDateChange(e.target.value)}
+            className="text-xs font-bold border border-slate-200 bg-white rounded-lg px-2.5 py-1.5 text-slate-700 focus:outline-none focus:ring-1 focus:ring-primary shadow-sm"
+          />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-6 p-6">
+          <div className="md:col-span-4 flex items-center gap-5 bg-slate-50 p-4 rounded-xl border border-slate-100">
+            <div className="relative w-16 h-16 flex items-center justify-center shrink-0">
+              <svg className="w-full h-full transform -rotate-90">
+                <circle cx="32" cy="32" r={radius} className="text-slate-100" strokeWidth="4.5" stroke="currentColor" fill="transparent" />
+                <circle cx="32" cy="32" r={radius} className="text-primary transition-all duration-1000" strokeWidth="4.5" strokeDasharray={circumference} strokeDashoffset={dashOffset} strokeLinecap="round" stroke="currentColor" fill="transparent" />
+              </svg>
+              <span className="absolute text-xs font-black text-slate-800">{attendancePct}%</span>
+            </div>
+            <div className="flex-1 grid grid-cols-3 gap-2 text-center">
+              <div className="bg-white p-2 rounded-lg border border-slate-200 shadow-sm">
+                <span className="text-[8px] font-black text-slate-500 block">Faculty</span>
+                <span className="text-xs font-black text-slate-800 block pt-0.5">{teachers.length}</span>
+              </div>
+              <div className="bg-emerald-50 p-2 rounded-lg border border-emerald-100 shadow-sm">
+                <span className="text-[8px] font-black text-emerald-600 block">Present</span>
+                <span className="text-xs font-black text-emerald-700 block pt-0.5">{presentCount}</span>
+              </div>
+              <div className="bg-rose-50 p-2 rounded-lg border border-rose-100 shadow-sm">
+                <span className="text-[8px] font-black text-rose-600 block">Absent</span>
+                <span className="text-xs font-black text-rose-700 block pt-0.5">{absentCount}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="md:col-span-8 flex flex-col justify-center space-y-4">
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Search teachers by name or ID..."
+                  value={teacherSearch}
+                  onChange={(e) => setTeacherSearch(e.target.value)}
+                  className="w-full pl-9 pr-4 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+              <select
+                value={attendanceFilter}
+                onChange={(e) => setAttendanceFilter(e.target.value as any)}
+                className="text-xs font-semibold border border-slate-200 bg-white rounded-lg px-2 py-1 focus:outline-none"
+              >
+                <option value="all">All</option>
+                <option value="present">Present</option>
+                <option value="absent">Absent</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div className="px-6 pb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 max-h-[300px] overflow-y-auto no-scrollbar pr-1">
+            {filteredTeachers.length > 0 ? filteredTeachers.map((teacher) => {
+              const status = attendanceRecords[teacher.id] || 'present';
+              return (
+                <div key={teacher.id} className="flex items-center justify-between gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100 hover:shadow-sm transition-all">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs uppercase shrink-0">
+                      {teacher.full_name?.split(' ').map((n: string) => n[0]).join('').substring(0, 2) || 'T'}
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-bold text-slate-900 truncate leading-tight">{teacher.full_name}</span>
+                      <span className="text-[8px] font-black text-slate-400 tracking-widest pt-0.5">{teacher.employee_id || 'VR-FACULTY'}</span>
+                    </div>
+                  </div>
+                  <div className="flex gap-1 bg-white p-0.5 rounded-lg border border-slate-100 shadow-sm shrink-0">
+                    <button onClick={() => handleToggleAttendance(teacher.id, 'present')}
+                      className={`px-2 py-0.5 text-[8px] font-black rounded-md transition-all flex items-center gap-1 cursor-pointer ${status === 'present' ? 'bg-emerald-500 text-white shadow-sm' : 'text-slate-400 hover:text-emerald-500'}`}>
+                      <Check className="w-2.5 h-2.5" /> Present
+                    </button>
+                    <button onClick={() => handleToggleAttendance(teacher.id, 'absent')}
+                      className={`px-2 py-0.5 text-[8px] font-black rounded-md transition-all flex items-center gap-1 cursor-pointer ${status === 'absent' ? 'bg-rose-500 text-white shadow-sm' : 'text-slate-400 hover:text-rose-500'}`}>
+                      <X className="w-2.5 h-2.5" /> Absent
+                    </button>
+                  </div>
+                </div>
+              );
+            }) : (
+              <div className="col-span-full text-center py-8 text-slate-400 text-xs">No teachers match this filter.</div>
+            )}
+          </div>
+        </div>
+      </DashboardWidgetCard>
+
+      {/* ── System Management ─────────────────────────────── */}
+      <DashboardWidgetCard noPadding>
+        <div className="px-6 py-5 border-b border-slate-100 bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-t-2xl">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
+              <LayoutDashboard className="w-4.5 h-4.5 text-primary" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-slate-900 tracking-tight">System Management</h2>
+              <p className="text-[11px] text-slate-400 font-medium mt-0.5">Quick access to essential management tools</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <select
+              value={actionFilter}
+              onChange={(e) => setActionFilter(e.target.value)}
+              className="bg-white text-slate-800 font-bold text-[10px] rounded-lg border border-slate-200 px-2.5 py-1.5 cursor-pointer outline-none"
+            >
+              <option value="All">All Operations</option>
+              <option value="Academic">Academic Focus</option>
+              <option value="Institution">Institutional Focus</option>
+            </select>
+            <span className="text-[10px] font-bold text-primary bg-primary/10 px-2.5 py-1 rounded-full tracking-wider">Management</span>
+          </div>
+        </div>
+
+        <div className="p-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+            {[
+              { label: 'Add Grade',     href: '/staff/grades/create/',         icon: GraduationCap, color: 'from-violet-500 to-violet-600', ring: 'hover:ring-violet-200', type: 'Academic',     description: 'Create a new academic grade' },
+              { label: 'Add Unit',      href: '/staff/modules/create/',        icon: BookOpen,      color: 'from-blue-500 to-blue-600',     ring: 'hover:ring-blue-200',   type: 'Academic',     description: 'Add a new academic unit' },
+              { label: 'Add Topic',     href: '/staff/lessons/create/',        icon: BookText,      color: 'from-emerald-500 to-emerald-600',ring: 'hover:ring-emerald-200',type: 'Academic',     description: 'Create lesson topics' },
+              { label: 'Add MCQ',       href: '/staff/exam/create/',           icon: HelpCircle,    color: 'from-amber-500 to-amber-600',   ring: 'hover:ring-amber-200',  type: 'Academic',     description: 'Set up an MCQ exam' },
+              { label: 'Add Questions', href: '/staff/modulequestion/create/', icon: HelpCircle,    color: 'from-rose-500 to-rose-600',     ring: 'hover:ring-rose-200',   type: 'Academic',     description: 'Add exam questions' },
+              { label: 'Add School',    href: '/staff/schools/create/',        icon: School,        color: 'from-teal-500 to-teal-600',     ring: 'hover:ring-teal-200',   type: 'Institution',  description: 'Register a new campus' },
+            ].filter(a => actionFilter === 'All' || a.type === actionFilter)
+             .map((action, i) => {
+               const Icon = action.icon;
+               return (
+                 <a key={i} href={action.href}
+                   className={`group relative flex flex-col items-center gap-3.5 p-5 rounded-2xl border border-slate-200 bg-white hover:border-transparent ring-2 ring-transparent ${action.ring} hover:shadow-lg transition-all duration-200`}>
+                   <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${action.color} flex items-center justify-center text-white shadow-sm group-hover:scale-105 transition-transform duration-200`}>
+                     <Icon className="w-5 h-5" />
+                   </div>
+                   <div className="text-center space-y-0.5">
+                     <span className="text-[12px] font-bold text-slate-800 block leading-tight">{action.label}</span>
+                     <span className="text-[10px] text-slate-400 font-medium block">{action.description}</span>
+                   </div>
+                   <div className={`absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r ${action.color} rounded-b-2xl opacity-0 group-hover:opacity-100 transition-opacity`} />
+                 </a>
+               );
+             })}
+          </div>
+        </div>
+      </DashboardWidgetCard>
+    </DashboardPageShell>
+  );
+};
+
+export default StaffDashboard;

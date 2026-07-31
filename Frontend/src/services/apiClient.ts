@@ -40,7 +40,7 @@ apiClient.interceptors.request.use(
       // school-switching + per-school data visibility) to take effect on any
       // service that goes through this client rather than the legacy `api`
       // instance in api.ts — both must stay in sync since either may be used.
-      const selectedSchoolId = localStorage.getItem('nubeera_selected_school_id');
+      const selectedSchoolId = localStorage.getItem('nubeera_selected_school_id') || localStorage.getItem('veriton_selected_school_id');
       if (selectedSchoolId) {
         config.headers['X-School-Id'] = selectedSchoolId;
       }
@@ -88,10 +88,14 @@ apiClient.interceptors.response.use(
      */
     if (error.response?.status === 401) {
       const currentPath = window.location.pathname;
-      if (currentPath !== '/login') {
+      const token = localStorage.getItem(APP_CONFIG.TOKEN_KEY);
+      const reqUrl = error.config?.url || '';
+
+      if (currentPath !== '/login' && (!token || reqUrl.includes('/auth/me') || reqUrl.includes('/auth/refresh') || reqUrl.includes('/auth/validate'))) {
         localStorage.removeItem(APP_CONFIG.TOKEN_KEY);
         localStorage.removeItem(APP_CONFIG.USER_KEY);
         localStorage.removeItem('nubeera_selected_school_id');
+        localStorage.removeItem('veriton_selected_school_id');
         window.location.href = '/login';
       }
     }

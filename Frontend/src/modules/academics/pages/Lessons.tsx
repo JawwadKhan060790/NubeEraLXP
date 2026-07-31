@@ -28,6 +28,7 @@ interface Lesson {
    source?: string;
    procedure?: string;
    serial_number: number;
+   display_order?: number;
    pdf_file_url?: string;
    is_active?: boolean;
    is_activity?: boolean;
@@ -43,6 +44,11 @@ interface Module {
    id: string;
    name: string;
    grade_level_id: string;
+}
+
+interface School {
+   id: string;
+   name: string;
 }
 
 const isFrameBlocked = (url: string): boolean => {
@@ -70,10 +76,13 @@ const Lessons: React.FC = () => {
    const [lessons, setLessons] = useState<Lesson[]>([]);
    const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
    const [modules, setModules] = useState<Module[]>([]);
+   const [schools, setSchools] = useState<School[]>([]);
    const [showModal, setShowModal] = useState(false);
    const location = useLocation();
    const [editingId, setEditingId] = useState<string | null>(null);
    const [selectedGradeId, setSelectedGradeId] = useState('');
+   const [selectedSchoolId, setSelectedSchoolId] = useState('');
+   const [selectedUnitId, setSelectedUnitId] = useState('');
    const [searchTerm, setSearchTerm] = useState('');
    const [currentPage, setCurrentPage] = useState(1);
    const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -92,7 +101,7 @@ const Lessons: React.FC = () => {
    // Reset to page 1 on filter change
    useEffect(() => {
       if (currentPage !== 1) setCurrentPage(1);
-   }, [searchTerm, selectedGradeId]);
+   }, [searchTerm, selectedGradeId, selectedSchoolId, selectedUnitId]);
 
    const [formData, setFormData] = useState({
       module_id: '',
@@ -274,25 +283,37 @@ sys.stderr = io.StringIO()
       }
    }, [location.pathname]);
 
-   // Load Units once (used for the Unit dropdown, narrowed client-side by grade
-   // level). Grade levels themselves are sourced by <GradeLevelSelect> directly.
    useEffect(() => {
       api.get('/modules').then(res => setModules(res.data)).catch(err => console.error('Error fetching modules:', err));
+      api.get('/schools').then(res => setSchools(res.data)).catch(() => { });
    }, []);
 
-   // Re-fetch lesson list whenever page, size, search, or grade filter changes
+   // Filter Unit/Module dropdown defensively by grade level ID across all property casings
+   const filteredFilterModules = useMemo(() => {
+      if (!selectedGradeId) return modules;
+      return modules.filter(m => {
+         const mGradeId = m.grade_level_id || (m as any).gradeLevelId || (m as any).GradeLevelId;
+         return mGradeId === selectedGradeId;
+      });
+   }, [modules, selectedGradeId]);
+
+   // Re-fetch lesson list whenever page, size, search, grade, school, or unit filter changes
    useEffect(() => {
       fetchData();
-   }, [currentPage, itemsPerPage, searchTerm, selectedGradeId]);
+   }, [currentPage, itemsPerPage, searchTerm, selectedGradeId, selectedSchoolId, selectedUnitId]);
 
    const fetchData = async () => {
       try {
          const params: Record<string, any> = {
             pageNumber: currentPage,
             pageSize: itemsPerPage,
+            sortBy: 'displayorder',
+            sortDirection: 'ASC'
          };
          if (searchTerm.trim()) params.search = searchTerm.trim();
          if (selectedGradeId) params.gradeId = selectedGradeId;
+         if (selectedUnitId) params.unitId = selectedUnitId;
+         if (selectedSchoolId) params.schoolId = selectedSchoolId;
 
          const res = await api.get('/lessons/paged', { params });
          const paged = res.data;
@@ -490,31 +511,97 @@ sys.stderr = io.StringIO()
 
             {/* LEFT PANEL: Searchable List */}
             <div className="lg:col-span-5 bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] rounded-2xl overflow-hidden shadow-sm flex flex-col max-h-[680px]">
-               <div className="p-4 border-b border-slate-100 dark:border-[#283548] bg-slate-50/60 dark:bg-[#283548]/60">
-                  {/* Search and grade level filter share one row */}
-                  <div className="flex items-center gap-2">
-                     <div className="relative flex-1 min-w-0">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-[#64748b] w-3.5 h-3.5" />
-                        <input
-                           type="text"
-                           value={searchTerm}
-                           onChange={(e) => setSearchTerm(e.target.value)}
-                           placeholder="Search topics..."
-                           className="w-full pl-9 pr-4 py-2 bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 transition-all font-medium"
+               <div className="p-4 border-b border-slate-100 dark:border-[#283548] bg-slate-50/60 dark:bg-[#283548]/60 space-y-2.5">
+                  {/* Search Bar across top */}
+                  <div className="relative">
+                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-[#64748b] w-3.5 h-3.5" />
+                     <input
+                        type="text"
+                        value={searchTerm}
+                        onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+                        placeholder="Search topics by title or keyword..."
+                        className="w-full pl-9 pr-4 py-2 bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 transition-all font-medium"
+                     />
+                  </div>
+
+                  {/* 3-Tier Cascading Filters: 1. School -> 2. Grade -> 3. Unit */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                     {/* Level 1: School Filter */}
+                     <div className="min-w-0">
+                        <select
+                           value={selectedSchoolId}
+                           onChange={(e) => {
+                              setSelectedSchoolId(e.target.value);
+                              setSelectedGradeId('');
+                              setSelectedUnitId('');
+                              setCurrentPage(1);
+                           }}
+                           className="w-full px-2.5 py-2 bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 transition-all cursor-pointer text-slate-700 dark:text-slate-200 truncate"
+                        >
+                           <option value="">All Schools</option>
+                           {schools.map((s) => (
+                              <option key={s.id || (s as any).Id} value={s.id || (s as any).Id}>
+                                 {s.name || (s as any).Name}
+                              </option>
+                           ))}
+                        </select>
+                     </div>
+
+                     {/* Level 2: Grade Filter (scoped to selected School) */}
+                     <div className="min-w-0">
+                        <GradeLevelSelect
+                           value={selectedGradeId}
+                           onChange={(value) => {
+                              setSelectedGradeId(value);
+                              setSelectedUnitId('');
+                              setCurrentPage(1);
+                           }}
+                           schoolId={selectedSchoolId || undefined}
+                           source={selectedSchoolId ? 'allowed' : 'master'}
+                           valueAs="id"
+                           placeholder="All Grades"
+                           className="w-full px-2.5 pr-8 py-2 bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 transition-all cursor-pointer appearance-none text-slate-700 dark:text-slate-200 truncate"
                         />
                      </div>
 
-                     <div className="flex-1 min-w-0">
-                        <GradeLevelSelect
-                           value={selectedGradeId}
-                           onChange={(value) => setSelectedGradeId(value)}
-                           source="master"
-                           valueAs="id"
-                           placeholder="All Grades"
-                           className="w-full px-3 pr-9 py-2 bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 transition-all cursor-pointer appearance-none"
-                        />
+                     {/* Level 3: Unit Filter (scoped to selected Grade) */}
+                     <div className="min-w-0">
+                        <select
+                           value={selectedUnitId}
+                           onChange={(e) => { setSelectedUnitId(e.target.value); setCurrentPage(1); }}
+                           className="w-full px-2.5 py-2 bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 transition-all cursor-pointer text-slate-700 dark:text-slate-200 truncate"
+                        >
+                           <option value="">All Units</option>
+                           {filteredFilterModules.map((m) => (
+                              <option key={m.id || (m as any).Id} value={m.id || (m as any).Id}>
+                                 {m.name}
+                              </option>
+                           ))}
+                        </select>
                      </div>
                   </div>
+
+                  {/* Active Filters Summary & Reset Button */}
+                  {Boolean(selectedGradeId || selectedSchoolId || selectedUnitId || searchTerm.trim()) && (
+                     <div className="flex items-center justify-between pt-1">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                           Active Filters
+                        </span>
+                        <button
+                           type="button"
+                           onClick={() => {
+                              setSelectedSchoolId('');
+                              setSelectedGradeId('');
+                              setSelectedUnitId('');
+                              setSearchTerm('');
+                              setCurrentPage(1);
+                           }}
+                           className="text-[10px] font-bold text-rose-500 hover:text-rose-600 flex items-center gap-1 cursor-pointer transition-colors"
+                        >
+                           <X className="w-3 h-3" /> Clear All Filters
+                        </button>
+                     </div>
+                  )}
                </div>
 
                <div className="overflow-y-auto divide-y divide-slate-100 dark:divide-[#283548] flex-1 min-h-[350px] custom-scrollbar">
@@ -525,28 +612,40 @@ sys.stderr = io.StringIO()
                   ) : (
                      lessons.map((l) => {
                         const isSelected = selectedLesson?.id === l.id;
+                        const orderNum = l.display_order ?? (l as any).displayOrder ?? 0;
+                        const initials = l.sub_topic.substring(0, 2).toUpperCase();
                         return (
                            <div
                               key={l.id}
                               onClick={() => fetchLessonDetail(l.id)}
-                              className={`relative px-4 py-3.5 cursor-pointer flex items-center gap-3.5 transition-all duration-200 border-l-[3px] group ${isSelected
-                                    ? 'bg-indigo-50/70 dark:bg-indigo-950/30 border-l-indigo-500'
+                              className={`relative px-4 py-3.5 cursor-pointer flex items-center gap-3.5 transition-all duration-200 border-l-4 group ${
+                                 isSelected
+                                    ? 'bg-indigo-50/80 dark:bg-indigo-500/15 border-l-indigo-600 dark:border-l-indigo-400 shadow-xs'
                                     : 'border-l-transparent hover:bg-slate-50 dark:hover:bg-[#283548] hover:border-l-slate-300'
-                                 }`}
+                              }`}
                            >
-                              <div className="w-10 h-10 rounded-full bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-100 dark:border-indigo-900/50 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
-                                 <BookOpen className="w-5 h-5 text-indigo-500" />
+                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-extrabold text-xs uppercase flex-shrink-0 border transition-all ${
+                                 isSelected
+                                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                                    : 'bg-indigo-50 dark:bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-100 dark:border-indigo-400/25 group-hover:bg-indigo-100 dark:group-hover:bg-indigo-500/25'
+                              }`}>
+                                 {initials}
                               </div>
                               <div className="flex-1 min-w-0">
-                                 <div className="text-xs font-bold text-slate-800 dark:text-white tracking-tight truncate">
-                                    {l.sub_topic}
+                                 <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-[9px] font-mono font-extrabold px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-400/20">
+                                       Order: {orderNum}
+                                    </span>
+                                    <div className="text-xs font-black text-slate-800 dark:text-white tracking-tight truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                                       {l.sub_topic}
+                                    </div>
                                  </div>
-                                 <div className="text-[10px] text-slate-500 dark:text-[#94a3b8] font-medium truncate mt-0.5">
+                                 <div className="text-[10px] text-slate-500 dark:text-[#94a3b8] font-semibold truncate mt-0.5">
                                     {l.module_name || 'General Unit'}
                                  </div>
                               </div>
                               {isSelected && (
-                                 <ChevronRight className="w-3.5 h-3.5 text-indigo-500 flex-shrink-0 animate-in fade-in slide-in-from-left-2 duration-300" />
+                                 <ChevronRight className="w-4 h-4 text-indigo-600 dark:text-indigo-400 flex-shrink-0 animate-in fade-in slide-in-from-left-2 duration-300" />
                               )}
                            </div>
                         );
@@ -573,40 +672,45 @@ sys.stderr = io.StringIO()
 
                      {/* Header detail */}
                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-100 dark:border-[#283548]">
-                        <div>
-                           <h2 className="text-base font-black text-slate-800 dark:text-white uppercase tracking-tight leading-tight">{selectedLesson.sub_topic}</h2>
-                           <div className="flex items-center gap-2 mt-2 flex-wrap">
-                              <span className="text-[9px] font-bold text-primary bg-primary/5 border border-primary/10 px-2 py-0.5 rounded-md uppercase">
-                                 {selectedLesson.module_name || 'General Unit'}
-                              </span>
-                              <span className="text-[9px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-500/15 border border-indigo-100 dark:border-indigo-400/25 px-2 py-0.5 rounded-md uppercase">
-                                 ⏱️ {selectedLesson.expected_periods || 1} Expected Periods
-                              </span>
-                              {selectedLesson.pdf_file_url && (
-                                 <a
-                                    href={resolveMediaUrl(selectedLesson.pdf_file_url)}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="text-[9px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-100 dark:border-emerald-400/25 px-2 py-0.5 rounded-md flex items-center gap-1 hover:bg-emerald-100 transition-all cursor-pointer"
-                                 >
-                                    <FileText className="w-3.5 h-3.5 text-emerald-500" /> Topic PDF
-                                 </a>
-                              )}
+                        <div className="flex items-center gap-4">
+                           <div className="w-14 h-14 rounded-2xl bg-indigo-600 text-white border-2 border-indigo-200 dark:border-indigo-400/30 flex items-center justify-center text-lg font-black uppercase shadow-sm flex-shrink-0">
+                              {selectedLesson.sub_topic.substring(0, 2).toUpperCase()}
+                           </div>
+                           <div>
+                              <h2 className="text-base font-black text-slate-900 dark:text-white uppercase tracking-tight leading-tight">{selectedLesson.sub_topic}</h2>
+                              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                 <span className="text-[9px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-500/15 border border-indigo-100 dark:border-indigo-400/25 px-2 py-0.5 rounded-md uppercase">
+                                    {selectedLesson.module_name || 'General Unit'}
+                                 </span>
+                                 <span className="text-[9px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-500/15 border border-indigo-100 dark:border-indigo-400/25 px-2 py-0.5 rounded-md uppercase">
+                                    ⏱️ {selectedLesson.expected_periods || 1} Expected Periods
+                                 </span>
+                                 {selectedLesson.pdf_file_url && (
+                                    <a
+                                       href={resolveMediaUrl(selectedLesson.pdf_file_url)}
+                                       target="_blank"
+                                       rel="noreferrer"
+                                       className="text-[9px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-100 dark:border-emerald-400/25 px-2 py-0.5 rounded-md flex items-center gap-1 hover:bg-emerald-100 transition-all cursor-pointer"
+                                    >
+                                       <FileText className="w-3.5 h-3.5 text-emerald-500" /> Topic PDF
+                                    </a>
+                                 )}
+                              </div>
                            </div>
                         </div>
 
                         {!isTeacher && (
-                           <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+                           <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap flex-shrink-0">
                               <button
                                  onClick={() => handleEdit(selectedLesson)}
-                                 className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 hover:border-indigo-300 rounded-lg font-bold text-xs tracking-normal transition-all flex items-center justify-center gap-1.5 shadow-xs hover:shadow-sm dark:bg-indigo-950/40 dark:text-indigo-400 dark:border-indigo-900/40 dark:hover:bg-indigo-900/40"
+                                 className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-extrabold text-xs transition-all flex items-center gap-1.5 shadow-xs active:scale-95 cursor-pointer"
                                  title="Edit Topic"
                               >
                                  <Edit className="w-3.5 h-3.5" /> Edit
                               </button>
                               <button
                                  onClick={() => handleDelete(selectedLesson.id, selectedLesson.sub_topic)}
-                                 className="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 hover:border-rose-300 rounded-lg font-bold text-xs tracking-normal transition-all flex items-center justify-center gap-1.5 shadow-xs hover:shadow-sm dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-900/40 dark:hover:bg-rose-900/40"
+                                 className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-extrabold text-xs transition-all flex items-center gap-1.5 shadow-xs active:scale-95 cursor-pointer"
                                  title="Delete Topic"
                               >
                                  <Trash2 className="w-3.5 h-3.5" /> Delete
@@ -860,318 +964,258 @@ sys.stderr = io.StringIO()
          </div>
 
          {showModal && (
-            <div className="fixed inset-0 z-[1000] bg-black/50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-               <div className="bg-white dark:bg-[#1e293b] rounded-[10px] w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-xl flex flex-col animate-in zoom-in duration-200">
-                  <div className="px-6 py-4 border-b border-gray-100 dark:border-[#283548] flex items-center justify-between">
-                     <h2 className="text-lg font-black text-gray-900 dark:text-white tracking-tight">{editingId ? 'Edit Topic' : 'Add New Topic'}</h2>
-                     <button onClick={() => setShowModal(false)} className="w-8 h-8 flex items-center justify-center rounded-md bg-gray-100 dark:bg-[#283548] hover:bg-rose-50 hover:text-rose-500 text-gray-400 dark:text-[#64748b] transition-all"><X className="w-4 h-4" /></button>
+            <div className="fixed inset-0 z-[1000] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
+               <div className="bg-white dark:bg-[#1e293b] rounded-2xl w-full max-w-4xl h-[90vh] max-h-[850px] overflow-hidden shadow-2xl flex flex-col animate-in zoom-in duration-200 border border-slate-200 dark:border-[#334155]">
+                  <div className="px-6 py-4 border-b border-slate-100 dark:border-[#283548] flex items-center justify-between flex-shrink-0 bg-white dark:bg-[#1e293b] z-10">
+                     <h2 className="text-lg font-black text-slate-800 dark:text-white tracking-tight">{editingId ? 'Edit Topic' : 'Add New Topic'}</h2>
+                     <button onClick={() => setShowModal(false)} className="w-8 h-8 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-[#283548] hover:bg-rose-50 hover:text-rose-500 text-slate-400 dark:text-[#64748b] transition-all cursor-pointer"><X className="w-4 h-4" /></button>
                   </div>
 
-                  <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-5 custom-scrollbar">
-                     {formErrors._form && (
-                        <div className="p-4 bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-800/40 text-rose-700 dark:text-rose-300 text-xs font-bold rounded-lg flex items-center gap-2">
-                           <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                           <span>{formErrors._form}</span>
-                        </div>
-                     )}
-                     <div className="grid grid-cols-1 gap-5">
-                        <div className="space-y-1.5">
-                           <label className="text-[11px] font-bold text-gray-500 dark:text-[#94a3b8] uppercase tracking-wider mb-2 ml-1">Topic Name</label>
-                           <input type="text" required value={formData.sub_topic} onChange={e => setFormData({ ...formData, sub_topic: e.target.value })} placeholder="Enter Topic Name" className="w-full px-4 py-3 bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-[#334155] rounded-md text-sm outline-none focus:border-primary transition-all font-bold shadow-sm" />
-                           <FieldError message={formErrors.sub_topic || formErrors.subTopic} />
-                        </div>
-
-                        {/* Activity Type Checkboxes */}
-                        <div className="space-y-3 p-4 bg-slate-50 dark:bg-[#283548] border border-slate-200 dark:border-[#334155] rounded-xl">
-                           <p className="text-[10px] font-bold text-slate-500 dark:text-[#94a3b8] uppercase tracking-wider">Activity Type</p>
-                           <div className="flex flex-wrap gap-5">
-                              {/* Is Robotics Activity */}
-                              <label className="flex items-center gap-2.5 cursor-pointer group">
-                                 <input
-                                    type="checkbox"
-                                    id="is_robotics_activity"
-                                    checked={formData.is_robotics_activity}
-                                    onChange={e => setFormData({ ...formData, is_robotics_activity: e.target.checked, is_activity: e.target.checked || formData.is_python_activity || formData.is_ai_tool_activity })}
-                                    className="w-4 h-4 accent-primary rounded"
-                                 />
-                                 <span className="text-[12px] font-semibold text-slate-700 dark:text-[#e2e8f0] group-hover:text-primary transition-colors">🤖 Is Robotics Activity</span>
-                              </label>
-                              {/* Is Python Activity */}
-                              <label className="flex items-center gap-2.5 cursor-pointer group">
-                                 <input
-                                    type="checkbox"
-                                    id="is_python_activity"
-                                    checked={formData.is_python_activity}
-                                    onChange={e => setFormData({ ...formData, is_python_activity: e.target.checked, is_activity: formData.is_robotics_activity || e.target.checked || formData.is_ai_tool_activity })}
-                                    className="w-4 h-4 accent-primary rounded"
-                                 />
-                                 <span className="text-[12px] font-semibold text-slate-700 dark:text-[#e2e8f0] group-hover:text-primary transition-colors">🐍 Is Python Activity</span>
-                              </label>
-                              {/* Is AI Tool Activity */}
-                              <label className="flex items-center gap-2.5 cursor-pointer group">
-                                 <input
-                                    type="checkbox"
-                                    id="is_ai_tool_activity"
-                                    checked={formData.is_ai_tool_activity}
-                                    onChange={e => setFormData({ ...formData, is_ai_tool_activity: e.target.checked, is_activity: formData.is_robotics_activity || formData.is_python_activity || e.target.checked })}
-                                    className="w-4 h-4 accent-primary rounded"
-                                 />
-                                 <span className="text-[12px] font-semibold text-slate-700 dark:text-[#e2e8f0] group-hover:text-primary transition-colors">🤖 Is AI Tool Activity</span>
-                              </label>
+                  <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+                     <div className="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar">
+                        {formErrors._form && (
+                           <div className="p-4 bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-800/40 text-rose-700 dark:text-rose-300 text-xs font-bold rounded-lg flex items-center gap-2">
+                              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                              <span>{formErrors._form}</span>
+                           </div>
+                        )}
+                        <div className="grid grid-cols-1 gap-5">
+                           <div className="space-y-1.5">
+                              <label className="text-[11px] font-bold text-gray-500 dark:text-[#94a3b8] uppercase tracking-wider mb-2 ml-1">Topic Name</label>
+                              <input type="text" required value={formData.sub_topic} onChange={e => setFormData({ ...formData, sub_topic: e.target.value })} placeholder="Enter Topic Name" className="w-full px-4 py-3 bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-[#334155] rounded-md text-sm outline-none focus:border-primary transition-all font-bold shadow-sm" />
+                              <FieldError message={formErrors.sub_topic || formErrors.subTopic} />
                            </div>
 
-                           {/* Browser URL — shown only when Is AI Tool Activity is checked */}
-                           {formData.is_ai_tool_activity && (
-                              <div className="pt-3 border-t border-slate-200 dark:border-[#334155] space-y-1.5 animate-in fade-in duration-200">
-                                 <label className="text-[10px] font-bold text-slate-500 dark:text-[#94a3b8] uppercase tracking-wider">Browser URL <span className="text-primary">*</span></label>
-                                 <input
-                                    type="url"
-                                    value={formData.browser_url}
-                                    onChange={e => setFormData({ ...formData, browser_url: e.target.value })}
-                                    placeholder="Enter Browser URL"
-                                    className="w-full px-4 py-3 bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-[#334155] rounded-xl text-sm outline-none focus:border-primary transition-all font-medium shadow-sm"
-                                 />
-                                 <p className="text-[10px] text-slate-400 dark:text-[#64748b]">This URL will open in an embedded browser tab in the student learning path.</p>
+                           <div className="space-y-3 p-4 bg-slate-50 dark:bg-[#283548] border border-slate-200 dark:border-[#334155] rounded-xl">
+                              <p className="text-[10px] font-bold text-slate-500 dark:text-[#94a3b8] uppercase tracking-wider">Activity Type</p>
+                              <div className="flex flex-wrap gap-5">
+                                 <label className="flex items-center gap-2.5 cursor-pointer group">
+                                    <input
+                                       type="checkbox"
+                                       id="is_robotics_activity"
+                                       checked={formData.is_robotics_activity}
+                                       onChange={e => setFormData({ ...formData, is_robotics_activity: e.target.checked, is_activity: e.target.checked || formData.is_python_activity || formData.is_ai_tool_activity })}
+                                       className="w-4 h-4 accent-primary rounded"
+                                    />
+                                    <span className="text-[12px] font-semibold text-slate-700 dark:text-[#e2e8f0] group-hover:text-primary transition-colors">🤖 Is Robotics Activity</span>
+                                 </label>
+                                 <label className="flex items-center gap-2.5 cursor-pointer group">
+                                    <input
+                                       type="checkbox"
+                                       id="is_python_activity"
+                                       checked={formData.is_python_activity}
+                                       onChange={e => setFormData({ ...formData, is_python_activity: e.target.checked, is_activity: formData.is_robotics_activity || e.target.checked || formData.is_ai_tool_activity })}
+                                       className="w-4 h-4 accent-primary rounded"
+                                    />
+                                    <span className="text-[12px] font-semibold text-slate-700 dark:text-[#e2e8f0] group-hover:text-primary transition-colors">🐍 Is Python Activity</span>
+                                 </label>
+                                 <label className="flex items-center gap-2.5 cursor-pointer group">
+                                    <input
+                                       type="checkbox"
+                                       id="is_ai_tool_activity"
+                                       checked={formData.is_ai_tool_activity}
+                                       onChange={e => setFormData({ ...formData, is_ai_tool_activity: e.target.checked, is_activity: formData.is_robotics_activity || formData.is_python_activity || e.target.checked })}
+                                       className="w-4 h-4 accent-primary rounded"
+                                    />
+                                    <span className="text-[12px] font-semibold text-slate-700 dark:text-[#e2e8f0] group-hover:text-primary transition-colors">🤖 Is AI Tool Activity</span>
+                                 </label>
                               </div>
-                           )}
-                        </div>
-                     </div>
 
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-
-
-                        <div className="space-y-1.5">
-
-
-                           <label className="text-[11px] font-bold text-gray-500 dark:text-[#94a3b8] uppercase tracking-wider mb-2 ml-1">Expected Periods</label>
-
-
-                           <input
-
-
-                              type="number"
-
-
-                              min={1}
-
-
-                              required
-
-
-                              value={formData.expected_periods}
-
-
-                              onChange={e => setFormData({ ...formData, expected_periods: parseInt(e.target.value) || 1 })}
-
-
-                              placeholder="Required periods (e.g. 2)"
-
-
-                              className="w-full px-4 py-3 bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-[#334155] rounded-md text-sm outline-none focus:border-primary transition-all font-bold shadow-sm"
-
-
-                           />
-
-
-                           <FieldError message={formErrors.expected_periods || formErrors.expectedPeriods} />
-
-
-                        </div>
-
-
-                        <div className="space-y-1.5">
-
-
-                           <label className="text-[11px] font-bold text-gray-500 dark:text-[#94a3b8] uppercase tracking-wider mb-2 ml-1">Display Order</label>
-
-
-                           <input
-
-
-                              type="number"
-
-
-                              min={0}
-
-
-                              required
-
-
-                              value={formData.display_order}
-
-
-                              onChange={e => setFormData({ ...formData, display_order: parseInt(e.target.value) || 0 })}
-
-
-                              placeholder="Display order (e.g. 1)"
-
-
-                              className="w-full px-4 py-3 bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-[#334155] rounded-md text-sm outline-none focus:border-primary transition-all font-bold shadow-sm"
-
-
-                           />
-
-
-                           <FieldError message={formErrors.display_order || formErrors.displayOrder} />
-
-
-                        </div>
-
-
-                     </div>
-
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        <div className="space-y-1.5">
-                           <label className="text-[11px] font-bold text-gray-500 dark:text-[#94a3b8] uppercase tracking-wider mb-2 ml-1">Select Grade Level</label>
-                           <GradeLevelSelect
-                              required
-                              value={selectedGradeId}
-                              onChange={(value) => { setSelectedGradeId(value); setFormData(prev => ({ ...prev, module_id: '' })); }}
-                              source="master"
-                              valueAs="id"
-                              placeholder="Choose Grade Level"
-                           />
-                           <FieldError message={formErrors.grade_level_id} />
-                        </div>
-                        <div className="space-y-1.5">
-                           <label className="text-[11px] font-bold text-gray-500 dark:text-[#94a3b8] uppercase tracking-wider mb-2 ml-1">Select Unit</label>
-                           <div className="relative">
-                              <select required value={formData.module_id} onChange={e => handleModuleChange(e.target.value)} className="w-full px-4 pr-10 py-3 bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-[#334155] rounded-md focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all outline-none font-semibold text-sm cursor-pointer shadow-sm appearance-none">
-                                 <option value="">Select Unit</option>
-                                 {filteredModules.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                              </select>
-                              <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-[#64748b] pointer-events-none" />
-                           </div>
-                           <FieldError message={formErrors.module_id || formErrors.moduleId} />
-                        </div>
-                     </div>
-
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        <div className="space-y-1.5">
-                           <label className="text-[11px] font-bold text-gray-500 dark:text-[#94a3b8] uppercase tracking-wider mb-2 ml-1">
-                              🎥 Video Links <span className="text-indigo-400">(YouTube or Direct URL)</span>
-                           </label>
-                           <div className="space-y-2">
-                              {videoUrls.map((url, idx) => (
-                                 <div key={idx} className="flex gap-2 items-center">
-                                    <span className="text-[10px] font-bold text-slate-400 w-5 text-right shrink-0">{idx + 1}.</span>
+                              {formData.is_ai_tool_activity && (
+                                 <div className="pt-3 border-t border-slate-200 dark:border-[#334155] space-y-1.5 animate-in fade-in duration-200">
+                                    <label className="text-[10px] font-bold text-slate-500 dark:text-[#94a3b8] uppercase tracking-wider">Browser URL <span className="text-primary">*</span></label>
                                     <input
-                                       type="text"
-                                       value={url}
-                                       onChange={e => setVideoUrls(prev => prev.map((u, i) => i === idx ? e.target.value : u))}
-                                       placeholder="YouTube URL or video link..."
-                                       className="flex-1 px-3 py-2.5 bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-[#334155] rounded-md text-sm outline-none focus:border-primary transition-all"
+                                       type="url"
+                                       value={formData.browser_url}
+                                       onChange={e => setFormData({ ...formData, browser_url: e.target.value })}
+                                       placeholder="Enter Browser URL"
+                                       className="w-full px-4 py-3 bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-[#334155] rounded-xl text-sm outline-none focus:border-primary transition-all font-medium shadow-sm"
                                     />
-                                    {/* File upload for this row */}
-                                    <input
-                                       type="file" accept="video/*" className="hidden"
-                                       ref={el => { videoFileRefs.current[idx] = el; }}
-                                       onChange={e => handleVideoFileUpload(e, idx)}
-                                    />
-                                    <button type="button"
-                                       onClick={() => videoFileRefs.current[idx]?.click()}
-                                       className="px-3 py-2.5 bg-gray-100 dark:bg-[#283548] text-gray-600 dark:text-[#cbd5e1] rounded-md hover:bg-gray-200 dark:hover:bg-[#334155] border border-gray-200 dark:border-[#334155] transition-all flex items-center gap-1.5 shrink-0"
-                                       title="Upload video file"
-                                    >
-                                       {uploadingVideoIdx === idx
-                                          ? <div className="w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                                          : <Upload className="w-3.5 h-3.5" />}
-                                    </button>
-                                    {/* Move up */}
-                                    {idx > 0 && (
-                                       <button type="button"
-                                          onClick={() => setVideoUrls(prev => { const a = [...prev];[a[idx - 1], a[idx]] = [a[idx], a[idx - 1]]; return a; })}
-                                          className="w-7 h-7 flex items-center justify-center rounded bg-slate-100 dark:bg-[#283548] hover:bg-slate-200 dark:hover:bg-[#334155] text-slate-500 text-xs transition-all shrink-0 cursor-pointer"
-                                          title="Move up"
-                                       >↑</button>
-                                    )}
-                                    {/* Remove */}
-                                    {videoUrls.length > 1 && (
-                                       <button type="button"
-                                          onClick={() => setVideoUrls(prev => prev.filter((_, i) => i !== idx))}
-                                          className="w-7 h-7 flex items-center justify-center rounded bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/40 text-rose-500 transition-all shrink-0 cursor-pointer"
-                                          title="Remove"
-                                       >
-                                          <X className="w-3.5 h-3.5" />
-                                       </button>
-                                    )}
+                                    <p className="text-[10px] text-slate-400 dark:text-[#64748b]">This URL will open in an embedded browser tab in the student learning path.</p>
                                  </div>
-                              ))}
+                              )}
                            </div>
-                           <button
-                              type="button"
-                              onClick={() => setVideoUrls(prev => [...prev, ''])}
-                              className="mt-1.5 flex items-center gap-1.5 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors cursor-pointer"
-                           >
-                              <Plus className="w-3.5 h-3.5" /> Add another video
-                           </button>
-                           <FieldError message={formErrors.video_url || formErrors.videoUrl} />
                         </div>
-                        <div className="space-y-1.5">
-                           <label className="text-[11px] font-bold text-gray-500 dark:text-[#94a3b8] uppercase tracking-wider mb-2 ml-1">Topic Full PDF Book</label>
-                           <div className="flex gap-2">
-                              <input type="text" value={formData.pdf_file_url} onChange={e => setFormData({ ...formData, pdf_file_url: e.target.value })} placeholder="Enter PDF Link" className="flex-1 px-4 py-3 bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-[#334155] rounded-md text-sm outline-none focus:border-primary transition-all" />
-                              <input type="file" id="pdfFileUrlInput" accept=".pdf" className="hidden" onChange={(e) => handleFileUpload(e, 'pdf_file_url')} />
-                              <button type="button" onClick={() => document.getElementById('pdfFileUrlInput')?.click()} className="px-4 py-2.5 bg-gray-100 dark:bg-[#283548] text-gray-600 dark:text-[#cbd5e1] rounded-md hover:bg-gray-200 dark:hover:bg-[#334155] transition-all flex items-center gap-2 shadow-sm border border-gray-200 dark:border-[#334155]">
-                                 {isUploading ? <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" /> : <Upload className="w-4 h-4" />}
-                                 <span className="text-[10px] font-bold uppercase">Upload</span>
-                              </button>
-                           </div>
-                           <FieldError message={formErrors.pdf_file_url || formErrors.pdfFileUrl} />
-                        </div>
-                     </div>
 
-                     <div className="space-y-1.5">
-                        <label className="text-[11px] font-bold text-gray-500 dark:text-[#94a3b8] uppercase tracking-wider mb-2 ml-1">Lesson Content</label>
-                        <div className="border border-gray-200 dark:border-[#334155] rounded-md overflow-hidden bg-white dark:bg-[#1e293b] shadow-sm">
-                           <PremiumRichTextEditor
-                              value={formData.activity}
-                              onChange={newContent => setFormData(prev => ({ ...prev, activity: newContent }))}
-                              placeholder="Enter Lesson Content"
-                           />
-                        </div>
-                        <FieldError message={formErrors.activity} />
-                     </div>
-
-                     {formData.is_activity && (
-                        <>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                            <div className="space-y-1.5">
-                              <label className="text-[11px] font-bold text-gray-500 dark:text-[#94a3b8] uppercase tracking-wider mb-2 ml-1">Coding Content</label>
-                              <textarea
-                                 value={formData.code || ''}
-                                 onChange={e => setFormData(prev => ({ ...prev, code: e.target.value }))}
-                                 placeholder="Enter Coding Content"
-                                 rows={10}
-                                 className="w-full px-4 py-3 bg-slate-950 text-slate-100 border border-slate-800 rounded-md font-mono text-xs focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all shadow-inner leading-relaxed resize-y"
+                              <label className="text-[11px] font-bold text-gray-500 dark:text-[#94a3b8] uppercase tracking-wider mb-2 ml-1">Expected Periods</label>
+                              <input
+                                 type="number"
+                                 min={1}
+                                 required
+                                 value={formData.expected_periods}
+                                 onChange={e => setFormData({ ...formData, expected_periods: parseInt(e.target.value) || 1 })}
+                                 placeholder="Required periods (e.g. 2)"
+                                 className="w-full px-4 py-3 bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-[#334155] rounded-md text-sm outline-none focus:border-primary transition-all font-bold shadow-sm"
                               />
-                              <FieldError message={formErrors.code} />
+                              <FieldError message={formErrors.expected_periods || formErrors.expectedPeriods} />
                            </div>
                            <div className="space-y-1.5">
-                              <label className="text-[11px] font-bold text-gray-500 dark:text-[#94a3b8] uppercase tracking-wider mb-2 ml-1">Diagram Content</label>
-                              <div className="border border-gray-200 dark:border-[#334155] rounded-md overflow-hidden bg-white dark:bg-[#1e293b] shadow-sm">
-                                 <PremiumRichTextEditor
-                                    value={formData.diagram_url || ''}
-                                    onChange={newContent => setFormData(prev => ({ ...prev, diagram_url: newContent }))}
-                                    placeholder="Enter Diagram Content"
-                                 />
-                              </div>
-                              <FieldError message={formErrors.diagram_url || formErrors.diagramUrl} />
+                              <label className="text-[11px] font-bold text-gray-500 dark:text-[#94a3b8] uppercase tracking-wider mb-2 ml-1">Display Order</label>
+                              <input
+                                 type="number"
+                                 min={0}
+                                 required
+                                 value={formData.display_order}
+                                 onChange={e => setFormData({ ...formData, display_order: parseInt(e.target.value) || 0 })}
+                                 placeholder="Display order (e.g. 1)"
+                                 className="w-full px-4 py-3 bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-[#334155] rounded-md text-sm outline-none focus:border-primary transition-all font-bold shadow-sm"
+                              />
+                              <FieldError message={formErrors.display_order || formErrors.displayOrder} />
                            </div>
-                        </>
-                     )}
+                        </div>
 
-                     <div className="flex items-center justify-end gap-3 pt-4 sticky bottom-0 bg-white dark:bg-[#1e293b] pb-2 border-t border-gray-100 dark:border-[#283548]">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                           <div className="space-y-1.5">
+                              <label className="text-[11px] font-bold text-gray-500 dark:text-[#94a3b8] uppercase tracking-wider mb-2 ml-1">Select Grade Level</label>
+                              <GradeLevelSelect
+                                 required
+                                 value={selectedGradeId}
+                                 onChange={(value) => { setSelectedGradeId(value); setFormData(prev => ({ ...prev, module_id: '' })); }}
+                                 source="master"
+                                 valueAs="id"
+                                 placeholder="Choose Grade Level"
+                              />
+                              <FieldError message={formErrors.grade_level_id} />
+                           </div>
+                           <div className="space-y-1.5">
+                              <label className="text-[11px] font-bold text-gray-500 dark:text-[#94a3b8] uppercase tracking-wider mb-2 ml-1">Select Unit</label>
+                              <div className="relative">
+                                 <select required value={formData.module_id} onChange={e => handleModuleChange(e.target.value)} className="w-full px-4 pr-10 py-3 bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-[#334155] rounded-md focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all outline-none font-semibold text-sm cursor-pointer shadow-sm appearance-none">
+                                    <option value="">Select Unit</option>
+                                    {filteredModules.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                                 </select>
+                                 <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-[#64748b] pointer-events-none" />
+                              </div>
+                              <FieldError message={formErrors.module_id || formErrors.moduleId} />
+                           </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                           <div className="space-y-1.5">
+                              <label className="text-[11px] font-bold text-gray-500 dark:text-[#94a3b8] uppercase tracking-wider mb-2 ml-1">
+                                 🎥 Video Links <span className="text-indigo-400">(YouTube or Direct URL)</span>
+                              </label>
+                              <div className="space-y-2">
+                                 {videoUrls.map((url, idx) => (
+                                    <div key={idx} className="flex gap-2 items-center">
+                                       <span className="text-[10px] font-bold text-slate-400 w-5 text-right shrink-0">{idx + 1}.</span>
+                                       <input
+                                          type="text"
+                                          value={url}
+                                          onChange={e => setVideoUrls(prev => prev.map((u, i) => i === idx ? e.target.value : u))}
+                                          placeholder="YouTube URL or video link..."
+                                          className="flex-1 px-3 py-2.5 bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-[#334155] rounded-md text-sm outline-none focus:border-primary transition-all"
+                                       />
+                                       <input
+                                          type="file" accept="video/*" className="hidden"
+                                          ref={el => { videoFileRefs.current[idx] = el; }}
+                                          onChange={e => handleVideoFileUpload(e, idx)}
+                                       />
+                                       <button type="button"
+                                          onClick={() => videoFileRefs.current[idx]?.click()}
+                                          className="px-3 py-2.5 bg-gray-100 dark:bg-[#283548] text-gray-600 dark:text-[#cbd5e1] rounded-md hover:bg-gray-200 dark:hover:bg-[#334155] border border-gray-200 dark:border-[#334155] transition-all flex items-center gap-1.5 shrink-0"
+                                          title="Upload video file"
+                                       >
+                                          {uploadingVideoIdx === idx
+                                             ? <div className="w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                                             : <Upload className="w-3.5 h-3.5" />}
+                                       </button>
+                                       {idx > 0 && (
+                                          <button type="button"
+                                             onClick={() => setVideoUrls(prev => { const a = [...prev];[a[idx - 1], a[idx]] = [a[idx], a[idx - 1]]; return a; })}
+                                             className="w-7 h-7 flex items-center justify-center rounded bg-slate-100 dark:bg-[#283548] hover:bg-slate-200 dark:hover:bg-[#334155] text-slate-500 text-xs transition-all shrink-0 cursor-pointer"
+                                             title="Move up"
+                                          >↑</button>
+                                       )}
+                                       {videoUrls.length > 1 && (
+                                          <button type="button"
+                                             onClick={() => setVideoUrls(prev => prev.filter((_, i) => i !== idx))}
+                                             className="w-7 h-7 flex items-center justify-center rounded bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/40 text-rose-500 transition-all shrink-0 cursor-pointer"
+                                             title="Remove"
+                                          >
+                                             <X className="w-3.5 h-3.5" />
+                                          </button>
+                                       )}
+                                    </div>
+                                 ))}
+                              </div>
+                              <button
+                                 type="button"
+                                 onClick={() => setVideoUrls(prev => [...prev, ''])}
+                                 className="mt-1.5 flex items-center gap-1.5 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors cursor-pointer"
+                              >
+                                 <Plus className="w-3.5 h-3.5" /> Add another video
+                              </button>
+                              <FieldError message={formErrors.video_url || formErrors.videoUrl} />
+                           </div>
+                           <div className="space-y-1.5">
+                              <label className="text-[11px] font-bold text-gray-500 dark:text-[#94a3b8] uppercase tracking-wider mb-2 ml-1">Topic Full PDF Book</label>
+                              <div className="flex gap-2">
+                                 <input type="text" value={formData.pdf_file_url} onChange={e => setFormData({ ...formData, pdf_file_url: e.target.value })} placeholder="Enter PDF Link" className="flex-1 px-4 py-3 bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-[#334155] rounded-md text-sm outline-none focus:border-primary transition-all" />
+                                 <input type="file" id="pdfFileUrlInput" accept=".pdf" className="hidden" onChange={(e) => handleFileUpload(e, 'pdf_file_url')} />
+                                 <button type="button" onClick={() => document.getElementById('pdfFileUrlInput')?.click()} className="px-4 py-2.5 bg-gray-100 dark:bg-[#283548] text-gray-600 dark:text-[#cbd5e1] rounded-md hover:bg-gray-200 dark:hover:bg-[#334155] transition-all flex items-center gap-2 shadow-sm border border-gray-200 dark:border-[#334155]">
+                                    {isUploading ? <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" /> : <Upload className="w-4 h-4" />}
+                                    <span className="text-[10px] font-bold uppercase">Upload</span>
+                                 </button>
+                              </div>
+                              <FieldError message={formErrors.pdf_file_url || formErrors.pdfFileUrl} />
+                           </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                           <label className="text-[11px] font-bold text-gray-500 dark:text-[#94a3b8] uppercase tracking-wider mb-2 ml-1">Lesson Content</label>
+                           <div className="border border-gray-200 dark:border-[#334155] rounded-md overflow-hidden bg-white dark:bg-[#1e293b] shadow-sm">
+                              <PremiumRichTextEditor
+                                 value={formData.activity}
+                                 onChange={newContent => setFormData(prev => ({ ...prev, activity: newContent }))}
+                                 placeholder="Enter Lesson Content"
+                              />
+                           </div>
+                           <FieldError message={formErrors.activity} />
+                        </div>
+
+                        {formData.is_activity && (
+                           <>
+                              <div className="space-y-1.5">
+                                 <label className="text-[11px] font-bold text-gray-500 dark:text-[#94a3b8] uppercase tracking-wider mb-2 ml-1">Coding Content</label>
+                                 <textarea
+                                    value={formData.code || ''}
+                                    onChange={e => setFormData(prev => ({ ...prev, code: e.target.value }))}
+                                    placeholder="Enter Coding Content"
+                                    rows={10}
+                                    className="w-full px-4 py-3 bg-slate-950 text-slate-100 border border-slate-800 rounded-md font-mono text-xs focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all shadow-inner leading-relaxed resize-y"
+                                 />
+                                 <FieldError message={formErrors.code} />
+                              </div>
+                              <div className="space-y-1.5">
+                                 <label className="text-[11px] font-bold text-gray-500 dark:text-[#94a3b8] uppercase tracking-wider mb-2 ml-1">Diagram Content</label>
+                                 <div className="border border-gray-200 dark:border-[#334155] rounded-md overflow-hidden bg-white dark:bg-[#1e293b] shadow-sm">
+                                    <PremiumRichTextEditor
+                                       value={formData.diagram_url || ''}
+                                       onChange={newContent => setFormData(prev => ({ ...prev, diagram_url: newContent }))}
+                                       placeholder="Enter Diagram Content"
+                                    />
+                                 </div>
+                                 <FieldError message={formErrors.diagram_url || formErrors.diagramUrl} />
+                              </div>
+                           </>
+                        )}
+                     </div>
+
+                     <div className="px-6 py-4 border-t border-slate-100 dark:border-[#283548] bg-slate-50/80 dark:bg-[#283548]/50 flex items-center justify-end gap-3 flex-shrink-0 z-10">
                         <button
                            type="button"
                            onClick={() => setShowModal(false)}
-                           className="modal-btn-cancel"
+                           className="modal-btn-cancel cursor-pointer"
                         >
                            <X className="w-3.5 h-3.5" />
                            <span>Cancel</span>
                         </button>
                         <button
                            type="submit"
-                           className="modal-btn-save font-bold uppercase tracking-wider"
+                           className="modal-btn-save font-bold uppercase tracking-wider cursor-pointer"
                         >
                            <Check className="w-3.5 h-3.5" />
                            <span>Save Topic</span>

@@ -55,7 +55,7 @@ const AppRoutes: React.FC = () => {
     user?.utype === 'staff'      ? ROUTES.STAFF_DASHBOARD :
     user?.utype === 'teacher'    ? ROUTES.TEACHER_DASHBOARD :
     user?.utype === 'parent'     ? ROUTES.PARENT_DASHBOARD :
-    ROUTES.STUDENT_DASHBOARD;
+    ROUTES.STUDENT_LEARNING;
 
   return (
     <Routes>

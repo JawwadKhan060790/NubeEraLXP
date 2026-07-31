@@ -14,8 +14,8 @@ YOUR_SERVER_IP
 
 After deployment:
 
-* Frontend: `http://YOUR_SERVER_IP:5173`
-* Backend: `http://YOUR_SERVER_IP:5000`
+* Frontend: `http://YOUR_SERVER_IP:5174`
+* Backend: `http://YOUR_SERVER_IP:5001`
 
 ---
 
@@ -115,13 +115,13 @@ docker compose up -d --build
 Frontend:
 
 ```bash
-http://YOUR_SERVER_IP:5173
+http://YOUR_SERVER_IP:5174
 ```
 
 Backend:
 
 ```bash
-http://YOUR_SERVER_IP:5000/swagger
+http://YOUR_SERVER_IP:5001/swagger
 ```
 
 ---
@@ -170,11 +170,11 @@ docker compose ps
 Frontend:
 
 ```bash
-http://YOUR_SERVER_IP:5173
+http://YOUR_SERVER_IP:5174
 ```
 
 Backend:
 
 ```bash
-http://YOUR_SERVER_IP:5000/swagger
+http://YOUR_SERVER_IP:5001/swagger
 ```

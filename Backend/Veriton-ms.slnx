@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="Veriton.API/Veriton.API.csproj" Id="f0cd6591-85f0-4413-833b-e416c897d0e6" />
+  <Project Path="Veriton.Application/Veriton.Application.csproj" Id="1ae2634f-f647-4ae0-9fd5-0446f6d10262" />
+  <Project Path="Veriton.Domain/Veriton.Domain.csproj" Id="a2c8b2ae-6766-4af5-b2b5-42acbba5986d" />
+  <Project Path="Veriton.Infrastructure/Veriton.Infrastructure.csproj" Id="bbacd731-e79a-43f3-ab87-45c55c1586e4" />
+  <Project Path="Veriton.Tests/Veriton.Tests.csproj" Id="d4f8a6c1-9e2b-4f7a-8c3d-5b1e9a7f2d4c" />
+</Solution>

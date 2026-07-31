@@ -1,6 +1,6 @@
-# NubeEra LMS - Backend Documentation (.NET Web API)
+# NubeEra LXP - Backend Documentation (.NET Web API)
 
-The **NubeEra LMS Backend** is a robust, enterprise-grade Web API built on **.NET 8** following **Clean Architecture** principles. It serves as the single source of truth for the entire Learning Management System ecosystem.
+The **NubeEra LXP Backend** is a robust, enterprise-grade Web API built on **.NET 10** following **Clean Architecture** principles. It serves as the single source of truth for the entire Learning Management System ecosystem.
 
 ## 🏗️ Architecture
 The project is divided into four main layers:
@@ -54,13 +54,13 @@ The API is specifically tuned to support the React frontend requirements:
 ---
 
 ## 🚀 Environment & Database
-- **Core**: .NET 8.0
-- **Database**: SQL Server (via Entity Framework Core)
-- **Migrations**: Automatic database migration and seeding via `AdminSeeder`.
+- **Core**: .NET 10.0 / MySQL 8.0
+- **Database**: MySQL (`nubeera_db` via Entity Framework Core & Pomelo)
+- **Migrations**: Automatic database migration and seeding via EF Core / Seeders.
 - **Security**: BCrypt for password hashing and JWT for session management.
 
 ## 🏃 Getting Started
 1. Update `appsettings.json` with your connection string.
-2. Run migrations: `dotnet ef database update`
+2. Run migrations: `dotnet ef database update --project NubeEra.Infrastructure --startup-project NubeEra.API`
 3. Launch API: `dotnet run --project NubeEra.API`
-4. Access Swagger: `http://localhost:5000/swagger`
+4. Access Swagger: `http://localhost:5001/swagger`

@@ -271,7 +271,7 @@ const TeacherDoubtHub: React.FC = () => {
                   onClick={() => viewDoubtDetails(d.id)}
                   className={`bg-white dark:bg-[#1e293b] border ${
                     selectedDoubt?.id === d.id 
-                      ? 'border-emerald-500 ring-2 ring-emerald-500/20' 
+                      ? 'border-indigo-500 dark:border-indigo-400 ring-2 ring-indigo-500/20 dark:ring-indigo-400/20' 
                       : 'border-slate-200/80 dark:border-[#334155] hover:border-slate-350 dark:hover:border-[#475569]'
                   } p-5 rounded-2xl shadow-xs hover:shadow-md cursor-pointer transition-all flex flex-col md:flex-row md:items-center justify-between gap-4`}
                 >
@@ -320,9 +320,8 @@ const TeacherDoubtHub: React.FC = () => {
         <div className="lg:sticky lg:top-8 space-y-4">
           {selectedDoubt ? (
             <div className="bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] rounded-2xl p-6 shadow-sm space-y-5 animate-fade-in relative overflow-hidden">
-              <div className="absolute top-0 left-0 right-0 h-1.5" style={{ backgroundImage: 'linear-gradient(135deg, var(--primary), var(--secondary))' }} />
               
-              <div className="flex justify-between items-start pt-2">
+              <div className="flex justify-between items-start">
                 <span className={`inline-flex items-center gap-1 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
                   selectedDoubt.status === 'Open'
                     ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-200'
@@ -342,7 +341,7 @@ const TeacherDoubtHub: React.FC = () => {
 
               {/* Student Metadata */}
               <div className="flex items-center gap-3 bg-slate-50 dark:bg-[#283548]/30 p-3 rounded-2xl border border-slate-100 dark:border-[#334155]/60">
-                <div className="w-10 h-10 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-black text-sm">
+                <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-black text-sm">
                   {selectedDoubt.studentName.charAt(0)}
                 </div>
                 <div>
@@ -406,8 +405,7 @@ const TeacherDoubtHub: React.FC = () => {
                       <button
                         type="submit"
                         disabled={submittingReply}
-                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-white rounded-xl font-bold text-xs uppercase tracking-wider transition-all shadow-xs cursor-pointer disabled:opacity-60 hover:brightness-110 active:scale-98"
-                        style={{ backgroundImage: 'linear-gradient(135deg, var(--primary), var(--secondary))' }}
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs uppercase tracking-wider transition-all shadow-xs cursor-pointer disabled:opacity-60 active:scale-98"
                       >
                         {submittingReply ? (
                           <Loader2 size={14} className="animate-spin" />

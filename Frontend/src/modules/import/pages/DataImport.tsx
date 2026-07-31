@@ -17,12 +17,18 @@ interface ImportResult {
   errors: string[];
 }
 
-type ImportType = 'students' | 'attendance' | 'teacher-schedule' | 'mcqs';
+type ImportType = 'students' | 'attendance' | 'teacher-schedule' | 'mcqs' | 'units' | 'topics';
 
 export default function DataImport() {
+  const [user] = useState<any>(() => {
+    const saved = localStorage.getItem('user');
+    return saved ? JSON.parse(saved) : null;
+  });
+  const isTeacher = user?.role === 'teacher' || user?.utype === 'teacher';
+
   const [schools, setSchools] = useState<School[]>([]);
   const [selectedSchoolId, setSelectedSchoolId] = useState<string>('');
-  const [importType, setImportType] = useState<ImportType>('students');
+  const [importType, setImportType] = useState<ImportType>(isTeacher ? 'mcqs' : 'students');
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [schoolsLoading, setSchoolsLoading] = useState<boolean>(false);
@@ -41,7 +47,11 @@ export default function DataImport() {
           name: s.name || s.Name || 'Unknown School'
         }));
         setSchools(mapped);
-        if (mapped.length > 0) {
+
+        const teacherSchoolId = user?.school_id || user?.schoolId;
+        if (teacherSchoolId && mapped.some((s: any) => s.id === teacherSchoolId)) {
+          setSelectedSchoolId(teacherSchoolId);
+        } else if (mapped.length > 0) {
           setSelectedSchoolId(mapped[0].id);
         }
       } catch (err) {
@@ -50,7 +60,7 @@ export default function DataImport() {
         setSchoolsLoading(false);
       }
     })();
-  }, []);
+  }, [user]);
 
   const templates: Record<ImportType, { title: string; headers: string[]; desc: string; sample: string[][] }> = {
     students: {
@@ -91,6 +101,24 @@ export default function DataImport() {
       sample: [
         ['Midterm Quiz', 'Grade 1', 'A', 'Algebra Intro', 'Variables Topic', '60', '100', '2026-07-30 10:00', 'What is 2x + 5 = 15? Solve for x.', '2', '5', '10', '15', 'B'],
         ['Midterm Quiz', 'Grade 1', 'A', 'Algebra Intro', 'Variables Topic', '60', '100', '2026-07-30 10:00', 'Which option represents a variable?', 'x', '7', 'Present', 'None', 'A']
+      ]
+    },
+    units: {
+      title: 'Units (Modules) Template',
+      desc: 'Imports curriculum Units/Modules under a Grade Level. Maps subject, credits, description, PDF attachment, and automatically grants visibility to the selected school campus.',
+      headers: ['Unit Name', 'Grade Level', 'Subject Name', 'Description', 'Credits', 'PDF File URL', 'Is Active'],
+      sample: [
+        ['Algebra Basics', 'Grade 1', 'Mathematics', 'Introduction to algebraic concepts', '3', '', 'true'],
+        ['Physics Motion', 'Grade 2', 'Science', 'Kinetics and Newtonian motion', '4', '', 'true']
+      ]
+    },
+    topics: {
+      title: 'Topics (Lessons) Template',
+      desc: 'Imports topics/lessons under a Unit. Supports Display Order, Serial Number, Hours, Expected Periods, Activity Types (Python, Robotics, AI Tool), Code, Procedure, Video/PDF URLs, and automatically grants school visibility.',
+      headers: ['Topic Name', 'Unit Name', 'Display Order', 'Serial Number', 'Total Hours', 'Expected Periods', 'Activity Type', 'Video URL', 'PDF File URL', 'Is Activity', 'Is Python Activity', 'Is Robotics Activity', 'Is AI Tool Activity', 'Browser URL', 'Code', 'Procedure', 'Required Material', 'What You Get'],
+      sample: [
+        ['Linear Equations', 'Algebra Basics', '1', '1', '60', '2', 'Lecture & Lab', 'https://youtu.be/example', '', 'false', 'false', 'false', 'false', '', '', 'Solve linear equations step by step', 'Pencil, Notebook', 'Understanding of single variable equations'],
+        ['Python Loop Challenge', 'Algebra Basics', '2', '2', '90', '3', 'Hands-on Python', '', '', 'true', 'true', 'false', 'false', '', 'for i in range(5):\n    print(i)', 'Write python loops', 'Computer with Python', 'Mastery over python loops']
       ]
     }
   };
@@ -181,18 +209,14 @@ export default function DataImport() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
-      {/* Title & Header Banner */}
-      <div className="bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-700 text-white rounded-2xl p-6 md:p-8 shadow-lg relative overflow-hidden">
-        <div className="absolute right-0 top-0 opacity-10 pointer-events-none transform translate-x-12 -translate-y-8">
-          <FileSpreadsheet className="w-80 h-80" />
-        </div>
-        <div className="relative z-10 max-w-2xl">
-          <span className="bg-white/20 text-white text-[11px] font-bold tracking-wider uppercase px-3 py-1 rounded-full backdrop-blur-md">
-            Administration Tools
-          </span>
-          <h1 className="text-3xl font-extrabold mt-3 tracking-tight">Bulk Data Import Center</h1>
-          <p className="text-violet-100/90 text-sm mt-2 leading-relaxed">
-            Upload student rosters, attendance logs, teacher schedules, or question banks in bulk. Match records against schools and automatically generate student and parent accounts instantly.
+      {/* Standard Header section */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-200 dark:border-slate-800">
+        <div>
+          <h1 className="text-xl md:text-2xl font-black text-slate-800 dark:text-white tracking-tight">
+            Bulk Data Import Center
+          </h1>
+          <p className="text-xs text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest mt-1">
+            Upload rosters, schedules, units, topics & question banks in bulk
           </p>
         </div>
       </div>
@@ -238,14 +262,20 @@ export default function DataImport() {
               <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">
                 Import Data Category
               </label>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {(['students', 'attendance', 'teacher-schedule', 'mcqs'] as ImportType[]).map((type) => {
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {(
+                  (isTeacher
+                    ? ['mcqs']
+                    : ['students', 'attendance', 'teacher-schedule', 'mcqs', 'units', 'topics']) as ImportType[]
+                ).map((type) => {
                   const active = importType === type;
                   const labelMap: Record<ImportType, string> = {
                     students: 'Students',
                     attendance: 'Attendance',
                     'teacher-schedule': 'Schedules',
-                    mcqs: 'MCQ Exams'
+                    mcqs: 'MCQ Exams',
+                    units: 'Units (Modules)',
+                    topics: 'Topics (Lessons)'
                   };
                   return (
                     <button

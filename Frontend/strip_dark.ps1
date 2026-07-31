@@ -1,5 +1,5 @@
 $pattern = 'dark:[a-zA-Z0-9/\[\].:_%-]+'
-Get-ChildItem 'e:\nubeera\LMS\Frontend\src' -Include '*.tsx','*.jsx','*.css' -Recurse | ForEach-Object {
+Get-ChildItem 'e:\veriton\LMS\Frontend\src' -Include '*.tsx','*.jsx','*.css' -Recurse | ForEach-Object {
   try {
     $c = Get-Content $_.FullName -Raw -ErrorAction Stop
     $n = $c -replace $pattern, ''

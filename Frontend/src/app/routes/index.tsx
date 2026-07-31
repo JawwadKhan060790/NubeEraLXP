@@ -166,7 +166,7 @@ export const AuthenticatedRoutes = ({ userUtype }: { userUtype: string }): React
     userUtype === 'staff'                               ? ROUTES.STAFF_DASHBOARD :
     userUtype === 'teacher'                             ? ROUTES.TEACHER_DASHBOARD :
     userUtype === 'parent'                              ? ROUTES.PARENT_DASHBOARD :
-    ROUTES.STUDENT_DASHBOARD;
+    ROUTES.STUDENT_LEARNING;
 
   return (
     <>
@@ -209,7 +209,8 @@ export const AuthenticatedRoutes = ({ userUtype }: { userUtype: string }): React
       <Route path={ROUTES.CREATE_TEACHER}       element={staffLevel(<CreateTeacher />)} />
       <Route path={ROUTES.ADMIN_SETTINGS}       element={adminOnly(<AdminSettings />)} />
       <Route path={ROUTES.RECYCLE_BIN}          element={adminOnly(<RecycleBin />)} />
-      <Route path={ROUTES.DATA_IMPORT}          element={adminStaffLevel(<DataImport />)} />
+      <Route path={ROUTES.DATA_IMPORT}          element={protect([ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF, ROLES.TEACHER], <DataImport />)} />
+      <Route path="/import"                      element={protect([ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF, ROLES.TEACHER], <DataImport />)} />
       <Route path={ROUTES.ADMIN_BACKUP_RESTORE} element={adminOnly(<DatabaseBackupRestore />)} />
       <Route path={ROUTES.TEACHER_FEE_SETTING}  element={staffLevel(<TeacherFees />)} />
       <Route path={ROUTES.PENDING_TEACHERS}     element={adminOnly(<PendingTeachers />)} />
@@ -244,13 +245,15 @@ export const AuthenticatedRoutes = ({ userUtype }: { userUtype: string }): React
       <Route path={ROUTES.TEACHER_ATTENDANCE_REGISTRY} element={<Navigate to={ROUTES.ATTENDANCE} replace />} />
 
       {/* ── Teacher Enhancement Module ──────────────────────────────────────────────────────────────────────────── */}
-      <Route path={ROUTES.TEACHER_LEARNING_PATH}      element={protect([ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER], <TeacherLearningPath />)} />
-      <Route path={ROUTES.TEACHER_TEACHING_PATH}     element={protect([ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER], <TeachingPath />)} />
-      <Route path={ROUTES.TEACHER_SCHEDULE_CALENDAR}  element={protect([ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER], <TeacherScheduleCalendar />)} />
-      <Route path={ROUTES.TEACHER_GRADE_STUDENTS}     element={protect([ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER], <TeacherGradeStudents />)} />
-      <Route path={ROUTES.TEACHER_STUDENT_WEAKNESS}      element={protect([ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER], <StudentWeaknessAnalysis />)} />
-      {/* Syllabus completion is surfaced via learning path — redirect there */}
-      <Route path={ROUTES.TEACHER_SYLLABUS_COMPLETION}   element={<Navigate to={ROUTES.TEACHER_LEARNING_PATH} replace />} />
+      <Route path={ROUTES.TEACHER_LEARNING_PATH}      element={protect([ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF, ROLES.PRINCIPAL], <TeacherLearningPath />)} />
+      <Route path="/staff/learning-path"              element={protect([ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF, ROLES.PRINCIPAL], <TeacherLearningPath />)} />
+      <Route path="/staff/syllabus-completion"        element={protect([ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF, ROLES.PRINCIPAL], <TeacherLearningPath />)} />
+      <Route path="/syllabus-completion"                element={protect([ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF, ROLES.PRINCIPAL], <TeacherLearningPath />)} />
+      <Route path={ROUTES.TEACHER_TEACHING_PATH}     element={protect([ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF, ROLES.PRINCIPAL, ROLES.TEACHER], <TeachingPath />)} />
+      <Route path={ROUTES.TEACHER_SCHEDULE_CALENDAR}  element={protect([ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF, ROLES.PRINCIPAL, ROLES.TEACHER], <TeacherScheduleCalendar />)} />
+      <Route path={ROUTES.TEACHER_GRADE_STUDENTS}     element={protect([ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF, ROLES.PRINCIPAL, ROLES.TEACHER], <TeacherGradeStudents />)} />
+      <Route path={ROUTES.TEACHER_STUDENT_WEAKNESS}   element={protect([ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF, ROLES.PRINCIPAL, ROLES.TEACHER], <StudentWeaknessAnalysis />)} />
+      <Route path={ROUTES.TEACHER_SYLLABUS_COMPLETION}element={protect([ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF, ROLES.PRINCIPAL, ROLES.TEACHER], <TeacherLearningPath />)} />
 
       {/* ── Student ────────────────────────────────────────────────────────────────────────────────────────────── */}
       <Route path={ROUTES.STUDENT_LEARNING} element={protect([ROLES.STUDENT], <StudentLearning />)} />

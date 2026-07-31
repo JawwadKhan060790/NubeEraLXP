@@ -46,6 +46,8 @@ export interface SuperAdminAnalytics {
   top_schools_by_enrollment: ChartPoint[];
   platform_activity:         DualTrendPoint[];
   exam_performance_trend:    TrendPoint[];
+  syllabus_completion_by_grade?: ChartPoint[];
+  subjectwise_performance?: ChartPoint[];
 }
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
@@ -90,6 +92,8 @@ export interface PrincipalAnalytics {
   teacher_performance:    ChartPoint[];
   pass_fail_distribution: ChartPoint[];
   academic_growth:        DualTrendPoint[];
+  syllabus_completion_by_grade?: ChartPoint[];
+  subjectwise_performance?: ChartPoint[];
 }
 
 // ── Teacher ───────────────────────────────────────────────────────────────────
@@ -165,6 +169,8 @@ export interface StaffAnalytics {
   total_events:            number;
   resolved_tickets:        number;
   new_students_this_month: number;
+  total_doubts:            number;
+  total_units:             number;
 
   ticket_trend:            TrendPoint[];
   admissions_trend:        TrendPoint[];

@@ -92,6 +92,7 @@ export interface TeacherStudentRow {
   student_name: string;
   roll_no?: string;
   grade_name: string;
+  section_name?: string;
   attendance_percent: number;
   course_completion_percent: number;
   weak_topics_count: number;
@@ -269,8 +270,8 @@ export const updateTopicStatus = (payload: {
 export const getSyllabusCompletion = (): Promise<SyllabusCompletion> =>
   get<SyllabusCompletion>(API_ENDPOINTS.TEACHER_LEARNING_PATH.SYLLABUS);
 
-export const getGradeStudentList = (gradeId: string): Promise<GradeStudentList> =>
-  get<GradeStudentList>(API_ENDPOINTS.TEACHER_LEARNING_PATH.GRADE_STUDENTS(gradeId));
+export const getGradeStudentList = (gradeId: string, sectionId?: string): Promise<GradeStudentList> =>
+  get<GradeStudentList>(API_ENDPOINTS.TEACHER_LEARNING_PATH.GRADE_STUDENTS(gradeId, sectionId));
 
 export const getEnhancedDashboard = (): Promise<TeacherEnhancedDashboard> =>
   get<TeacherEnhancedDashboard>(API_ENDPOINTS.TEACHER_LEARNING_PATH.ENHANCED_DASHBOARD);
@@ -304,8 +305,8 @@ export const seedTodayPeriods = (): Promise<{ message: string }> =>
 export const getStudentWeakness = (studentId: string): Promise<StudentWeaknessAnalysis> =>
   get<StudentWeaknessAnalysis>(API_ENDPOINTS.STUDENT_WEAKNESS.BY_STUDENT(studentId));
 
-export const getGradeWeakness = (gradeId: string): Promise<GradeWeaknessAnalysis> =>
-  get<GradeWeaknessAnalysis>(API_ENDPOINTS.STUDENT_WEAKNESS.BY_GRADE(gradeId));
+export const getGradeWeakness = (gradeId: string, sectionId?: string): Promise<GradeWeaknessAnalysis> =>
+  get<GradeWeaknessAnalysis>(API_ENDPOINTS.STUDENT_WEAKNESS.BY_GRADE(gradeId, sectionId));
 
 export const createWeakTopic = (payload: {
   student_id: string;

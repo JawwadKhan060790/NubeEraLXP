@@ -3,7 +3,7 @@ import {
   BookOpen, Calendar, ClipboardList, Clock, FileText,
   GraduationCap, Layers, Shield, Users, Activity, TrendingUp,
   BarChart2, PieChart as PieIcon, Target, Award,
-  CheckCircle2, AlertTriangle, BookMarked, Route
+  CheckCircle2, AlertTriangle, BookMarked, Route, HelpCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
@@ -68,6 +68,7 @@ const TeacherDashboard: React.FC = () => {
   const [rawSchedules, setRawSchedules]     = useState<any[]>([]);
   const [analytics, setAnalytics]           = useState<TeacherAnalytics | null>(null);
   const [enhancedDash, setEnhancedDash]     = useState<TeacherEnhancedDashboard | null>(null);
+  const [doubtCount, setDoubtCount]         = useState<number>(0);
   const [gradeFilter, setGradeFilter]       = useState('All');
   const [loading, setLoading]               = useState(true);
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
@@ -124,15 +125,22 @@ const TeacherDashboard: React.FC = () => {
       const savedUser  = localStorage.getItem('user');
       const parsedUser = savedUser ? JSON.parse(savedUser) : null;
 
-      const [dashboardRes, schedulesRes] = await Promise.allSettled([
+      const [dashboardRes, schedulesRes, doubtsRes] = await Promise.allSettled([
         api.get('/dashboard/teacher'),
         api.get('/schedulers'),
+        api.get('/doubts/grade'),
       ]);
 
       if (dashboardRes.status === 'fulfilled') {
         setRawData(dashboardRes.value.data);
       } else {
         console.error('Dashboard fetch failed:', dashboardRes.reason);
+      }
+
+      if (doubtsRes.status === 'fulfilled') {
+        const d = doubtsRes.value.data;
+        const arr = Array.isArray(d) ? d : (d?.value || []);
+        setDoubtCount(arr.length);
       }
 
       // Load enhanced dashboard (non-blocking)
@@ -183,7 +191,7 @@ const TeacherDashboard: React.FC = () => {
       <DashboardPageShell>
         <div className="h-8 w-56 bg-slate-100 rounded-full animate-pulse" />
         <StatGrid cols={4}>
-          <SkeletonStatGrid count={8} />
+          <SkeletonStatGrid count={4} />
         </StatGrid>
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <div className="lg:col-span-7 h-72 bg-slate-100 rounded-2xl animate-pulse" />
@@ -247,45 +255,22 @@ const TeacherDashboard: React.FC = () => {
         actions={gradeSelector}
       />
 
-      {/* KPI Cards — Row 1: base data */}
+      {/* KPI Cards — Exact 4 Counters Requested */}
       <StatGrid cols={4}>
         <StatGridCards stats={[
-          { title: 'Total Students',     value: analytics?.total_students ?? data.total_students, icon: <Users        className="w-5 h-5" />, color: 'violet' , subtitle: 'Across your classes' },
-          { title: 'Topics (Modules)',   value: analytics?.total_modules  ?? data.total_modules,  icon: <Layers       className="w-5 h-5" />, color: 'emerald', subtitle: 'Assigned curriculum units' },
-          { title: 'Lessons Configured', value: analytics?.total_lessons  ?? data.total_lessons,  icon: <BookOpen     className="w-5 h-5" />, color: 'amber'  , subtitle: 'Topics ready to teach' },
-          { title: 'Active Exams',       value: analytics?.total_exams    ?? data.total_exams,    icon: <FileText     className="w-5 h-5" />, color: 'purple' , subtitle: 'Currently scheduled' },
+          { title: 'Total Students',                        value: analytics?.total_students ?? data.total_students, icon: <Users className="w-5 h-5" />, color: 'violet', subtitle: 'Across your classes' },
+          { title: 'Syllabus Complete (Overall coverage)', value: `${enhancedDash ? enhancedDash.overall_syllabus_completion.toFixed(0) : (analytics?.syllabus_completion ?? 0)}%`, icon: <BookOpen className="w-5 h-5" />, color: 'indigo', subtitle: 'Overall coverage' },
+          { title: 'Weak Students',                         value: enhancedDash ? enhancedDash.weak_students_count : (analytics?.weak_students_count ?? 0), icon: <AlertTriangle className="w-5 h-5" />, color: 'rose', subtitle: 'Need extra support' },
+          { title: 'Doubt Count',                           value: doubtCount, icon: <HelpCircle className="w-5 h-5" />, color: 'amber', subtitle: 'Student queries pending' },
         ]} />
       </StatGrid>
-
-      {/* KPI Cards — Row 2: analytics-derived metrics */}
-      <StatGrid cols={4}>
-        <StatGridCards stats={[
-          { title: 'Avg Attendance Rate', value: `${analytics?.avg_attendance_rate ?? 0}%`, icon: <ClipboardList className="w-5 h-5" />, color: 'teal'   , subtitle: 'Across your classes' },
-          { title: 'Avg Exam Score',      value: `${analytics?.avg_exam_score      ?? 0}%`, icon: <Award        className="w-5 h-5" />, color: 'sky'    , subtitle: 'Class average' },
-          { title: 'Weak Students',       value:  analytics?.weak_students_count   ?? 0,    icon: <Target       className="w-5 h-5" />, color: 'rose'   , subtitle: 'Need extra support' },
-          { title: 'Syllabus Complete',   value: `${analytics?.syllabus_completion ?? 0}%`, icon: <TrendingUp   className="w-5 h-5" />, color: 'indigo' , subtitle: 'Curriculum coverage' },
-        ]} />
-      </StatGrid>
-
-      {/* KPI Cards — Row 3: Today's Schedule (enhanced) */}
-      {enhancedDash && (
-        <StatGrid cols={4}>
-          <StatGridCards stats={[
-            { title: "Today's Periods",    value: enhancedDash.today_total_periods,     icon: <Calendar      className="w-5 h-5" />, color: 'sky'    , subtitle: 'Classes scheduled today' },
-            { title: 'Completed Today',    value: enhancedDash.today_completed_periods, icon: <CheckCircle2  className="w-5 h-5" />, color: 'emerald', subtitle: 'Periods finished' },
-            { title: 'Syllabus Complete',  value: `${enhancedDash.overall_syllabus_completion.toFixed(0)}%`, icon: <BookMarked className="w-5 h-5" />, color: 'indigo' , subtitle: 'Overall coverage' },
-            { title: 'Weak Students',      value: enhancedDash.weak_students_count,     icon: <AlertTriangle className="w-5 h-5" />, color: 'rose'   , subtitle: 'Need extra support' },
-          ]} />
-        </StatGrid>
-      )}
 
       {/* Quick Links — Teacher Enhancement Modules */}
       <DashboardWidgetCard>
         <SectionHeader title="Teacher Enhancement Modules" className="mb-4" />
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
             { route: ROUTES.TEACHER_TEACHING_PATH,      color: 'violet',  icon: <BookOpen      className="w-5 h-5" />, label: 'Teaching Path',    sub: 'Grade-wise lesson workbench'},
-            { route: ROUTES.TEACHER_LEARNING_PATH,      color: 'indigo',  icon: <Route         className="w-5 h-5" />, label: 'Learning Path',    sub: 'Track syllabus by grade'    },
             { route: ROUTES.TEACHER_SCHEDULE_CALENDAR,  color: 'sky',     icon: <Calendar      className="w-5 h-5" />, label: 'Schedule',         sub: 'Day / Week / Month view'    },
             { route: ROUTES.TEACHER_GRADE_STUDENTS,     color: 'emerald', icon: <Users         className="w-5 h-5" />, label: 'Grade Students',   sub: 'Progress & attendance grid' },
             { route: ROUTES.TEACHER_STUDENT_WEAKNESS,   color: 'rose',    icon: <AlertTriangle className="w-5 h-5" />, label: 'Weakness Analysis',sub: 'Identify weak topics'       },
@@ -464,10 +449,9 @@ const TeacherDashboard: React.FC = () => {
       {/* Quick Actions */}
       <DashboardWidgetCard>
         <SectionHeader title="Educator Quick Actions" className="mb-4" />
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
             { href: '/teacher/student-list',      color: 'emerald', icon: <Users className="w-5 h-5" />,          label: 'Student List',     sub: 'View & edit roll calls' },
-            { href: '/modules',                   color: 'primary',  icon: <Layers className="w-5 h-5" />,         label: 'Course Topics',    sub: 'Manage modules & slides' },
             { href: '/teacher/exams',             color: 'rose',     icon: <FileText className="w-5 h-5" />,       label: 'Setup Exams',      sub: 'Add question sets & marks' },
             { href: '/teacher/teacher-calender',  color: 'amber',    icon: <Calendar className="w-5 h-5" />,       label: 'Schedule',         sub: 'Class calendar & timetables' },
             { href: '/teacher/attendance',        color: 'violet',   icon: <ClipboardList className="w-5 h-5" />,  label: 'Attendance Sheet', sub: 'Record daily attendance' },

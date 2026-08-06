@@ -284,7 +284,7 @@ public static class AdminSeeder
             }
         }
 
-        var teacher = context.Teachers.FirstOrDefault(t => t.UserId == user.Id || t.Email == email);
+        var teacher = context.Teachers.FirstOrDefault(t => t.UserId == user.Id || t.Email == email || (t.SchoolId == schoolId && t.EmployeeId == employeeId));
         if (teacher == null)
         {
             teacher = new Teacher
@@ -351,7 +351,7 @@ public static class AdminSeeder
             }
         }
 
-        var student = context.Students.FirstOrDefault(s => s.UserId == user.Id || s.Email == email);
+        var student = context.Students.FirstOrDefault(s => s.UserId == user.Id || s.Email == email || (s.SchoolId == schoolId && s.StudentId == studentId));
         if (student == null)
         {
             student = new Student

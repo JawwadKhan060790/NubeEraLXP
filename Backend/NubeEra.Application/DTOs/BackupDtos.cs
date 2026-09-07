@@ -15,13 +15,16 @@ public class BackupHistoryDto
 {
     public Guid Id { get; set; }
     public string FileName { get; set; } = "";
+    public string FilePath { get; set; } = "";
     public string DatabaseName { get; set; } = "";
     public long FileSizeBytes { get; set; }
 
     /// <summary>Human-readable size, e.g. "12.4 MB" — pre-formatted server-side so every client renders identically.</summary>
     public string FileSizeDisplay { get; set; } = "";
+    public string FileSizeFormatted { get; set; } = "";
 
     public DateTime CreatedAt { get; set; }
+    public Guid CreatedByUserId { get; set; }
     public string CreatedByUserName { get; set; } = "";
     public string Status { get; set; } = "";
     public string? ErrorMessage { get; set; }
@@ -35,6 +38,8 @@ public class BackupHistoryDto
 /// <summary>Response returned immediately after triggering "Create Backup".</summary>
 public class CreateBackupResultDto
 {
+    public bool Success { get; set; }
+    public string Message { get; set; } = "";
     public Guid BackupId { get; set; }
     public string FileName { get; set; } = "";
     public string Status { get; set; } = "";
@@ -43,6 +48,7 @@ public class CreateBackupResultDto
     public long DurationMs { get; set; }
     public string? ErrorMessage { get; set; }
     public DateTime CreatedAt { get; set; }
+    public BackupHistoryDto? Backup { get; set; }
 }
 
 /// <summary>
@@ -71,6 +77,9 @@ public class BackupModuleStatusDto
 {
     public bool IsBackupInProgress { get; set; }
     public bool IsRestoreInProgress { get; set; }
+    public bool IsOperationRunning { get; set; }
+    public string? CurrentOperation { get; set; }
+    public DateTime? OperationStartedAt { get; set; }
     public string DatabaseName { get; set; } = "";
 }
 
@@ -78,6 +87,7 @@ public class BackupModuleStatusDto
 public class BackupAuditLogDto
 {
     public Guid Id { get; set; }
+    public Guid UserId { get; set; }
     public string UserName { get; set; } = "";
     public string Role { get; set; } = "";
     public string ActionType { get; set; } = "";
@@ -94,6 +104,7 @@ public class PagedResultDto<T>
     public int TotalCount { get; set; }
     public int Page { get; set; }
     public int PageSize { get; set; }
+    public int TotalPages => PageSize > 0 ? (int)Math.Ceiling((double)TotalCount / PageSize) : 0;
 }
 
 /// <summary>Query parameters accepted by GET /api/backups (search, status filter, pagination).</summary>

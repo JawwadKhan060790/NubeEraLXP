@@ -16,7 +16,7 @@ RUN apt-get update \
 
 COPY --from=build /app/publish .
 
-ENV ASPNETCORE_URLS=http://0.0.0.0:5000
-EXPOSE 5000
+ENV ASPNETCORE_URLS=http://0.0.0.0:5001
+EXPOSE 5001
 
 ENTRYPOINT ["dotnet", "NubeEra.API.dll"]

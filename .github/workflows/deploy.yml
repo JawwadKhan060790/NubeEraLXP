@@ -1,0 +1,52 @@
+name: Deploy NubeEra LXP
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v4
+        with:
+          authkey: ${{ secrets.TS_AUTHKEY }}
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/veriton_key
+          chmod 600 ~/.ssh/veriton_key
+
+      - name: Test connection
+        run: |
+          tailscale status
+          ping -c 3 ${{ secrets.VM_HOST }}
+
+      - name: Deploy NubeEra LXP
+        run: |
+          ssh -o StrictHostKeyChecking=no \
+              -i ~/.ssh/veriton_key \
+              ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} << 'EOF'
+
+          cd ~/NubeEraLXP
+
+          # Fetch and apply the latest code (without pull conflicts)
+          git fetch origin
+          git checkout main
+          git reset --hard origin/main
+
+          # Stop the old container, rebuild, and start the new one
+          docker compose down
+          docker compose up -d --build
+
+          # Check the server state and API migration logs
+          docker ps
+          echo "=== NubeEra API Startup & Migration Logs ==="
+          sleep 5
+          docker logs nubeera-api --tail 50
+
+          EOF

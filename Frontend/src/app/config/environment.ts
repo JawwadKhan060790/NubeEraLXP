@@ -31,7 +31,7 @@ const resolveApiBaseUrl = (): string => {
   }
 
   if (isLocalNetwork()) {
-    return `${window.location.protocol}//${window.location.hostname}:5000/api`;
+    return `${window.location.protocol}//${window.location.hostname}:5001/api`;
   }
 
   return '/api';
@@ -49,7 +49,7 @@ const resolveMediaBaseUrl = (): string => {
   }
 
   if (isLocalNetwork()) {
-    return `${window.location.protocol}//${window.location.hostname}:5000`;
+    return `${window.location.protocol}//${window.location.hostname}:5001`;
   }
 
   return '';

@@ -17,7 +17,7 @@ const getApiBaseUrl = () => {
     host.startsWith('10.') ||
     host.startsWith('172.')
   ) {
-    return `${window.location.protocol}//${window.location.hostname}:5000/api`;
+    return `${window.location.protocol}//${window.location.hostname}:5001/api`;
   }
 
   return '/api';

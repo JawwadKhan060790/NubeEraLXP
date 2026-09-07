@@ -20,7 +20,7 @@ const getMediaUrl = (url: string | undefined) => {
     host.startsWith('10.') ||
     host.startsWith('172.')
   ) {
-    return `${protocol}//${host}:5000${url}`;
+    return `${protocol}//${host}:5001${url}`;
   }
   return url;
 };

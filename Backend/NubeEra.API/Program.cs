@@ -145,4 +145,4 @@ app.UseMiddleware<TeacherSchoolAccessMiddleware>(); // Validates Teacher's X-Sch
 app.MapControllers();
 app.MapHealthChecks("/health").AllowAnonymous();
 
-app.Run("http://0.0.0.0:5000");
+app.Run("http://0.0.0.0:5001");

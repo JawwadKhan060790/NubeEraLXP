@@ -121,6 +121,7 @@ export interface TeacherAnalytics {
 
 export interface StudentAnalytics {
   total_modules:       number;
+  total_lessons:       number;
   completed_lessons:   number;
   total_exams:         number;
   average_score:       number;

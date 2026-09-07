@@ -114,7 +114,7 @@ const GenerateReportCard: React.FC = () => {
   const [students, setStudents] = useState<{ id: string; name: string; studentIdNumber: string }[]>([]);
 
   // Core selectors
-  const [schoolId,  setSchoolId]  = useState(localStorage.getItem('nubeera_selected_school_id') || localStorage.getItem('veriton_selected_school_id') || '');
+  const [schoolId,  setSchoolId]  = useState(localStorage.getItem('nubeera_selected_school_id') || '');
   const [gradeId,   setGradeId]   = useState('');
   const [studentId, setStudentId] = useState('');
 

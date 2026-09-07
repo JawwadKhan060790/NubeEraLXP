@@ -6,7 +6,8 @@ using NubeEra.Application.DTOs;
 using NubeEra.Application.Interfaces.Services;
 using NubeEra.Application.Interfaces.Services.Export;
 using NubeEra.Application.Pagination;
-using NubeEra.Domain.Common;
+using NubeEra.Application.Interfaces.Repositories;
+using NubeEra.Domain.Entities;
 
 namespace NubeEra.API.Controllers.People;
 
@@ -19,6 +20,8 @@ public class StudentsController : ControllerBase
     private readonly IStudentPromotionService _promotionService;
     private readonly IExcelExportService _excelExportService;
     private readonly ILogger<StudentsController> _logger;
+    private readonly IUserRepository _userRepository;
+    private readonly IGenericRepository<Student> _studentRepository;
 
     // Declarative column map for the Students Excel export — the ONLY place this
     // module describes its export shape. Generation itself is fully delegated to
@@ -46,12 +49,16 @@ public class StudentsController : ControllerBase
         IStudentService service,
         IStudentPromotionService promotionService,
         IExcelExportService excelExportService,
-        ILogger<StudentsController> logger)
+        ILogger<StudentsController> logger,
+        IUserRepository userRepository,
+        IGenericRepository<Student> studentRepository)
     {
         _service = service;
         _promotionService = promotionService;
         _excelExportService = excelExportService;
         _logger = logger;
+        _userRepository = userRepository;
+        _studentRepository = studentRepository;
     }
 
     /// <summary>
@@ -201,5 +208,73 @@ public class StudentsController : ControllerBase
 
         var created = await _service.BulkImportCsvAsync(file.OpenReadStream());
         return Ok(new { message = $"Bulk import successful. {created} student(s) created." });
+    }
+
+    /// <summary>
+    /// Reset parent/guardian login password for a student.
+    /// Staff, Admin, SuperAdmin, Teacher, and Principal can reset.
+    /// </summary>
+    [HttpPut("{id}/reset-parent-password")]
+    [Authorize(Policy = "TeacherOnly")]
+    public async Task<IActionResult> ResetParentPassword(Guid id, [FromBody] NubeEra.API.Controllers.Auth.ResetPasswordBody? request)
+    {
+        if (string.IsNullOrWhiteSpace(request?.Password))
+            return BadRequest(new { message = "Password is required" });
+
+        if (request.Password.Length < 6)
+            return BadRequest(new { message = "Password must be at least 6 characters long." });
+
+        await _service.ResetParentPasswordAsync(id, request.Password);
+        return Ok(new { message = "Parent login password reset successfully." });
+    }
+
+    /// <summary>
+    /// Reset student login password by student ID (or user ID).
+    /// Staff, Admin, SuperAdmin, Teacher, and Principal can reset.
+    /// </summary>
+    [HttpPut("{id}/reset-password")]
+    [Authorize(Policy = "TeacherOnly")]
+    public async Task<IActionResult> ResetStudentPassword(Guid id, [FromBody] NubeEra.API.Controllers.Auth.ResetPasswordBody? request)
+    {
+        if (string.IsNullOrWhiteSpace(request?.Password))
+            return BadRequest(new { message = "Password is required" });
+
+        if (request.Password.Length < 6)
+            return BadRequest(new { message = "Password must be at least 6 characters long." });
+
+        var student = await _studentRepository.GetByIdAsync(id);
+        User? user = null;
+
+        if (student != null && student.UserId.HasValue && student.UserId.Value != Guid.Empty)
+        {
+            user = await _userRepository.GetByIdAsync(student.UserId.Value);
+        }
+        else
+        {
+            user = await _userRepository.GetByIdAsync(id);
+        }
+
+        if (user == null)
+            return NotFound(new { message = "Student user account not found." });
+
+        user.UpdatePassword(BCrypt.Net.BCrypt.HashPassword(request.Password));
+        await _userRepository.UpdateAsync(user);
+
+        return Ok(new { message = "Student login password updated successfully." });
+    }
+
+    /// <summary>
+    /// GET /api/students/next-id?schoolId={schoolId}
+    /// Returns the next sequential Student ID for a school (e.g. DA-260005)
+    /// </summary>
+    [HttpGet("next-id")]
+    [Authorize(Policy = "TeacherOnly")]
+    public async Task<IActionResult> GetNextStudentId([FromQuery] Guid schoolId)
+    {
+        if (schoolId == Guid.Empty)
+            return BadRequest(new { message = "School ID is required." });
+
+        var nextId = await _service.GetNextStudentIdAsync(schoolId);
+        return Ok(new { student_id = nextId });
     }
 }

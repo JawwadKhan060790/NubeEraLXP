@@ -52,7 +52,7 @@ public class SmtpEmailService : IEmailService
         {
             var port = int.TryParse(_configuration["Smtp:Port"], out var p) ? p : 587;
             var enableSsl = !bool.TryParse(_configuration["Smtp:EnableSsl"], out var ssl) || ssl; // default true
-            var fromAddress = _configuration["Smtp:FromAddress"] ?? _configuration["Smtp:Username"] ?? "no-reply@nubeera-lms.local";
+            var fromAddress = _configuration["Smtp:FromAddress"] ?? _configuration["Smtp:Username"] ?? "no-reply@veriton-lms.local";
             var fromName = _configuration["Smtp:FromName"] ?? "NubeEra LMS";
             var username = _configuration["Smtp:Username"];
             var password = _configuration["Smtp:Password"];

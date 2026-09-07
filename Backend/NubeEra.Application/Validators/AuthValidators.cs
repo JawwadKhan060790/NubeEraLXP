@@ -12,8 +12,7 @@ public class LoginRequestValidator : AbstractValidator<LoginRequestDto>
     public LoginRequestValidator()
     {
         RuleFor(x => x.Email)
-            .NotEmpty().WithMessage("Email is required.")
-            .EmailAddress().WithMessage("A valid email address is required.");
+            .NotEmpty().WithMessage("Email or username is required.");
 
         RuleFor(x => x.Password)
             .NotEmpty().WithMessage("Password is required.")
@@ -65,8 +64,7 @@ public class ForgotPasswordRequestValidator : AbstractValidator<ForgotPasswordRe
     public ForgotPasswordRequestValidator()
     {
         RuleFor(x => x.Email)
-            .NotEmpty().WithMessage("Email is required.")
-            .EmailAddress().WithMessage("A valid email address is required.");
+            .NotEmpty().WithMessage("Email address or mobile number is required.");
     }
 }
 
@@ -75,8 +73,7 @@ public class ResetPasswordRequestValidator : AbstractValidator<ResetPasswordRequ
     public ResetPasswordRequestValidator()
     {
         RuleFor(x => x.Email)
-            .NotEmpty().WithMessage("Email is required.")
-            .EmailAddress().WithMessage("A valid email address is required.");
+            .NotEmpty().WithMessage("Email address or mobile number is required.");
 
         RuleFor(x => x.Otp)
             .NotEmpty().WithMessage("OTP is required.")
@@ -84,8 +81,6 @@ public class ResetPasswordRequestValidator : AbstractValidator<ResetPasswordRequ
 
         RuleFor(x => x.NewPassword)
             .NotEmpty().WithMessage("New password is required.")
-            .MinimumLength(8).WithMessage("New password must be at least 8 characters.")
-            .Matches(@"[A-Z]").WithMessage("Password must contain at least one uppercase letter.")
-            .Matches(@"[0-9]").WithMessage("Password must contain at least one digit.");
+            .MinimumLength(6).WithMessage("New password must be at least 6 characters.");
     }
 }

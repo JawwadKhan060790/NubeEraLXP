@@ -64,6 +64,7 @@ interface Teacher {
   last_name: string;
   full_name: string;
   email: string;
+  username?: string;
   employee_id: string;
   phone?: string;
   specialization?: string;
@@ -150,6 +151,7 @@ const Teachers: React.FC = () => {
     first_name: '',
     last_name: '',
     email: '',
+    username: '',
     phone: '',
     password: '',
     confirm_password: '',
@@ -165,6 +167,7 @@ const Teachers: React.FC = () => {
   const [selectedSubjectIds, setSelectedSubjectIds] = useState<string[]>([]);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [originalEmail, setOriginalEmail] = useState('');
+  const [originalUsername, setOriginalUsername] = useState('');
 
   const clearFieldError = (field: string) =>
     setFormErrors(prev => {
@@ -179,6 +182,14 @@ const Teachers: React.FC = () => {
     if (!trimmed || trimmed === originalEmail || !isValidEmail(trimmed)) return;
     if (await isDuplicateValue('email', trimmed)) {
       setFormErrors(prev => ({ ...prev, email: DUPLICATE_MESSAGES.email }));
+    }
+  };
+
+  const checkUsernameDuplicate = async (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed || trimmed === originalUsername) return;
+    if (await isDuplicateValue('username', trimmed)) {
+      setFormErrors(prev => ({ ...prev, username: DUPLICATE_MESSAGES.username }));
     }
   };
 
@@ -275,6 +286,7 @@ const Teachers: React.FC = () => {
       first_name: teacher.first_name,
       last_name: teacher.last_name,
       email: teacher.email,
+      username: teacher.username || '',
       phone: teacher.phone || '',
       password: '',
       confirm_password: '',
@@ -289,6 +301,7 @@ const Teachers: React.FC = () => {
     });
     setFormErrors({});
     setOriginalEmail(teacher.email || '');
+    setOriginalUsername(teacher.username || '');
     setShowModal(true);
   };
 
@@ -338,7 +351,7 @@ const Teachers: React.FC = () => {
         return;
       }
     }
-    if (formErrors.email) return;
+    if (formErrors.email || formErrors.username) return;
 
     const canMultiSelect = user?.utype === 'admin' || user?.utype === 'staff' || user?.utype === 'principal';
 
@@ -417,6 +430,7 @@ const Teachers: React.FC = () => {
       first_name: '',
       last_name: '',
       email: '',
+      username: '',
       phone: '',
       password: '',
       confirm_password: '',
@@ -429,6 +443,7 @@ const Teachers: React.FC = () => {
     });
     setFormErrors({});
     setOriginalEmail('');
+    setOriginalUsername('');
   };
 
   const toggleSchoolSelection = (schoolId: string) => {
@@ -812,6 +827,24 @@ const Teachers: React.FC = () => {
                   <FieldError message={formErrors.email} />
                 </div>
                 <div>
+                  <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">Username <span className="text-gray-400 font-normal normal-case">(optional)</span></label>
+                  <div className="relative">
+                    <User className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      value={formData.username}
+                      onChange={e => { setFormData({ ...formData, username: e.target.value.toLowerCase().replace(/\s+/g, '') }); clearFieldError('username'); }}
+                      onBlur={e => checkUsernameDuplicate(e.target.value)}
+                      placeholder="e.g. teacher.john"
+                      className={`w-full pl-11 pr-4 py-3 bg-white border rounded-[4px] focus:ring-4 transition-all outline-none text-sm font-medium shadow-sm ${formErrors.username ? 'border-rose-300 focus:ring-rose-500/10 focus:border-rose-400' : 'border-gray-200 focus:ring-primary/5 focus:border-primary'}`}
+                    />
+                  </div>
+                  <FieldError message={formErrors.username} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                <div>
                   <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">Phone Number</label>
                   <MobileNumberInput
                     label="Phone Number"
@@ -820,9 +853,6 @@ const Teachers: React.FC = () => {
                     error={formErrors.phone}
                   />
                 </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                 <div>
                   <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">Employee ID</label>
                   <input
@@ -836,6 +866,9 @@ const Teachers: React.FC = () => {
                   />
                   <FieldError message={formErrors.employee_id} />
                 </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                 <div>
                   <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">Specialization</label>
                   <div className="relative">
@@ -850,9 +883,6 @@ const Teachers: React.FC = () => {
                   </div>
                   <FieldError message={formErrors.specialization} />
                 </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                 <div>
                   <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">Qualification</label>
                   <div className="relative">

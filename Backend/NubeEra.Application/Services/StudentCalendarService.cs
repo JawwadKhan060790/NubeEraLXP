@@ -34,7 +34,8 @@ public class StudentCalendarService : IStudentCalendarService
 
     public async Task<List<StudentCalendarEventDto>> GetStudentCalendarAsync(Guid studentId, DateTime start, DateTime end)
     {
-        var student = await _studentRepo.GetByIdAsync(studentId);
+        var student = await _studentRepo.GetByIdAsync(studentId)
+            ?? (await _studentRepo.GetAllAsync(q => q.Where(s => s.UserId == studentId))).FirstOrDefault();
         if (student == null)
             throw new KeyNotFoundException("Student not found.");
 
@@ -57,7 +58,9 @@ public class StudentCalendarService : IStudentCalendarService
             .Where(p => p.GradeId == student.GradeId &&
                         p.PeriodDate.Date >= startDate && p.PeriodDate.Date <= endDate));
 
-        var periodMap = periods.ToDictionary(p => p.SchedulerId);
+        var periodMap = periods
+            .GroupBy(p => p.SchedulerId)
+            .ToDictionary(g => g.Key, g => g.First());
 
         // 3. Fetch Exams
         var exams = await _examRepo.GetAllAsync(q => q
@@ -82,31 +85,33 @@ public class StudentCalendarService : IStudentCalendarService
             periodMap.TryGetValue(s.Id, out var period);
             var status = period?.Status.ToString() ?? "NotStarted";
             var color = GetStatusColor(period?.Status ?? PeriodStatus.NotStarted);
+            var teacherName = s.Teacher != null ? $"{s.Teacher.FirstName} {s.Teacher.LastName}" : "Teacher";
 
             result.Add(new StudentCalendarEventDto
             {
                 Id = s.Id,
                 Type = "Class",
                 Title = $"{s.Module?.Name ?? "Class"} - {s.Lesson?.SubTopic ?? "Topic"}",
-                Description = $"Teacher: {s.Teacher.FirstName} {s.Teacher.LastName}\nTime: {s.StartTime} - {s.EndTime}\nStatus: {status}",
+                Description = $"Teacher: {teacherName}\nTime: {s.StartTime} - {s.EndTime}\nStatus: {status}",
                 Start = s.Date.Date.Add(s.StartTime),
                 End = s.Date.Date.Add(s.EndTime),
                 Color = color,
                 Status = status,
                 SubjectName = s.Module?.Name,
-                TeacherName = $"{s.Teacher.FirstName} {s.Teacher.LastName}"
+                TeacherName = teacherName
             });
         }
 
         // Map Exams
         foreach (var exam in exams)
         {
+            var subjectName = exam.Module?.Name ?? "Subject";
             result.Add(new StudentCalendarEventDto
             {
                 Id = exam.Id,
                 Type = "Exam",
                 Title = $"[Exam] {exam.Title ?? "Unit Test"}",
-                Description = $"Subject: {exam.Module.Name}\nDuration: {exam.DurationMinutes} mins\nTotal Marks: {exam.TotalMarks}\nPassing Marks: {exam.PassingMarks}",
+                Description = $"Subject: {subjectName}\nDuration: {exam.DurationMinutes} mins\nTotal Marks: {exam.TotalMarks}\nPassing Marks: {exam.PassingMarks}",
                 Start = exam.Date,
                 End = exam.Date.AddMinutes(exam.DurationMinutes ?? 60),
                 Color = "#F59E0B", // Amber

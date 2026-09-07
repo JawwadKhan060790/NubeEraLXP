@@ -24,6 +24,7 @@ export type UserRole = 'admin' | 'principal' | 'teacher' | 'student' | 'staff' |
 export interface User {
   id: string;
   email: string;
+  username?: string;
   first_name: string;
   last_name: string;
   full_name: string;
@@ -76,6 +77,8 @@ export interface Student {
   last_name: string;
   full_name: string;
   email: string;
+  username?: string;
+  parent_username?: string;
   student_id: string;
   grade_id: string;
   grade_name: string;

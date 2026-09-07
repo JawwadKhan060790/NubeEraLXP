@@ -22,4 +22,10 @@ public interface IStudentService : IGenericService<StudentCreateDto, StudentUpda
 
     /// <summary>Returns lesson-level progress detail for a specific student.</summary>
     Task<StudentProgressDto?> GetProgressAsync(Guid studentId);
+
+    /// <summary>Resets or creates the parent/guardian login password associated with a student.</summary>
+    Task ResetParentPasswordAsync(Guid studentId, string newPassword);
+
+    /// <summary>Returns the next sequential Student ID for a given school (e.g. DA-260005).</summary>
+    Task<string> GetNextStudentIdAsync(Guid schoolId);
 }

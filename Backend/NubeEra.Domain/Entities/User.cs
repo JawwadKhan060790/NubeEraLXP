@@ -8,6 +8,7 @@ public class User : BaseEntity
     public Guid? SchoolId { get; set; }
     public Guid RoleId { get; set; }
     public string Email { get; private set; } = string.Empty;
+    public string? Username { get; set; }
     public string PasswordHash { get; private set; } = string.Empty;
     public bool IsActive { get; private set; } = true;
     public DateTime? LastLoginAt { get; set; }
@@ -15,6 +16,7 @@ public class User : BaseEntity
     public string? LastName { get; set; }
     public string? Phone { get; set; }
     public string? ProfileImageUrl { get; set; }
+    public bool IsParent { get; set; } = false;
 
     // Navigation Properties
     public School? School { get; set; }
@@ -24,14 +26,20 @@ public class User : BaseEntity
 
     private User() { }
 
-    public User(string email, string passwordHash, Guid roleId, Guid? schoolId = null)
+    public User(string email, string passwordHash, Guid roleId, Guid? schoolId = null, string? username = null)
     {
         Id = Guid.NewGuid();
         Email = email;
+        Username = username;
         PasswordHash = passwordHash;
         RoleId = roleId;
         SchoolId = schoolId;
         CreatedAt = DateTime.UtcNow;
+    }
+
+    public void UpdateUsername(string? newUsername)
+    {
+        Username = newUsername;
     }
 
     public void UpdatePassword(string newPasswordHash)

@@ -414,7 +414,6 @@ sys.stderr = io.StringIO()
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       localStorage.removeItem('nubeera_selected_school_id');
-      localStorage.removeItem('veriton_selected_school_id');
       window.location.href = '/login';
    };
 
@@ -582,7 +581,7 @@ sys.stderr = io.StringIO()
                      <div className="w-8 h-8 bg-primary rounded-md flex items-center justify-center text-white shadow-sm">
                         <GraduationCap className="w-4.5 h-4.5" />
                      </div>
-                     <span className="font-bold text-[15px] tracking-tight text-gray-900 dark:text-white">NubeEra Tech</span>
+                     <span className="font-bold text-[15px] tracking-tight text-gray-900 dark:text-white">NubeEra tech</span>
                   </div>
                   <div className="h-4 w-px bg-gray-200 dark:bg-[#334155] hidden md:block"></div>
                </div>

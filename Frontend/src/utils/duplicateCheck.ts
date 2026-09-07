@@ -10,7 +10,7 @@ import api from '../services/api';
  * legitimately share the same mobile number across multiple children's records,
  * so that field is exempt from the phone-duplication rule by design.
  */
-export type DuplicateCheckField = 'email' | 'phone';
+export type DuplicateCheckField = 'email' | 'phone' | 'username';
 
 export async function isDuplicateValue(field: DuplicateCheckField, value: string): Promise<boolean> {
   const trimmed = value?.trim();
@@ -30,4 +30,5 @@ export async function isDuplicateValue(field: DuplicateCheckField, value: string
 export const DUPLICATE_MESSAGES = {
   email: 'This email address is already registered.',
   phone: 'This mobile number is already registered.',
+  username: 'This username is already taken.',
 };

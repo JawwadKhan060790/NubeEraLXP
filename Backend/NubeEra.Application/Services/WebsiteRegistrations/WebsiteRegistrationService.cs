@@ -179,30 +179,30 @@ public class WebsiteRegistrationService : IWebsiteRegistrationService
         var firstName = nameParts.Length > 0 ? nameParts[0] : registration.StudentFullName;
         var lastName = nameParts.Length > 1 ? nameParts[1] : "Student";
 
-        // Find default NubeEra School (B2C)
-        var schools = await _schoolRepository.GetAllAsync(q => q.Where(s => s.SchoolCode == "NUBEERA-SCHOOL"));
-        var nubeeraSchool = schools.FirstOrDefault();
-        if (nubeeraSchool == null)
+        // Find default VeriTon School (B2C)
+        var schools = await _schoolRepository.GetAllAsync(q => q.Where(s => s.SchoolCode == "VERITON-SCHOOL"));
+        var veritonSchool = schools.FirstOrDefault();
+        if (veritonSchool == null)
         {
             var allSchools = await _schoolRepository.GetAllAsync();
-            nubeeraSchool = allSchools.FirstOrDefault();
-            if (nubeeraSchool == null)
+            veritonSchool = allSchools.FirstOrDefault();
+            if (veritonSchool == null)
                 throw new AppException("No valid school found to scope the enrollment.");
         }
 
         var studentDto = new StudentCreateDto
         {
-            SchoolId = nubeeraSchool.Id,
+            SchoolId = veritonSchool.Id,
             GradeId = dto.GradeId,
             StudentId = dto.StudentId,
             RollNo = dto.RollNo,
             FirstName = firstName,
             LastName = lastName,
-            Email = registration.EmailAddress ?? $"{dto.StudentId.ToLower()}@nubeera.b2c",
+            Email = registration.EmailAddress ?? $"{dto.StudentId.ToLower()}@veriton.b2c",
             Phone = registration.MobileNumber,
             ParentGuardianName = registration.ParentName,
             ParentGuardianPhone = registration.ParentMobileNumber,
-            ParentGuardianEmail = registration.EmailAddress ?? $"{dto.StudentId.ToLower()}_parent@nubeera.b2c",
+            ParentGuardianEmail = registration.EmailAddress ?? $"{dto.StudentId.ToLower()}_parent@veriton.b2c",
             Password = dto.Password,
             ParentPassword = string.IsNullOrWhiteSpace(dto.ParentPassword) ? registration.ParentMobileNumber : dto.ParentPassword,
             PersonalNote = $"Website B2C registration lead converted. Interested program: '{registration.InterestedProgram}'. Message: '{registration.Message}'."

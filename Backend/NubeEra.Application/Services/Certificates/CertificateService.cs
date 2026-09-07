@@ -254,7 +254,7 @@ public class CertificateService : ICertificateService
             Id = Guid.NewGuid(),
             CreatedAt = DateTime.UtcNow,
             CertificateNumber = certNumber,
-            QrCodeData = $"https://nubeera.tech/verify/{certNumber}",
+            QrCodeData = $"https://veriton.tech/verify/{certNumber}",
             StudentId = dto.StudentId,
             TemplateId = template?.Id,
             SchoolId = student.SchoolId,

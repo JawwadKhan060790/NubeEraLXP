@@ -98,7 +98,7 @@ public class GradeAccessService : IGradeAccessService
 
     public async Task<bool> IsLevelNumberAllowedAsync(Guid? schoolId, int levelNumber)
     {
-        if (levelNumber < -1 || levelNumber > 10)
+        if (levelNumber < -1 || levelNumber > 12)
         {
             return false;
         }
@@ -173,11 +173,41 @@ public class GradeAccessService : IGradeAccessService
     {
         levelNumber = 0;
         if (string.IsNullOrWhiteSpace(gradeLevel)) return false;
-        var match = System.Text.RegularExpressions.Regex.Match(gradeLevel, @"-?\d+");
+
+        var trimmed = gradeLevel.Trim();
+
+        // 1. Direct integer match
+        var match = System.Text.RegularExpressions.Regex.Match(trimmed, @"-?\d+");
         if (match.Success && int.TryParse(match.Value, out levelNumber))
         {
             return true;
         }
+
+        // 2. Named levels
+        if (trimmed.Equals("Boot Camp", StringComparison.OrdinalIgnoreCase)) { levelNumber = -1; return true; }
+        if (trimmed.Equals("Foundation Course", StringComparison.OrdinalIgnoreCase)) { levelNumber = 0; return true; }
+
+        // 3. Roman Numerals (XII, XI, VIII, VII, VI, IV, IX, V, X, III, II, I)
+        var romanMatch = System.Text.RegularExpressions.Regex.Match(trimmed, @"\b(XII|XI|VIII|VII|VI|IV|IX|V|X|III|II|I)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (romanMatch.Success)
+        {
+            switch (romanMatch.Value.ToUpperInvariant())
+            {
+                case "I":    levelNumber = 1;  return true;
+                case "II":   levelNumber = 2;  return true;
+                case "III":  levelNumber = 3;  return true;
+                case "IV":   levelNumber = 4;  return true;
+                case "V":    levelNumber = 5;  return true;
+                case "VI":   levelNumber = 6;  return true;
+                case "VII":  levelNumber = 7;  return true;
+                case "VIII": levelNumber = 8;  return true;
+                case "IX":   levelNumber = 9;  return true;
+                case "X":    levelNumber = 10; return true;
+                case "XI":   levelNumber = 11; return true;
+                case "XII":  levelNumber = 12; return true;
+            }
+        }
+
         return false;
     }
 

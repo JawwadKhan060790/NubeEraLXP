@@ -216,7 +216,7 @@ const OrderTrackingPage: React.FC = () => {
               </div>
 
               <div class="footer">
-                Thank you for your order! For support, contact ${invoice.company_contact ?? 'support@nubeera.com'}<br>
+                Thank you for your order! For support, contact ${invoice.company_contact ?? 'support@nubeera.tech'}<br>
                 This is a computer-generated invoice and does not require a signature.
               </div>
             </body>

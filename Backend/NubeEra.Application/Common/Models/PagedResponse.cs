@@ -13,6 +13,18 @@ public class PagedResponse<T>
     /// <summary>Total number of records matching the query (all pages combined).</summary>
     public int TotalCount { get; init; }
 
+    /// <summary>Total active count matching the filters.</summary>
+    public int ActiveCount { get; init; }
+
+    /// <summary>Total inactive count matching the filters.</summary>
+    public int InactiveCount { get; init; }
+
+    /// <summary>Total male count matching the filters.</summary>
+    public int BoysCount { get; init; }
+
+    /// <summary>Total female count matching the filters.</summary>
+    public int GirlsCount { get; init; }
+
     /// <summary>Current page number (1-based).</summary>
     public int Page { get; init; }
 

@@ -28,6 +28,8 @@ public class ExamsController : ControllerBase
     private readonly ICurrentUserService _currentUserService;
     private readonly IExcelExportService _excelExportService;
     private readonly IStudentWeakTopicService _weakTopicService;
+    private readonly IGenericRepository<LessonCompletion> _completionRepository;
+    private readonly IGenericRepository<Lesson> _lessonRepository;
 
     private static readonly IReadOnlyList<ExportColumnDefinition> ExamExportColumns = new List<ExportColumnDefinition>
     {
@@ -52,7 +54,9 @@ public class ExamsController : ControllerBase
         IGenericRepository<Exam> examRepository,
         ICurrentUserService currentUserService,
         IExcelExportService excelExportService,
-        IStudentWeakTopicService weakTopicService)
+        IStudentWeakTopicService weakTopicService,
+        IGenericRepository<LessonCompletion> completionRepository,
+        IGenericRepository<Lesson> lessonRepository)
     {
         _service = service;
         _questionRepository = questionRepository;
@@ -62,6 +66,8 @@ public class ExamsController : ControllerBase
         _currentUserService = currentUserService;
         _excelExportService = excelExportService;
         _weakTopicService = weakTopicService;
+        _completionRepository = completionRepository;
+        _lessonRepository = lessonRepository;
     }
 
     /// <summary>
@@ -228,14 +234,54 @@ public class ExamsController : ControllerBase
         {
             try
             {
-                // Record this failure as a weak topic immediately, so the
-                // Teacher's Student Weakness Analysis and Grade-wise Students
-                // pages reflect it without waiting on a manual "Sync from Results" click.
+                // Identify all Unit & Topic IDs associated with this failed exam
+                var failedLessonIds = new List<Guid>();
+
+                if (exam.LessonId.HasValue && exam.LessonId.Value != Guid.Empty)
+                {
+                    failedLessonIds.Add(exam.LessonId.Value);
+                }
+
+                if (exam.ModuleId != Guid.Empty)
+                {
+                    var moduleLessonIds = await _lessonRepository.Query()
+                        .AsNoTracking()
+                        .Where(l => l.ModuleId == exam.ModuleId && !l.IsDeleted)
+                        .Select(l => l.Id)
+                        .ToListAsync();
+
+                    failedLessonIds.AddRange(moduleLessonIds);
+                }
+
+                if (exam.Questions != null && exam.Questions.Any())
+                {
+                    var questionLessonIds = exam.Questions
+                        .Where(q => q.LessonId.HasValue && q.LessonId.Value != Guid.Empty)
+                        .Select(q => q.LessonId!.Value);
+
+                    failedLessonIds.AddRange(questionLessonIds);
+                }
+
+                failedLessonIds = failedLessonIds.Distinct().ToList();
+
+                if (failedLessonIds.Any())
+                {
+                    // Automatically mark unit & topics as INCOMPLETE by deleting LessonCompletions so the student MUST relearn them
+                    var completionsToRemove = await _completionRepository.GetAllAsync(q =>
+                        q.Where(lc => lc.StudentId == student.Id && failedLessonIds.Contains(lc.LessonId)));
+
+                    foreach (var completion in completionsToRemove)
+                    {
+                        await _completionRepository.HardDeleteAsync(completion);
+                    }
+                }
+
+                // Record this failure as a weak topic immediately for AI & Teacher Weakness Analysis
                 await _weakTopicService.SyncFromResultsAsync(exam.GradeId, exam.SchoolId);
             }
             catch (Exception)
             {
-                // Never block exam submission on weak-topic bookkeeping.
+                // Never block exam submission on bookkeeping.
             }
         }
 

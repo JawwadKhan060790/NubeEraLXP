@@ -39,13 +39,17 @@ public class TeacherSchedulePeriodService : ITeacherSchedulePeriodService
         await SeedPeriodsForDateAsync(teacherId, day);
 
         var schedulers = await _schedulerRepo.GetAllAsync(q =>
-            q.Where(s => s.TeacherId == teacherId && s.Date.Date == day)
+            q.IgnoreQueryFilters()
+             .Where(s => !s.IsDeleted && s.TeacherId == teacherId && s.Date.Date == day)
              .Include(s => s.Grade).Include(s => s.Module).Include(s => s.Lesson).Include(s => s.Section)
              .OrderBy(s => s.StartTime));
 
         var periods = await _periodRepo.GetAllAsync(q =>
-            q.Where(p => p.TeacherId == teacherId && p.PeriodDate.Date == day));
-        var periodMap = periods.ToDictionary(p => p.SchedulerId);
+            q.IgnoreQueryFilters()
+             .Where(p => !p.IsDeleted && p.TeacherId == teacherId && p.PeriodDate.Date == day));
+        var periodMap = periods
+            .GroupBy(p => p.SchedulerId)
+            .ToDictionary(g => g.Key, g => g.First());
 
         var periodDtos = schedulers.Select(s =>
         {
@@ -90,15 +94,19 @@ public class TeacherSchedulePeriodService : ITeacherSchedulePeriodService
         var monthEnd   = monthStart.AddMonths(1).AddDays(-1);
 
         var schedulers = await _schedulerRepo.GetAllAsync(q =>
-            q.Where(s => s.TeacherId == teacherId &&
+            q.IgnoreQueryFilters()
+             .Where(s => !s.IsDeleted && s.TeacherId == teacherId &&
                          s.Date.Date >= monthStart && s.Date.Date <= monthEnd)
              .Include(s => s.Grade).Include(s => s.Module).Include(s => s.Lesson).Include(s => s.Section));
 
         var schedulerIds = schedulers.Select(s => s.Id).ToHashSet();
         var periods = await _periodRepo.GetAllAsync(q =>
-            q.Where(p => p.TeacherId == teacherId &&
+            q.IgnoreQueryFilters()
+             .Where(p => !p.IsDeleted && p.TeacherId == teacherId &&
                          p.PeriodDate.Date >= monthStart && p.PeriodDate.Date <= monthEnd));
-        var periodMap = periods.ToDictionary(p => p.SchedulerId);
+        var periodMap = periods
+            .GroupBy(p => p.SchedulerId)
+            .ToDictionary(g => g.Key, g => g.First());
 
         return schedulers.Select(s =>
         {

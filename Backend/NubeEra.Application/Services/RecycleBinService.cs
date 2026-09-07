@@ -179,7 +179,7 @@ public class RecycleBinService : IRecycleBinService
                 {
                     Id = x.Id, EntityType = "School",
                     DisplayName = x.Name, Description = x.City,
-                    DeletedDate = x.DeletedDate!.Value, DeletedBy = x.DeletedBy, CreatedAt = x.CreatedAt,
+                    DeletedDate = x.DeletedDate ?? x.CreatedAt, DeletedBy = x.DeletedBy, CreatedAt = x.CreatedAt,
                 }),
 
             "Grade" => await PagedDeleted(
@@ -188,7 +188,7 @@ public class RecycleBinService : IRecycleBinService
                 {
                     Id = x.Id, EntityType = "Grade",
                     DisplayName = x.GradeName,
-                    DeletedDate = x.DeletedDate!.Value, DeletedBy = x.DeletedBy, CreatedAt = x.CreatedAt,
+                    DeletedDate = x.DeletedDate ?? x.CreatedAt, DeletedBy = x.DeletedBy, CreatedAt = x.CreatedAt,
                 }),
 
             "Teacher" => await PagedDeleted(
@@ -197,7 +197,7 @@ public class RecycleBinService : IRecycleBinService
                 {
                     Id = x.Id, EntityType = "Teacher",
                     DisplayName = $"{x.FirstName} {x.LastName}", Description = x.Email,
-                    DeletedDate = x.DeletedDate!.Value, DeletedBy = x.DeletedBy, CreatedAt = x.CreatedAt,
+                    DeletedDate = x.DeletedDate ?? x.CreatedAt, DeletedBy = x.DeletedBy, CreatedAt = x.CreatedAt,
                 }),
 
             "Student" => await PagedDeleted(
@@ -206,7 +206,7 @@ public class RecycleBinService : IRecycleBinService
                 {
                     Id = x.Id, EntityType = "Student",
                     DisplayName = $"{x.FirstName} {x.LastName}", Description = x.Email,
-                    DeletedDate = x.DeletedDate!.Value, DeletedBy = x.DeletedBy, CreatedAt = x.CreatedAt,
+                    DeletedDate = x.DeletedDate ?? x.CreatedAt, DeletedBy = x.DeletedBy, CreatedAt = x.CreatedAt,
                 }),
 
             "Module" => await PagedDeleted(
@@ -215,7 +215,7 @@ public class RecycleBinService : IRecycleBinService
                 {
                     Id = x.Id, EntityType = "Module",
                     DisplayName = x.Name, Description = x.Description,
-                    DeletedDate = x.DeletedDate!.Value, DeletedBy = x.DeletedBy, CreatedAt = x.CreatedAt,
+                    DeletedDate = x.DeletedDate ?? x.CreatedAt, DeletedBy = x.DeletedBy, CreatedAt = x.CreatedAt,
                 }),
 
             "Lesson" => await PagedDeleted(
@@ -224,7 +224,7 @@ public class RecycleBinService : IRecycleBinService
                 {
                     Id = x.Id, EntityType = "Lesson",
                     DisplayName = x.SubTopic, Description = x.Activity,
-                    DeletedDate = x.DeletedDate!.Value, DeletedBy = x.DeletedBy, CreatedAt = x.CreatedAt,
+                    DeletedDate = x.DeletedDate ?? x.CreatedAt, DeletedBy = x.DeletedBy, CreatedAt = x.CreatedAt,
                 }),
 
             "Exam" => await PagedDeleted(
@@ -233,7 +233,7 @@ public class RecycleBinService : IRecycleBinService
                 {
                     Id = x.Id, EntityType = "Exam",
                     DisplayName = x.Title ?? "Untitled Exam",
-                    DeletedDate = x.DeletedDate!.Value, DeletedBy = x.DeletedBy, CreatedAt = x.CreatedAt,
+                    DeletedDate = x.DeletedDate ?? x.CreatedAt, DeletedBy = x.DeletedBy, CreatedAt = x.CreatedAt,
                 }),
 
             "Scheduler" => await PagedDeleted(
@@ -243,7 +243,7 @@ public class RecycleBinService : IRecycleBinService
                     Id = x.Id, EntityType = "Scheduler",
                     DisplayName = $"Schedule {x.Date:yyyy-MM-dd}",
                     Description = x.IsActive ? "Active" : "Inactive",
-                    DeletedDate = x.DeletedDate!.Value, DeletedBy = x.DeletedBy, CreatedAt = x.CreatedAt,
+                    DeletedDate = x.DeletedDate ?? x.CreatedAt, DeletedBy = x.DeletedBy, CreatedAt = x.CreatedAt,
                 }),
 
             "Result" => await PagedDeleted(
@@ -252,7 +252,7 @@ public class RecycleBinService : IRecycleBinService
                 {
                     Id = x.Id, EntityType = "Result",
                     DisplayName = $"Result {x.Id.ToString()[..8]}",
-                    DeletedDate = x.DeletedDate!.Value, DeletedBy = x.DeletedBy, CreatedAt = x.CreatedAt,
+                    DeletedDate = x.DeletedDate ?? x.CreatedAt, DeletedBy = x.DeletedBy, CreatedAt = x.CreatedAt,
                 }),
 
             "Event" => await PagedDeleted(
@@ -261,7 +261,7 @@ public class RecycleBinService : IRecycleBinService
                 {
                     Id = x.Id, EntityType = "Event",
                     DisplayName = x.Title, Description = x.Venue,
-                    DeletedDate = x.DeletedDate!.Value, DeletedBy = x.DeletedBy, CreatedAt = x.CreatedAt,
+                    DeletedDate = x.DeletedDate ?? x.CreatedAt, DeletedBy = x.DeletedBy, CreatedAt = x.CreatedAt,
                 }),
 
             "Ticket" => await PagedDeleted(
@@ -271,7 +271,7 @@ public class RecycleBinService : IRecycleBinService
                     Id = x.Id, EntityType = "Ticket",
                     DisplayName = $"[{x.TicketNumber}] {x.Subject}",
                     Description = x.Status.ToString(),
-                    DeletedDate = x.DeletedDate!.Value, DeletedBy = x.DeletedBy, CreatedAt = x.CreatedAt,
+                    DeletedDate = x.DeletedDate ?? x.CreatedAt, DeletedBy = x.DeletedBy, CreatedAt = x.CreatedAt,
                 }),
 
             "Product" => await PagedDeleted(
@@ -280,7 +280,7 @@ public class RecycleBinService : IRecycleBinService
                 {
                     Id = x.Id, EntityType = "Product",
                     DisplayName = x.Title, Description = x.ShortDescription,
-                    DeletedDate = x.DeletedDate!.Value, DeletedBy = x.DeletedBy, CreatedAt = x.CreatedAt,
+                    DeletedDate = x.DeletedDate ?? x.CreatedAt, DeletedBy = x.DeletedBy, CreatedAt = x.CreatedAt,
                 }),
 
             "Order" => await PagedDeleted(
@@ -289,7 +289,7 @@ public class RecycleBinService : IRecycleBinService
                 {
                     Id = x.Id, EntityType = "Order",
                     DisplayName = $"Order #{x.OrderNumber}", Description = x.Status,
-                    DeletedDate = x.DeletedDate!.Value, DeletedBy = x.DeletedBy, CreatedAt = x.CreatedAt,
+                    DeletedDate = x.DeletedDate ?? x.CreatedAt, DeletedBy = x.DeletedBy, CreatedAt = x.CreatedAt,
                 }),
 
             "Certificate" => await PagedDeleted(
@@ -298,7 +298,7 @@ public class RecycleBinService : IRecycleBinService
                 {
                     Id = x.Id, EntityType = "Certificate",
                     DisplayName = x.CertificateNumber, Description = x.StudentName,
-                    DeletedDate = x.DeletedDate!.Value, DeletedBy = x.DeletedBy, CreatedAt = x.CreatedAt,
+                    DeletedDate = x.DeletedDate ?? x.CreatedAt, DeletedBy = x.DeletedBy, CreatedAt = x.CreatedAt,
                 }),
 
             "User" => await PagedDeleted(
@@ -310,7 +310,7 @@ public class RecycleBinService : IRecycleBinService
                         ? x.Email
                         : $"{x.FirstName} {x.LastName}".Trim(),
                     Description = x.Email,
-                    DeletedDate = x.DeletedDate!.Value, DeletedBy = x.DeletedBy, CreatedAt = x.CreatedAt,
+                    DeletedDate = x.DeletedDate ?? x.CreatedAt, DeletedBy = x.DeletedBy, CreatedAt = x.CreatedAt,
                 }),
 
             _ => ([], 0),

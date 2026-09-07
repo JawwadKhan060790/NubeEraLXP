@@ -55,7 +55,7 @@ public class OrdersController : ControllerBase
     }
 
     [HttpGet("admin")]
-    [Authorize(Roles = "Staff,Admin")]
+    [Authorize(Policy = "StaffOnly")]
     public async Task<IActionResult> GetAdminOrders(
         [FromQuery] string? search,
         [FromQuery] Guid? schoolId,

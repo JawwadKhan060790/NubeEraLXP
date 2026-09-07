@@ -3,21 +3,22 @@ import ExportButton from '@/components/export/ExportButton';
 import FieldError from '@/components/FieldError';
 import MobileNumberInput from '@/components/MobileNumberInput';
 import Pagination from '@/components/Pagination';
-import PasswordPolicyTracker, { isPasswordValid } from '@/components/PasswordPolicyTracker';
 import StatGrid, { type StatItem } from '@/components/StatGrid';
 import { useConfirm } from '@/hooks/useConfirm';
 import api from '@/services/api';
+import { teacherEnhancedService, type StudentWeaknessAnalysis, type TeacherLearningPath } from '@/services/teacherEnhancedService';
 import { DUPLICATE_MESSAGES, isDuplicateValue } from '@/utils/duplicateCheck';
 import { parseApiErrors } from '@/utils/errorParser';
 import { isValidEmail, trimAndCollapseSpaces } from '@/utils/validation';
 import {
   AlertCircle, AlertTriangle, BarChart3, BookOpen, Calendar, Check, CheckCircle2, ChevronDown, ChevronRight,
-  Droplets, Edit, Eye, EyeOff, GraduationCap, Key, Lock, Mail, MapPin, Phone, Plus, School, Search, Trash2, TrendingUp, User, X, Zap, Loader2
+  Droplets, Edit, Eye, EyeOff, GraduationCap, Key,
+  Loader2,
+  Lock, Mail, MapPin, Phone, Plus, School, Search, Trash2, TrendingUp, User, X
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
-import { teacherEnhancedService, type StudentWeaknessAnalysis, type TeacherLearningPath } from '@/services/teacherEnhancedService';
 
 // ── Sub-components (Schools.tsx design system) ────────────────────────────────
 
@@ -62,6 +63,8 @@ interface Student {
   last_name: string;
   full_name: string;
   email: string;
+  username?: string;
+  parent_username?: string;
   student_id: string;
   roll_no?: string;
   grade_id: string;
@@ -114,9 +117,14 @@ const Students: React.FC = () => {
     return utype === 'superadmin' || utype === 'admin' || utype === 'staff';
   }, [user]);
 
-  // ── Server-side pagination state ──────────────────────────────────────────
+  // ── Server-side pagination & stats state ──────────────────────────────────
   const [students, setStudents] = useState<Student[]>([]);
   const [totalCount, setTotalCount] = useState(0);
+  const [overallTotalCount, setOverallTotalCount] = useState(0);
+  const [activeCount, setActiveCount] = useState(0);
+  const [inactiveCount, setInactiveCount] = useState(0);
+  const [boysCount, setBoysCount] = useState(0);
+  const [girlsCount, setGirlsCount] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [grades, setGrades] = useState<Grade[]>([]);
@@ -131,6 +139,7 @@ const Students: React.FC = () => {
   // Search is debounced before being sent to the server
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [filterSchoolId, setFilterSchoolId] = useState('');
@@ -184,9 +193,8 @@ const Students: React.FC = () => {
     e.preventDefault();
     if (!resettingParentStudent) return;
     setParentResetPasswordError('');
-    if (!isPasswordValid(parentResetPasswordData.password)) {
-      setParentResetPasswordTouched(true);
-      setParentResetPasswordError('Password does not meet validation requirements.');
+    if (!parentResetPasswordData.password || parentResetPasswordData.password.length < 6) {
+      setParentResetPasswordError('Password must be at least 6 characters.');
       return;
     }
     if (parentResetPasswordData.password !== parentResetPasswordData.confirm_password) {
@@ -317,6 +325,8 @@ const Students: React.FC = () => {
     first_name: '',
     last_name: '',
     email: '',
+    username: '',
+    parent_username: '',
     student_id: '',
     roll_no: '',
     grade_id: '',
@@ -342,10 +352,10 @@ const Students: React.FC = () => {
   // Inline, below-the-field validation/duplicate errors shown in red — replaces
   // toast-based form validation. Keyed by formData field name.
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-  // Snapshot of the email/phone values an existing student already had when the
+  // Snapshot of the email/phone/username values an existing student already had when the
   // edit modal opened, so re-blurring an unchanged field never flags itself as
   // a "duplicate" of its own record.
-  const [originalValues, setOriginalValues] = useState({ email: '', phone: '', parent_guardian_email: '' });
+  const [originalValues, setOriginalValues] = useState({ email: '', phone: '', parent_guardian_email: '', username: '', parent_username: '' });
 
   const clearFieldError = (field: string) =>
     setFormErrors(prev => {
@@ -359,7 +369,7 @@ const Students: React.FC = () => {
   // set (lets parent_guardian_email reuse the 'email' kind under its own key).
   // Deliberately never called for parent_guardian_phone — one parent can have
   // multiple children sharing the same contact number.
-  const runDuplicateCheck = async (errorKey: string, kind: 'email' | 'phone', value: string, originalValue: string) => {
+  const runDuplicateCheck = async (errorKey: string, kind: 'email' | 'phone' | 'username', value: string, originalValue: string) => {
     const trimmed = value.trim();
     if (!trimmed || trimmed === originalValue) return;
     if (kind === 'email' && !isValidEmail(trimmed)) return;
@@ -479,6 +489,14 @@ const Students: React.FC = () => {
       if (filterGradeId) params.gradeId = filterGradeId;
       if (filterSectionId) params.sectionId = filterSectionId;
 
+      if (filterStatus === 'all') {
+        params['filters[isActive]'] = 'all';
+      } else if (filterStatus === 'inactive') {
+        params.isActive = false;
+      } else {
+        params.isActive = true;
+      }
+
       const effectiveSchoolId = isPlatformWide ? filterSchoolId : (user?.school_id || '');
       if (effectiveSchoolId) params.schoolId = effectiveSchoolId;
 
@@ -489,6 +507,11 @@ const Students: React.FC = () => {
       const items: Student[] = data.items ?? [];
       setStudents(items);
       setTotalCount(data.total_count ?? 0);
+      setOverallTotalCount((data.active_count ?? 0) + (data.inactive_count ?? 0));
+      setActiveCount(data.active_count ?? items.filter(s => s.is_active).length);
+      setInactiveCount(data.inactive_count ?? items.filter(s => !s.is_active).length);
+      setBoysCount(data.boys_count ?? items.filter(s => s.gender?.toLowerCase() === 'male').length);
+      setGirlsCount(data.girls_count ?? items.filter(s => s.gender?.toLowerCase() === 'female').length);
       setTotalPages(data.total_pages ?? 1);
 
       // Auto-select first student on page 1 with no active selection
@@ -503,11 +526,12 @@ const Students: React.FC = () => {
       setFetchError(msg);
       setStudents([]);
       setTotalCount(0);
+      setOverallTotalCount(0);
       setTotalPages(1);
     } finally {
       setIsLoading(false);
     }
-  }, [currentPage, itemsPerPage, debouncedSearch, filterSchoolId, filterGradeId, filterSectionId, isPlatformWide, user]);
+  }, [currentPage, itemsPerPage, debouncedSearch, filterSchoolId, filterGradeId, filterSectionId, filterStatus, isPlatformWide, user]);
 
   // Re-fetch whenever user logs in or pagination/filter state changes
   useEffect(() => {
@@ -534,22 +558,20 @@ const Students: React.FC = () => {
     }
 
     if (!editingId) {
-      if (!isPasswordValid(formData.password)) {
-        setPasswordTouched(true);
-        setFormErrors(prev => ({ ...prev, password: 'Password does not meet validation requirements.' }));
+      if (!formData.password || formData.password.length < 6) {
+        setFormErrors(prev => ({ ...prev, password: 'Password must be at least 6 characters.' }));
         return;
       }
       if (formData.password !== formData.confirm_password) {
         setFormErrors(prev => ({ ...prev, confirm_password: 'Passwords do not match.' }));
         return;
       }
-      if (!isPasswordValid(formData.parent_password)) {
-        setParentPasswordTouched(true);
-        setFormErrors(prev => ({ ...prev, parent_password: 'Password does not meet validation requirements.' }));
+      if (formData.parent_password && formData.parent_password.length < 6) {
+        setFormErrors(prev => ({ ...prev, parent_password: 'Parent password must be at least 6 characters.' }));
         return;
       }
     }
-    if (formErrors.email || formErrors.phone || formErrors.parent_guardian_email) {
+    if (formErrors.email || formErrors.phone || formErrors.parent_guardian_email || formErrors.username || formErrors.parent_username) {
       // A duplicate flagged on blur is still showing — block submit until resolved.
       return;
     }
@@ -604,6 +626,8 @@ const Students: React.FC = () => {
       first_name: student.first_name,
       last_name: student.last_name,
       email: student.email,
+      username: student.username || '',
+      parent_username: student.parent_username || '',
       student_id: student.student_id,
       roll_no: student.roll_no || '',
       grade_id: student.grade_id,
@@ -629,7 +653,9 @@ const Students: React.FC = () => {
     setOriginalValues({
       email: student.email || '',
       phone: student.phone || '',
-      parent_guardian_email: student.parent_guardian_email || ''
+      parent_guardian_email: student.parent_guardian_email || '',
+      username: student.username || '',
+      parent_username: student.parent_username || ''
     });
     setShowModal(true);
   };
@@ -660,9 +686,8 @@ const Students: React.FC = () => {
     e.preventDefault();
     if (!resettingStudent) return;
     setResetPasswordError('');
-    if (!isPasswordValid(resetPasswordData.password)) {
-      setResetPasswordTouched(true);
-      setResetPasswordError('Password does not meet validation requirements.');
+    if (!resetPasswordData.password || resetPasswordData.password.length < 6) {
+      setResetPasswordError('Password must be at least 6 characters.');
       return;
     }
     if (resetPasswordData.password !== resetPasswordData.confirm_password) {
@@ -690,6 +715,8 @@ const Students: React.FC = () => {
       first_name: '',
       last_name: '',
       email: '',
+      username: '',
+      parent_username: '',
       student_id: '',
       roll_no: '',
       grade_id: '',
@@ -712,7 +739,7 @@ const Students: React.FC = () => {
       is_active: true
     });
     setFormErrors({});
-    setOriginalValues({ email: '', phone: '', parent_guardian_email: '' });
+    setOriginalValues({ email: '', phone: '', parent_guardian_email: '', username: '', parent_username: '' });
   };
 
   // ── Server-side pagination: students already arrive pre-filtered and pre-paged ──
@@ -762,7 +789,7 @@ const Students: React.FC = () => {
         <div>
           <h1 className="text-xl md:text-2xl font-black text-slate-800 dark:text-white tracking-tight">Student List</h1>
           <p className="text-xs text-gray-500 dark:text-[#94a3b8] font-bold uppercase tracking-widest mt-1">
-            {totalCount.toLocaleString()} Total Enrolled Students
+            {overallTotalCount.toLocaleString()} Total Enrolled Students
           </p>
         </div>
         <div className="flex flex-wrap gap-2.5">
@@ -792,17 +819,15 @@ const Students: React.FC = () => {
 
       {/* Counters / Stats Row */}
       {(() => {
-        const boys = students.filter(s => s.gender?.toLowerCase() === 'male').length;
-        const girls = students.filter(s => s.gender?.toLowerCase() === 'female').length;
         const studentStats: StatItem[] = [
-          { title: 'Total Students', value: totalCount, icon: <GraduationCap className="w-6 h-6" />, color: 'indigo', subtitle: 'All enrolled learners' },
-          { title: 'Active Students', value: students.filter(s => s.is_active).length, icon: <Check className="w-6 h-6" />, color: 'emerald', subtitle: 'Currently active' },
-          { title: 'Boys', value: boys, icon: <User className="w-6 h-6" />, color: 'sky', subtitle: 'Male enrollment' },
-          { title: 'Girls', value: girls, icon: <User className="w-6 h-6" />, color: 'violet', subtitle: 'Female enrollment' },
-          // { title: 'Grade Sections', value: grades.length, icon: <School className="w-6 h-6" />, color: 'amber' },
+          { title: 'Total Students', value: overallTotalCount, icon: <GraduationCap className="w-6 h-6" />, color: 'indigo', subtitle: 'All enrolled learners' },
+          { title: 'Active Students', value: activeCount, icon: <Check className="w-6 h-6" />, color: 'emerald', subtitle: 'Currently active' },
+          { title: 'Inactive Students', value: inactiveCount, icon: <X className="w-6 h-6" />, color: 'rose', subtitle: 'Currently inactive' },
+          { title: 'Boys', value: boysCount, icon: <User className="w-6 h-6" />, color: 'sky', subtitle: 'Male enrollment' },
+          { title: 'Girls', value: girlsCount, icon: <User className="w-6 h-6" />, color: 'violet', subtitle: 'Female enrollment' },
         ];
         return (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
             <StatGrid stats={studentStats} loading={isLoading && students.length === 0} />
           </div>
         );
@@ -877,6 +902,18 @@ const Students: React.FC = () => {
                   </select>
                   <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 dark:text-[#64748b] pointer-events-none" />
                 </div>
+                <div className="relative min-w-[95px] flex-initial">
+                  <select
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value as any)}
+                    className="w-full px-3 py-2 bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 transition-all font-semibold appearance-none cursor-pointer"
+                  >
+                    <option value="all">All Status</option>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 dark:text-[#64748b] pointer-events-none" />
+                </div>
               </div>
               {/* Section filter — only shown when a grade is selected and sections exist */}
               {filterGradeId && allSections.filter(s => s.grade_id === filterGradeId).length > 0 && (
@@ -915,17 +952,15 @@ const Students: React.FC = () => {
                     <div
                       key={student.id}
                       onClick={() => setSelectedStudent(student)}
-                      className={`relative px-4 py-3.5 cursor-pointer flex items-center gap-3.5 transition-all duration-200 border-l-4 group ${
-                        isSelected
+                      className={`relative px-4 py-3.5 cursor-pointer flex items-center gap-3.5 transition-all duration-200 border-l-4 group ${isSelected
                           ? 'bg-indigo-50/80 dark:bg-indigo-500/15 border-l-indigo-600 dark:border-l-indigo-400 shadow-xs'
                           : 'border-l-transparent hover:bg-slate-50 dark:hover:bg-[#283548] hover:border-l-slate-300'
-                      }`}
+                        }`}
                     >
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-extrabold text-xs uppercase flex-shrink-0 border transition-all ${
-                        isSelected
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-extrabold text-xs uppercase flex-shrink-0 border transition-all ${isSelected
                           ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
                           : 'bg-indigo-50 dark:bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-100 dark:border-indigo-400/25 group-hover:bg-indigo-100 dark:group-hover:bg-indigo-500/25'
-                      }`}>
+                        }`}>
                         {initials || <User className="w-4 h-4" />}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -1033,6 +1068,7 @@ const Students: React.FC = () => {
                       <SectionHeader icon={<GraduationCap className="w-3.5 h-3.5" />} title="Academic Information" />
                       <div className="grid grid-cols-2 gap-4">
                         <InfoRow icon={<Mail className="w-4 h-4" />} label="Email Address" value={selectedStudent.email} className="col-span-2" />
+                        <InfoRow icon={<User className="w-4 h-4" />} label="Student Username" value={selectedStudent.username} />
                         <InfoRow icon={<GraduationCap className="w-4 h-4" />} label="Student ID" value={selectedStudent.student_id} />
                         <InfoRow icon={<School className="w-4 h-4" />} label="Roll Number" value={selectedStudent.roll_no} />
                         <InfoRow icon={<School className="w-4 h-4" />} label="Grade / Division" value={
@@ -1089,6 +1125,7 @@ const Students: React.FC = () => {
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                           <InfoRow icon={<Mail className="w-4 h-4" />} label="Guardian Email" value={selectedStudent.parent_guardian_email} className="col-span-2" />
+                          <InfoRow icon={<User className="w-4 h-4" />} label="Guardian Username" value={selectedStudent.parent_username} />
                           <InfoRow icon={<Phone className="w-4 h-4" />} label="Guardian Phone" value={selectedStudent.parent_guardian_phone} />
                           <InfoRow icon={<Phone className="w-4 h-4" />} label="Emergency Contact" value={selectedStudent.emergency_contact} />
                         </div>
@@ -1189,13 +1226,12 @@ const Students: React.FC = () => {
                                       <span className="text-slate-700 dark:text-slate-300 truncate max-w-[180px]">
                                         {t.serial_number ? `${t.serial_number}. ` : ''}{t.sub_topic}
                                       </span>
-                                      <span className={`text-[9px] px-1.5 py-0.5 rounded font-black uppercase ${
-                                        t.status === 'Completed'
+                                      <span className={`text-[9px] px-1.5 py-0.5 rounded font-black uppercase ${t.status === 'Completed'
                                           ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
                                           : t.status === 'InProgress'
-                                          ? 'bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300'
-                                          : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400'
-                                      }`}>
+                                            ? 'bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300'
+                                            : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400'
+                                        }`}>
                                         {t.status}
                                       </span>
                                     </div>
@@ -1238,13 +1274,12 @@ const Students: React.FC = () => {
                                   <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{wt.module_name}</span>
                                   <h5 className="text-xs font-black text-slate-800 dark:text-white">{wt.lesson_name}</h5>
                                 </div>
-                                <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase border ${
-                                  wt.weakness_level === 'High'
+                                <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase border ${wt.weakness_level === 'High'
                                     ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/15 dark:text-rose-300'
                                     : wt.weakness_level === 'Medium'
-                                    ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300'
-                                    : 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-500/15 dark:text-violet-300'
-                                }`}>
+                                      ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300'
+                                      : 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-500/15 dark:text-violet-300'
+                                  }`}>
                                   {wt.weakness_level} Severity
                                 </span>
                               </div>
@@ -1257,9 +1292,8 @@ const Students: React.FC = () => {
                                 </div>
                                 <div className="w-full bg-slate-200 dark:bg-[#1e293b] h-1.5 rounded-full overflow-hidden">
                                   <div
-                                    className={`h-full rounded-full ${
-                                      (wt.score / (wt.max_score || 1)) >= 0.6 ? 'bg-emerald-500' : (wt.score / (wt.max_score || 1)) >= 0.35 ? 'bg-amber-400' : 'bg-rose-500'
-                                    }`}
+                                    className={`h-full rounded-full ${(wt.score / (wt.max_score || 1)) >= 0.6 ? 'bg-emerald-500' : (wt.score / (wt.max_score || 1)) >= 0.35 ? 'bg-amber-400' : 'bg-rose-500'
+                                      }`}
                                     style={{ width: `${Math.min(100, Math.max(0, (wt.score / (wt.max_score || 1)) * 100))}%` }}
                                   />
                                 </div>
@@ -1371,6 +1405,18 @@ const Students: React.FC = () => {
                     />
                     <FieldError message={formErrors.email} />
                   </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-gray-500 dark:text-[#94a3b8] uppercase tracking-wider mb-2 ml-1">Student Username <span className="text-gray-400 font-normal normal-case"></span></label>
+                    <input
+                      type="text"
+                      value={formData.username}
+                      onChange={e => { setFormData({ ...formData, username: e.target.value.toLowerCase().replace(/\s+/g, '') }); clearFieldError('username'); }}
+                      onBlur={e => runDuplicateCheck('username', 'username', e.target.value, originalValues.username)}
+                      placeholder="e.g. john.doe"
+                      className={`w-full px-4 py-3 bg-white dark:bg-[#1e293b] border rounded-[4px] focus:ring-4 transition-all outline-none font-medium text-sm shadow-sm ${formErrors.username ? 'border-rose-300 dark:border-rose-400/40 focus:ring-rose-500/10 focus:border-rose-400' : 'border-gray-200 dark:border-[#334155] focus:ring-primary/5 focus:border-primary'}`}
+                    />
+                    <FieldError message={formErrors.username} />
+                  </div>
                   {!editingId && (
                     <>
                       <div>
@@ -1381,10 +1427,9 @@ const Students: React.FC = () => {
                             type={showPassword ? 'text' : 'password'}
                             required
                             value={formData.password}
-                            onChange={e => setFormData({ ...formData, password: e.target.value })}
-                            onBlur={() => setPasswordTouched(true)}
+                            onChange={e => { setFormData({ ...formData, password: e.target.value }); clearFieldError('password'); }}
                             placeholder="••••••••"
-                            className="w-full pl-11 pr-12 py-3 bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-[#334155] rounded-[4px] focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all outline-none font-medium text-sm shadow-sm"
+                            className={`w-full pl-11 pr-12 py-3 bg-white dark:bg-[#1e293b] border rounded-[4px] focus:ring-4 transition-all outline-none font-medium text-sm shadow-sm ${formErrors.password ? 'border-rose-300 dark:border-rose-400/40 focus:ring-rose-500/10 focus:border-rose-400' : 'border-gray-200 dark:border-[#334155] focus:ring-primary/5 focus:border-primary'}`}
                           />
                           <button
                             type="button"
@@ -1393,8 +1438,8 @@ const Students: React.FC = () => {
                           >
                             {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                           </button>
-                          <PasswordPolicyTracker value={formData.password} touched={passwordTouched} />
                         </div>
+                        <FieldError message={formErrors.password} />
                       </div>
                       <div>
                         <label className="block text-[11px] font-bold text-gray-500 dark:text-[#94a3b8] uppercase tracking-wider mb-2 ml-1">Confirm Password</label>
@@ -1522,20 +1567,20 @@ const Students: React.FC = () => {
                   </div>
 
                   <div>
-                  <label className="block text-[11px] font-bold text-gray-500 dark:text-[#94a3b8] uppercase tracking-wider mb-2 ml-1">Date of Birth</label>
-                  <input
-                    type="date"
-                    value={formData.date_of_birth}
-                    onChange={e => setFormData({ ...formData, date_of_birth: e.target.value })}
-                    className="w-full px-4 py-3 bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-[#334155] rounded-[4px] focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all outline-none font-medium text-sm shadow-sm"
-                  />
-                </div>
-                </div>
-
+                    <label className="block text-[11px] font-bold text-gray-500 dark:text-[#94a3b8] uppercase tracking-wider mb-2 ml-1">Date of Birth</label>
+                    <input
+                      type="date"
+                      value={formData.date_of_birth}
+                      onChange={e => setFormData({ ...formData, date_of_birth: e.target.value })}
+                      className="w-full px-4 py-3 bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-[#334155] rounded-[4px] focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all outline-none font-medium text-sm shadow-sm"
+                    />
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-3 gap-6">
-                
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-3 gap-6">
+
                 <div>
                   <label className="block text-[11px] font-bold text-gray-500 dark:text-[#94a3b8] uppercase tracking-wider mb-2 ml-1">Gender</label>
                   <div className="relative">
@@ -1589,7 +1634,7 @@ const Students: React.FC = () => {
                   <div className="w-1 bg-indigo-500 h-4 rounded-full"></div>
                   <h3 className="text-xs font-black text-gray-900 dark:text-white uppercase tracking-widest">Parent / Guardian Information</h3>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                   <div>
                     <label className="block text-[11px] font-bold text-gray-500 dark:text-[#94a3b8] uppercase tracking-wider mb-2 ml-1">Guardian Name</label>
                     <input
@@ -1602,6 +1647,18 @@ const Students: React.FC = () => {
                       className="w-full px-4 py-3 bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-[#334155] rounded-[4px] focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all outline-none text-sm font-bold text-gray-900 dark:text-white shadow-sm"
                     />
                     <FieldError message={formErrors.parent_guardian_name} />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-gray-500 dark:text-[#94a3b8] uppercase tracking-wider mb-2 ml-1">Parent Username  </label>
+                    <input
+                      type="text"
+                      value={formData.parent_username}
+                      onChange={e => { setFormData({ ...formData, parent_username: e.target.value.toLowerCase().replace(/\s+/g, '') }); clearFieldError('parent_username'); }}
+                      onBlur={e => runDuplicateCheck('parent_username', 'username', e.target.value, originalValues.parent_username)}
+                      placeholder="e.g. parent.smith"
+                      className={`w-full px-4 py-3 bg-white dark:bg-[#1e293b] border rounded-[4px] focus:ring-4 transition-all outline-none font-medium text-sm shadow-sm ${formErrors.parent_username ? 'border-rose-300 dark:border-rose-400/40 focus:ring-rose-500/10 focus:border-rose-400' : 'border-gray-200 dark:border-[#334155] focus:ring-primary/5 focus:border-primary'}`}
+                    />
+                    <FieldError message={formErrors.parent_username} />
                   </div>
                   <div>
                     <label className="block text-[11px] font-bold text-gray-500 dark:text-[#94a3b8] uppercase tracking-wider mb-2 ml-1">Guardian Phone <span className="text-rose-500">*</span></label>
@@ -1619,26 +1676,14 @@ const Students: React.FC = () => {
                       <label className="block text-[11px] font-bold text-gray-500 dark:text-[#94a3b8] uppercase tracking-wider mb-2 ml-1">Parent Password</label>
                       <input
                         type="password"
-                        required
                         value={formData.parent_password}
-                        onChange={e => setFormData({ ...formData, parent_password: e.target.value })}
-                        onBlur={() => setParentPasswordTouched(true)}
+                        onChange={e => { setFormData({ ...formData, parent_password: e.target.value }); clearFieldError('parent_password'); }}
                         placeholder="••••••••"
-                        className="w-full px-4 py-3 bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-[#334155] rounded-[4px] focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all outline-none text-sm font-medium shadow-sm"
+                        className={`w-full px-4 py-3 bg-white dark:bg-[#1e293b] border rounded-[4px] focus:ring-4 transition-all outline-none text-sm font-medium shadow-sm ${formErrors.parent_password ? 'border-rose-300 dark:border-rose-400/40 focus:ring-rose-500/10 focus:border-rose-400' : 'border-gray-200 dark:border-[#334155] focus:ring-primary/5 focus:border-primary'}`}
                       />
                       <FieldError message={formErrors.parent_password} />
-                      <PasswordPolicyTracker value={formData.parent_password} touched={parentPasswordTouched} />
                     </div>
                   )}
-                  {/* <div>
-                    <label className="block text-[11px] font-bold text-gray-500 dark:text-[#94a3b8] uppercase tracking-wider mb-2 ml-1">Emergency Contact Number</label>
-                    <MobileNumberInput
-                      label="Emergency Contact Number"
-                      value={formData.emergency_contact}
-                      onChange={(digits) => setFormData({ ...formData, emergency_contact: digits })}
-                      error={formErrors.emergency_contact}
-                    />
-                  </div> */}
                 </div>
               </div>
 
@@ -1651,6 +1696,43 @@ const Students: React.FC = () => {
                   className="w-full px-4 py-3 bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-[#334155] rounded-[4px] focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all outline-none h-20 resize-none text-sm font-medium shadow-sm"
                 />
               </div>
+
+              {editingId && (
+                <div className="bg-slate-50 dark:bg-[#283548]/40 p-4 rounded-xl border border-slate-200 dark:border-[#334155] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-white uppercase tracking-wider">Student & Parent Account Status</label>
+                    <p className="text-[11px] text-slate-500 dark:text-[#94a3b8] font-medium">
+                      {isAdmin ? 'Inactive blocks student and parent logins. Active allows logins.' : 'Modifying student status requires Admin privileges'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      disabled={!isAdmin}
+                      onClick={() => setFormData(prev => ({ ...prev, is_active: true }))}
+                      className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${formData.is_active
+                          ? 'bg-emerald-600 text-white shadow-md ring-2 ring-emerald-400'
+                          : 'bg-white dark:bg-[#1e293b] text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-[#334155] hover:bg-slate-100'
+                        } disabled:opacity-50 disabled:cursor-not-allowed`}
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      Active
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!isAdmin}
+                      onClick={() => setFormData(prev => ({ ...prev, is_active: false }))}
+                      className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${!formData.is_active
+                          ? 'bg-rose-600 text-white shadow-md ring-2 ring-rose-400'
+                          : 'bg-white dark:bg-[#1e293b] text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-[#334155] hover:bg-slate-100'
+                        } disabled:opacity-50 disabled:cursor-not-allowed`}
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      Inactive
+                    </button>
+                  </div>
+                </div>
+              )}
 
             </div>
 
@@ -1785,11 +1867,9 @@ const Students: React.FC = () => {
                     required
                     value={resetPasswordData.password}
                     onChange={e => setResetPasswordData({ ...resetPasswordData, password: e.target.value })}
-                    onBlur={() => setResetPasswordTouched(true)}
                     className="w-full pl-11 pr-12 py-3 bg-gray-50 dark:bg-[#283548] border border-gray-200 dark:border-[#334155] rounded-[4px] focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all outline-none text-sm font-medium"
-                    placeholder="********"
+                    placeholder="••••••••"
                   />
-                  <PasswordPolicyTracker value={resetPasswordData.password} touched={resetPasswordTouched} />
                   <button
                     type="button"
                     onClick={() => setShowResetPasswordFields(!showResetPasswordFields)}
@@ -1810,7 +1890,7 @@ const Students: React.FC = () => {
                     value={resetPasswordData.confirm_password}
                     onChange={e => setResetPasswordData({ ...resetPasswordData, confirm_password: e.target.value })}
                     className="w-full pl-11 pr-12 py-3 bg-gray-50 dark:bg-[#283548] border border-gray-200 dark:border-[#334155] rounded-[4px] focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all outline-none text-sm font-medium"
-                    placeholder="********"
+                    placeholder="••••••••"
                   />
                 </div>
                 <FieldError message={resetPasswordError} />
@@ -1864,11 +1944,9 @@ const Students: React.FC = () => {
                     required
                     value={parentResetPasswordData.password}
                     onChange={e => setParentResetPasswordData({ ...parentResetPasswordData, password: e.target.value })}
-                    onBlur={() => setParentResetPasswordTouched(true)}
                     className="w-full pl-11 pr-12 py-3 bg-gray-50 dark:bg-[#283548] border border-gray-200 dark:border-[#334155] rounded-[4px] focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all outline-none text-sm font-medium"
-                    placeholder="********"
+                    placeholder="••••••••"
                   />
-                  <PasswordPolicyTracker value={parentResetPasswordData.password} touched={parentResetPasswordTouched} />
                   <button
                     type="button"
                     onClick={() => setShowResetPasswordFields(!showResetPasswordFields)}

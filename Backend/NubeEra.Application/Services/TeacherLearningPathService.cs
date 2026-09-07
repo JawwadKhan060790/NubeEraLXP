@@ -466,9 +466,9 @@ public class TeacherLearningPathService : ITeacherLearningPathService
 
     // ── Grade-wise student list ──────────────────────────────────────────────
 
-    public async Task<TeacherGradeStudentListDto> GetGradeStudentListAsync(Guid teacherId, Guid gradeId)
+    public async Task<TeacherGradeStudentListDto> GetGradeStudentListAsync(Guid teacherId, Guid gradeId, Guid? sectionId = null)
     {
-        var grade = await _gradeRepo.GetByIdAsync(gradeId)
+        var grade = await _gradeRepo.Query().IgnoreQueryFilters().FirstOrDefaultAsync(g => g.Id == gradeId)
             ?? throw new KeyNotFoundException("Grade not found.");
 
         // Self-heal: pick up any failed exams that haven't been synced into
@@ -478,18 +478,23 @@ public class TeacherLearningPathService : ITeacherLearningPathService
         catch (Exception) { /* never block the read on a sync failure */ }
 
         var students = await _studentRepo.GetAllAsync(q =>
-            q.Where(s => s.GradeId == gradeId && s.IsActive));
+            q.IgnoreQueryFilters()
+             .Where(s => !s.IsDeleted && s.GradeId == gradeId && s.IsActive && (!sectionId.HasValue || s.SectionId == sectionId.Value))
+             .Include(s => s.Section));
 
         var studentIds = students.Select(s => s.Id).ToHashSet();
 
         // Load completions, attendance, and weak topics in parallel
         var completions   = await _completionRepo.GetAllAsync(q =>
-            q.Where(c => studentIds.Contains(c.StudentId))
+            q.IgnoreQueryFilters()
+             .Where(c => studentIds.Contains(c.StudentId))
              .Include(c => c.Lesson).ThenInclude(l => l.Module));
         var weakTopics    = await _weakTopicRepo.GetAllAsync(q =>
-            q.Where(w => studentIds.Contains(w.StudentId) && !w.IsResolved));
+            q.IgnoreQueryFilters()
+             .Where(w => studentIds.Contains(w.StudentId) && !w.IsResolved));
         var attendances   = await _attendanceRepo.GetAllAsync(q =>
-            q.Where(a => a.StudentId != null && studentIds.Contains(a.StudentId!.Value)));
+            q.IgnoreQueryFilters()
+             .Where(a => a.StudentId != null && studentIds.Contains(a.StudentId!.Value)));
 
         // Lesson totals for the grade (to compute completion %) — Units are master
         // content keyed by the grade's master GradeLevel, scoped to this grade's
@@ -503,14 +508,21 @@ public class TeacherLearningPathService : ITeacherLearningPathService
             : new List<Module>();
         int totalLessons = gradeModules.Sum(m => m.Lessons.Count);
 
-        // Period counts
+        // Period counts (scoped to section/division if sectionId is provided)
         var schedulers = await _schedulerRepo.GetAllAsync(q =>
-            q.Where(s => s.TeacherId == teacherId && s.GradeId == gradeId));
+            q.IgnoreQueryFilters()
+             .Where(s => !s.IsDeleted && s.TeacherId == teacherId && s.GradeId == gradeId && (!sectionId.HasValue || s.SectionId == sectionId.Value)));
         int totalPeriodsPlanned = schedulers.Count;
 
+        var schedulerIds = schedulers.Select(s => s.Id).ToHashSet();
+
         var periods = await _periodRepo.GetAllAsync(q =>
-            q.Where(p => p.GradeId == gradeId && p.TeacherId == teacherId));
+            q.IgnoreQueryFilters()
+             .Where(p => !p.IsDeleted && p.GradeId == gradeId && p.TeacherId == teacherId && (!sectionId.HasValue || schedulerIds.Contains(p.SchedulerId))));
         int totalPeriodsConducted = periods.Count(p => p.Status == PeriodStatus.Completed);
+
+        var sectionsMap = (await _sectionRepo.GetAllAsync(q => q.IgnoreQueryFilters().Where(sec => !sec.IsDeleted && sec.GradeId == gradeId && sec.IsActive)))
+            .ToDictionary(sec => sec.Id);
 
         // Build student rows
         var rows         = new List<TeacherStudentRowDto>();
@@ -521,6 +533,16 @@ public class TeacherLearningPathService : ITeacherLearningPathService
             var studentCompletions  = completions.Where(c => c.StudentId == s.Id).ToList();
             var studentAttendances  = attendances.Where(a => a.StudentId == s.Id).ToList();
             var studentWeakTopics   = weakTopics.Where(w => w.StudentId == s.Id).ToList();
+
+            string? secName = s.Section?.SectionName ?? s.Section?.SectionCode;
+            if (string.IsNullOrEmpty(secName) && s.SectionId.HasValue && sectionsMap.TryGetValue(s.SectionId.Value, out var matchedSec))
+            {
+                secName = matchedSec.SectionName ?? matchedSec.SectionCode;
+            }
+            if (string.IsNullOrEmpty(secName) && sectionId.HasValue && sectionsMap.TryGetValue(sectionId.Value, out var fallbackSec))
+            {
+                secName = fallbackSec.SectionName ?? fallbackSec.SectionCode;
+            }
 
             int    completedLessons = studentCompletions.Count;
             double completionPct    = totalLessons == 0 ? 0 :
@@ -568,6 +590,7 @@ public class TeacherLearningPathService : ITeacherLearningPathService
                 StudentName             = $"{s.FirstName} {s.LastName}",
                 RollNo                  = s.RollNo,
                 GradeName               = grade.GradeName,
+                SectionName             = secName,
                 AttendancePercent       = attendancePct,
                 CourseCompletionPercent = completionPct,
                 WeakTopicsCount         = studentWeakTopics.Count,
@@ -890,6 +913,20 @@ public class TeacherLearningPathService : ITeacherLearningPathService
                         });
                     }
                 }
+            }
+        }
+
+        // 4. Ultimate Fallback: Return all active grades so Admin, Staff, and Teachers can ALWAYS view curriculum progress
+        if (!result.Any())
+        {
+            var allGrades = await _gradeRepo.GetAllAsync(q => q.Where(g => g.IsActive).OrderBy(g => g.GradeLevel));
+            foreach (var g in allGrades)
+            {
+                result.Add(new TeacherGradeSectionCombination
+                {
+                    Grade = g,
+                    Section = null
+                });
             }
         }
 

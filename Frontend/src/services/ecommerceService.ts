@@ -127,13 +127,108 @@ export interface Order {
   order_items: OrderItem[];
 }
 
+export function normalizeProduct(p: any): Product {
+  if (!p) return p;
+  return {
+    ...p,
+    id: p.id || p.Id || '',
+    title: p.title ?? p.Title ?? '',
+    sku_code: p.sku_code || p.skuCode || p.SkuCode || '',
+    skuCode: p.skuCode || p.sku_code || p.SkuCode || '',
+    brand_name: p.brand_name || p.brandName || p.BrandName || '',
+    brandName: p.brandName || p.brand_name || p.BrandName || '',
+    thumbnail_url: p.thumbnail_url || p.thumbnailUrl || p.ThumbnailUrl || '',
+    thumbnailUrl: p.thumbnailUrl || p.thumbnail_url || p.ThumbnailUrl || '',
+    stock_quantity: p.stock_quantity ?? p.stockQuantity ?? p.StockQuantity ?? 0,
+    stockQuantity: p.stockQuantity ?? p.stock_quantity ?? p.StockQuantity ?? 0,
+    price: Number(p.price ?? p.Price ?? 0),
+    discount_price: p.discount_price ?? p.discountPrice ?? p.DiscountPrice ?? null,
+    discountPrice: p.discountPrice ?? p.discount_price ?? p.DiscountPrice ?? null,
+    category_id: p.category_id || p.categoryId || p.CategoryId || '',
+    categoryId: p.categoryId || p.category_id || p.CategoryId || '',
+    short_description: p.short_description || p.shortDescription || p.ShortDescription || '',
+    shortDescription: p.shortDescription || p.short_description || p.ShortDescription || '',
+    full_description: p.full_description || p.fullDescription || p.FullDescription || '',
+    fullDescription: p.fullDescription || p.full_description || p.FullDescription || '',
+    is_featured: Boolean(p.is_featured ?? p.isFeatured ?? p.IsFeatured),
+    isFeatured: Boolean(p.isFeatured ?? p.is_featured ?? p.IsFeatured),
+    is_trending: Boolean(p.is_trending ?? p.isTrending ?? p.IsTrending),
+    isTrending: Boolean(p.isTrending ?? p.is_trending ?? p.IsTrending),
+    is_new_arrival: Boolean(p.is_new_arrival ?? p.isNewArrival ?? p.IsNewArrival),
+    isNewArrival: Boolean(p.isNewArrival ?? p.is_new_arrival ?? p.IsNewArrival),
+    is_visible: p.is_visible !== undefined ? p.is_visible : (p.isVisible !== undefined ? p.isVisible : (p.IsVisible !== undefined ? p.IsVisible : true)),
+    isVisible: p.isVisible !== undefined ? p.isVisible : (p.is_visible !== undefined ? p.is_visible : (p.IsVisible !== undefined ? p.IsVisible : true)),
+    school_grade_compatibility: p.school_grade_compatibility || p.schoolGradeCompatibility || p.SchoolGradeCompatibility || '',
+    recommended_age_group: p.recommended_age_group || p.recommendedAgeGroup || p.RecommendedAgeGroup || '',
+    images_json: p.images_json || p.imagesJson || p.ImagesJson || '[]',
+    features_json: p.features_json || p.featuresJson || p.FeaturesJson || '[]',
+    specifications_json: p.specifications_json || p.specificationsJson || p.SpecificationsJson || '{}',
+    tags_json: p.tags_json || p.tagsJson || p.TagsJson || '[]',
+    category: p.category ? {
+      ...p.category,
+      id: p.category.id || p.category.Id || '',
+      name: p.category.name || p.category.Name || '',
+      is_active: p.category.is_active ?? p.category.isActive ?? p.category.IsActive ?? true
+    } : undefined
+  };
+}
+
+export function normalizeOrder(o: any): Order {
+  if (!o) return o;
+  return {
+    ...o,
+    id: o.id || o.Id || '',
+    order_number: o.order_number || o.orderNumber || o.OrderNumber || '',
+    orderNumber: o.orderNumber || o.order_number || o.OrderNumber || '',
+    student_name: o.student_name || o.studentName || o.StudentName || '',
+    studentName: o.studentName || o.student_name || o.StudentName || '',
+    parent_name: o.parent_name || o.parentName || o.ParentName || '',
+    parentName: o.parentName || o.parent_name || o.ParentName || '',
+    school_name: o.school_name || o.schoolName || o.SchoolName || '',
+    schoolName: o.schoolName || o.school_name || o.SchoolName || '',
+    shipping_address: o.shipping_address || o.shippingAddress || o.ShippingAddress || '',
+    shippingAddress: o.shippingAddress || o.shipping_address || o.ShippingAddress || '',
+    contact_number: o.contact_number || o.contactNumber || o.ContactNumber || '',
+    contactNumber: o.contactNumber || o.contact_number || o.ContactNumber || '',
+    status: o.status || o.Status || 'Order Placed',
+    subtotal: Number(o.subtotal ?? o.Subtotal ?? 0),
+    delivery_charges: Number(o.delivery_charges ?? o.deliveryCharges ?? o.DeliveryCharges ?? 0),
+    deliveryCharges: Number(o.deliveryCharges ?? o.delivery_charges ?? o.DeliveryCharges ?? 0),
+    total_amount: Number(o.total_amount ?? o.totalAmount ?? o.TotalAmount ?? 0),
+    totalAmount: Number(o.totalAmount ?? o.total_amount ?? o.TotalAmount ?? 0),
+    delivery_notes: o.delivery_notes || o.deliveryNotes || o.DeliveryNotes || '',
+    deliveryNotes: o.deliveryNotes || o.delivery_notes || o.DeliveryNotes || '',
+    created_at: o.created_at || o.createdAt || o.CreatedAt || '',
+    createdAt: o.createdAt || o.created_at || o.CreatedAt || '',
+    order_items: (o.order_items || o.orderItems || o.OrderItems || []).map((item: any) => ({
+      ...item,
+      product_id: item.product_id || item.productId || item.ProductId || '',
+      product_title: item.product_title || item.productTitle || item.ProductTitle || '',
+      product_sku: item.product_sku || item.productSku || item.ProductSku || '',
+      price: Number(item.price ?? item.Price ?? 0),
+      quantity: Number(item.quantity ?? item.Quantity ?? 1)
+    }))
+  };
+}
+
+export function normalizeCategory(c: any): ProductCategory {
+  if (!c) return c;
+  return {
+    ...c,
+    id: c.id || c.Id || '',
+    name: c.name || c.Name || '',
+    description: c.description || c.Description || '',
+    is_active: c.is_active ?? c.isActive ?? c.IsActive ?? true
+  };
+}
+
 export const ecommerceService = {
   // --- Category ---
-  getCategories: () => api.get<ProductCategory[]>('/ecommerce/categories').then(r => r.data),
-  getCategoriesAdmin: () => api.get<ProductCategory[]>('/ecommerce/categories/admin').then(r => r.data),
-  getCategory: (id: string) => api.get<ProductCategory>(`/ecommerce/categories/${id}`).then(r => r.data),
-  createCategory: (data: ProductCategory) => api.post<ProductCategory>('/ecommerce/categories', data).then(r => r.data),
-  updateCategory: (id: string, data: ProductCategory) => api.put<ProductCategory>(`/ecommerce/categories/${id}`, data).then(r => r.data),
+  getCategories: () => api.get<any[]>('/ecommerce/categories').then(r => (r.data || []).map(normalizeCategory)),
+  getCategoriesAdmin: () => api.get<any[]>('/ecommerce/categories/admin').then(r => (r.data || []).map(normalizeCategory)),
+  getCategory: (id: string) => api.get<any>(`/ecommerce/categories/${id}`).then(r => normalizeCategory(r.data)),
+  createCategory: (data: ProductCategory) => api.post<ProductCategory>('/ecommerce/categories', data).then(r => normalizeCategory(r.data)),
+  updateCategory: (id: string, data: ProductCategory) => api.put<ProductCategory>(`/ecommerce/categories/${id}`, data).then(r => normalizeCategory(r.data)),
   deleteCategory: (id: string) => api.delete<{ message: string }>(`/ecommerce/categories/${id}`).then(r => r.data),
 
   // --- Product ---
@@ -150,12 +245,12 @@ export const ecommerceService = {
     isTrending?: boolean;
     isNewArrival?: boolean;
     sortBy?: string;
-  }) => api.get<Product[]>('/ecommerce/products', { params }).then(r => r.data),
-  getProductsAdmin: () => api.get<Product[]>('/ecommerce/products/admin').then(r => r.data),
-  getProduct: (id: string) => api.get<Product>(`/ecommerce/products/${id}`).then(r => r.data),
-  getRelatedProducts: (id: string) => api.get<Product[]>(`/ecommerce/products/${id}/related`).then(r => r.data),
-  createProduct: (data: any) => api.post<Product>('/ecommerce/products', data).then(r => r.data),
-  updateProduct: (id: string, data: any) => api.put<Product>(`/ecommerce/products/${id}`, data).then(r => r.data),
+  }) => api.get<any[]>('/ecommerce/products', { params }).then(r => (r.data || []).map(normalizeProduct)),
+  getProductsAdmin: () => api.get<any[]>('/ecommerce/products/admin').then(r => (r.data || []).map(normalizeProduct)),
+  getProduct: (id: string) => api.get<any>(`/ecommerce/products/${id}`).then(r => normalizeProduct(r.data)),
+  getRelatedProducts: (id: string) => api.get<any[]>(`/ecommerce/products/${id}/related`).then(r => (r.data || []).map(normalizeProduct)),
+  createProduct: (data: any) => api.post<Product>('/ecommerce/products', data).then(r => normalizeProduct(r.data)),
+  updateProduct: (id: string, data: any) => api.put<Product>(`/ecommerce/products/${id}`, data).then(r => normalizeProduct(r.data)),
   deleteProduct: (id: string) => api.delete<{ message: string }>(`/ecommerce/products/${id}`).then(r => r.data),
 
   // --- Cart ---
@@ -203,12 +298,12 @@ export const ecommerceService = {
     orderId: r.data.order_id || r.data.orderId,
     orderNumber: r.data.order_number || r.data.orderNumber
   })),
-  getMyOrders: () => api.get<any[]>('/ecommerce/orders/my-orders').then(r => r.data),
-  getOrder: (id: string) => api.get<Order>(`/ecommerce/orders/${id}`).then(r => r.data),
+  getMyOrders: () => api.get<any[]>('/ecommerce/orders/my-orders').then(r => (r.data || []).map(normalizeOrder)),
+  getOrder: (id: string) => api.get<any>(`/ecommerce/orders/${id}`).then(r => normalizeOrder(r.data)),
   getOrderTracking: (id: string) => api.get<any>(`/ecommerce/orders/${id}/tracking`).then(r => r.data),
   reorder: (id: string) => api.post<{ message: string }>(`/ecommerce/orders/${id}/reorder`).then(r => r.data),
   getAdminOrders: (params?: { search?: string; schoolId?: string; status?: string; date?: string }) => 
-    api.get<any[]>('/ecommerce/orders/admin', { params }).then(r => r.data),
+    api.get<any[]>('/ecommerce/orders/admin', { params }).then(r => (r.data || []).map(normalizeOrder)),
   updateOrderStatus: (id: string, data: { status: string; deliveryNotes?: string; estimatedDeliveryDate?: string }) => 
     api.put<{ message: string; status: string }>(`/ecommerce/orders/${id}/status`, {
       status: data.status,
@@ -218,5 +313,37 @@ export const ecommerceService = {
   getInvoice: (id: string) => api.get<any>(`/ecommerce/orders/${id}/invoice`).then(r => r.data),
 
   // --- Dashboard ---
-  getDashboardStats: () => api.get<any>('/ecommerce/dashboard/stats').then(r => r.data)
+  getDashboardStats: () => api.get<any>('/ecommerce/dashboard/stats').then(r => {
+    const d = r.data || {};
+    return {
+      totalOrders: d.totalOrders ?? d.total_orders ?? 0,
+      pendingOrders: d.pendingOrders ?? d.pending_orders ?? 0,
+      deliveredOrders: d.deliveredOrders ?? d.delivered_orders ?? 0,
+      cancelledOrders: d.cancelledOrders ?? d.cancelled_orders ?? 0,
+      totalProducts: d.totalProducts ?? d.total_products ?? 0,
+      lowStockProducts: d.lowStockProducts ?? d.low_stock_products ?? 0,
+      topProducts: (d.topProducts || d.top_products || []).map((tp: any) => ({
+        ...tp,
+        productId: tp.productId || tp.product_id || '',
+        title: tp.title ?? '',
+        quantitySold: tp.quantitySold ?? tp.quantity_sold ?? 0,
+        revenue: tp.revenue ?? 0
+      })),
+      ordersBySchool: (d.ordersBySchool || d.orders_by_school || []).map((os: any) => ({
+        ...os,
+        schoolName: os.schoolName || os.school_name || 'General / Direct',
+        count: os.count ?? 0,
+        revenue: os.revenue ?? 0
+      })),
+      monthlyTrends: (d.monthlyTrends || d.monthly_trends || []).map((mt: any) => ({
+        ...mt,
+        monthName: mt.monthName || mt.month_name || '',
+        year: mt.year ?? 0,
+        month: mt.month ?? 0,
+        count: mt.count ?? 0,
+        revenue: mt.revenue ?? 0
+      })),
+      lowStockList: (d.lowStockList || d.low_stock_list || []).map(normalizeProduct)
+    };
+  })
 };

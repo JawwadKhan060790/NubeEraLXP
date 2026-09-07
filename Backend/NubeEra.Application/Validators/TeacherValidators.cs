@@ -28,6 +28,10 @@ public class TeacherCreateValidator : AbstractValidator<TeacherCreateDto>
             .EmailAddress().WithMessage("A valid email is required.")
             .MaximumLength(256);
 
+        RuleFor(x => x.Username)
+            .MaximumLength(100).WithMessage("Teacher username must not exceed 100 characters.")
+            .When(x => !string.IsNullOrWhiteSpace(x.Username));
+
         RuleFor(x => x.Phone)
             .MaximumLength(20).When(x => x.Phone is not null);
 
@@ -68,6 +72,10 @@ public class TeacherUpdateValidator : AbstractValidator<TeacherUpdateDto>
             .NotEmpty().WithMessage("Email is required.")
             .EmailAddress().WithMessage("A valid email is required.")
             .MaximumLength(256);
+
+        RuleFor(x => x.Username)
+            .MaximumLength(100).WithMessage("Teacher username must not exceed 100 characters.")
+            .When(x => !string.IsNullOrWhiteSpace(x.Username));
 
         RuleFor(x => x.Phone)
             .MaximumLength(20).When(x => x.Phone is not null);

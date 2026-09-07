@@ -17,9 +17,11 @@ public class StudentDashboardDto
     
     // Counters
     public int TotalModules { get; set; }
+    public int TotalLessons { get; set; }
     public int CompletedLessons { get; set; }
     public int PendingLessons { get; set; }
     public double SyllabusCompletionPercentage { get; set; }
+    public double AttendanceRate { get; set; }
     public int TotalExams { get; set; }
     public double AverageExamScore { get; set; }
     

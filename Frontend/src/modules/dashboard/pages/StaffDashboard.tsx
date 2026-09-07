@@ -210,13 +210,12 @@ const StaffDashboard: React.FC = () => {
         </div>
 
         <div className="p-6">
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
             {[
               { label: 'Add Grade',     href: '/staff/grades/create/',         icon: GraduationCap, color: 'from-violet-500 to-violet-600', ring: 'hover:ring-violet-200', type: 'Academic',     description: 'Create a new academic grade' },
               { label: 'Add Unit',      href: '/staff/modules/create/',        icon: BookOpen,      color: 'from-blue-500 to-blue-600',     ring: 'hover:ring-blue-200',   type: 'Academic',     description: 'Add a new academic unit' },
               { label: 'Add Topic',     href: '/staff/lessons/create/',        icon: BookText,      color: 'from-emerald-500 to-emerald-600',ring: 'hover:ring-emerald-200',type: 'Academic',     description: 'Create lesson topics' },
-              { label: 'Add MCQ',       href: '/staff/exam/create/',           icon: HelpCircle,    color: 'from-amber-500 to-amber-600',   ring: 'hover:ring-amber-200',  type: 'Academic',     description: 'Set up an MCQ exam' },
-              { label: 'Add Questions', href: '/staff/modulequestion/create/', icon: HelpCircle,    color: 'from-rose-500 to-rose-600',     ring: 'hover:ring-rose-200',   type: 'Academic',     description: 'Add exam questions' },
+              { label: 'Add Test',      href: '/staff/exams?action=create',    icon: FileText,      color: 'from-amber-500 to-amber-600',   ring: 'hover:ring-amber-200',  type: 'Academic',     description: 'Create multiple-choice test' },
               { label: 'Add School',    href: '/staff/schools/create/',        icon: School,        color: 'from-teal-500 to-teal-600',     ring: 'hover:ring-teal-200',   type: 'Institution',  description: 'Register a new campus' },
             ].filter(a => actionFilter === 'All' || a.type === actionFilter)
              .map((action, i) => {

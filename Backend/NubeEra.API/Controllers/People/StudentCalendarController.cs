@@ -83,8 +83,9 @@ public class StudentCalendarController : ControllerBase
 
         if (role.Equals("Student", StringComparison.OrdinalIgnoreCase))
         {
-            var student = await _studentRepo.GetByIdAsync(studentId);
-            return student != null && student.UserId == userGuid;
+            var student = await _studentRepo.GetByIdAsync(studentId)
+                ?? (await _studentRepo.GetAllAsync(q => q.Where(s => s.UserId == studentId))).FirstOrDefault();
+            return student != null && (student.UserId == userGuid || student.Id == userGuid);
         }
 
         if (role.Equals("Parent", StringComparison.OrdinalIgnoreCase))

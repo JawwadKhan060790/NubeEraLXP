@@ -30,6 +30,7 @@ import { isValidEmail } from '@/utils/validation';
 interface UserData {
   id: string;
   email: string;
+  username?: string;
   full_name: string;
   first_name: string;
   last_name: string;
@@ -80,6 +81,7 @@ const Users: React.FC = () => {
   const [resetPasswordError, setResetPasswordError] = useState('');
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [originalEmail, setOriginalEmail] = useState('');
+  const [originalUsername, setOriginalUsername] = useState('');
 
   const clearFieldError = (field: string) =>
     setFormErrors(prev => {
@@ -97,6 +99,14 @@ const Users: React.FC = () => {
     }
   };
 
+  const checkUsernameDuplicate = async (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed || trimmed === originalUsername) return;
+    if (await isDuplicateValue('username', trimmed)) {
+      setFormErrors(prev => ({ ...prev, username: DUPLICATE_MESSAGES.username }));
+    }
+  };
+
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(12); // Multiples of 3/4 for cards
@@ -105,6 +115,7 @@ const Users: React.FC = () => {
     first_name: '',
     last_name: '',
     email: '',
+    username: '',
     password: '',
     confirm_password: '',
     role: 'Teacher',
@@ -199,12 +210,13 @@ const Users: React.FC = () => {
       setFormErrors(prev => ({ ...prev, confirm_password: 'Passwords do not match.' }));
       return;
     }
-    if (formErrors.email) return;
+    if (formErrors.email || formErrors.username) return;
     try {
       if (editingId) {
         await api.put(`/users/${editingId}`, {
           first_name: formData.first_name,
           last_name: formData.last_name,
+          username: formData.username || null,
           role: formData.role,
           school_id: formData.school_id || null,
           is_active: formData.is_active
@@ -215,6 +227,7 @@ const Users: React.FC = () => {
           first_name: formData.first_name,
           last_name: formData.last_name,
           email: formData.email,
+          username: formData.username || null,
           password: formData.password,
           role: formData.role,
           school_id: formData.school_id || null
@@ -226,7 +239,9 @@ const Users: React.FC = () => {
       fetchUsers();
     } catch (error: any) {
       const msg = error?.response?.data?.message || 'Failed to save user';
-      if (/email/i.test(msg)) {
+      if (/username/i.test(msg)) {
+        setFormErrors(prev => ({ ...prev, username: msg }));
+      } else if (/email/i.test(msg)) {
         setFormErrors(prev => ({ ...prev, email: msg }));
       } else {
         toast.error(msg);
@@ -273,6 +288,7 @@ const Users: React.FC = () => {
       first_name: '',
       last_name: '',
       email: '',
+      username: '',
       password: '',
       confirm_password: '',
       role: filterRole || 'Teacher',
@@ -281,6 +297,7 @@ const Users: React.FC = () => {
     });
     setFormErrors({});
     setOriginalEmail('');
+    setOriginalUsername('');
   };
 
   const filteredUsers = users.filter(u => {
@@ -288,7 +305,8 @@ const Users: React.FC = () => {
     const matchesSchool = !filterSchoolId || (u.school_id && String(u.school_id).toLowerCase() === String(filterSchoolId).toLowerCase());
     const matchesRole = !filterRole || u.role.toLowerCase() === filterRole.toLowerCase() || u.utype?.toLowerCase() === filterRole.toLowerCase();
     const matchesSearch = u.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         u.email?.toLowerCase().includes(searchTerm.toLowerCase());
+                         u.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         u.username?.toLowerCase().includes(searchTerm.toLowerCase());
     return matchesSchool && matchesRole && matchesSearch && !isSelf;
   });
 
@@ -423,16 +441,26 @@ const Users: React.FC = () => {
                     <td className="px-4 py-3 whitespace-nowrap">
                       <div className="flex flex-col">
                         <span className="text-sm font-semibold text-slate-800 ">{u.full_name || (u.first_name + ' ' + u.last_name)}</span>
-                        <span className="text-[10px] text-slate-400  font-bold">{u.email}</span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] text-slate-400 font-bold">{u.email}</span>
+                          {u.username && (
+                            <span className="text-[10px] text-indigo-600 font-mono font-semibold">@{u.username}</span>
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <span className="text-xs text-slate-600  font-medium">{u.school_name || '-'}</span>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-0.5 rounded-[4px] text-[9px] font-bold uppercase tracking-wider ${getRoleBadgeClass(u.role)}`}>
-                        {u.role}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className={`inline-flex px-2 py-0.5 rounded-[4px] text-[9px] font-bold uppercase tracking-wider ${getRoleBadgeClass(u.role)}`}>
+                          {u.role}
+                        </span>
+                        <span className={`inline-flex px-2 py-0.5 rounded-[4px] text-[9px] font-bold uppercase tracking-wider ${u.is_active ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-rose-50 text-rose-600 border border-rose-100'}`}>
+                          {u.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                      </div>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-right">
                       <div className="data-table-actions justify-end">
@@ -443,6 +471,7 @@ const Users: React.FC = () => {
                               first_name: u.first_name,
                               last_name: u.last_name,
                               email: u.email,
+                              username: u.username || '',
                               password: '',
                               confirm_password: '',
                               role: u.role,
@@ -451,6 +480,7 @@ const Users: React.FC = () => {
                             });
                             setFormErrors({});
                             setOriginalEmail(u.email || '');
+                            setOriginalUsername(u.username || '');
                             setShowModal(true);
                           }}
                           className="action-btn action-btn-edit"
@@ -465,22 +495,24 @@ const Users: React.FC = () => {
                         >
                           <Key className="w-3.5 h-3.5" />
                         </button>
-                        {u.is_active ? (
-                          <button
-                            onClick={() => handleDelete(u)}
-                            className="action-btn action-btn-delete"
-                            title="Deactivate User"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => handleRestore(u)}
-                            className="action-btn action-btn-edit"
-                            title="Restore User"
-                          >
-                            <RotateCcw className="w-3.5 h-3.5" />
-                          </button>
+                        {(currentUser?.utype === 'admin' || currentUser?.utype === 'superadmin') && (
+                          u.is_active ? (
+                            <button
+                              onClick={() => handleDelete(u)}
+                              className="action-btn action-btn-delete"
+                              title="Deactivate User"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleRestore(u)}
+                              className="action-btn action-btn-edit text-emerald-600 hover:text-emerald-700"
+                              title="Restore User"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5" />
+                            </button>
+                          )
                         )}
                       </div>
                     </td>
@@ -516,9 +548,14 @@ const Users: React.FC = () => {
                       <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-black shadow-sm shrink-0">
                         {initials}
                       </div>
-                      <span className={`px-2 py-0.5 rounded-[4px] text-[9px] font-black uppercase tracking-wider ${getRoleBadgeClass(u.role)}`}>
-                        {u.role}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`px-2 py-0.5 rounded-[4px] text-[9px] font-black uppercase tracking-wider ${getRoleBadgeClass(u.role)}`}>
+                          {u.role}
+                        </span>
+                        <span className={`px-2 py-0.5 rounded-[4px] text-[9px] font-black uppercase tracking-wider ${u.is_active ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-rose-50 text-rose-600 border border-rose-100'}`}>
+                          {u.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                      </div>
                     </div>
 
                     {/* Body: Full name, Email & School details */}
@@ -531,6 +568,12 @@ const Users: React.FC = () => {
                         <Mail className="w-3.5 h-3.5 shrink-0 text-slate-400" />
                         <span>{u.email}</span>
                       </div>
+
+                      {u.username && (
+                        <div className="text-[10px] text-indigo-600 font-mono font-semibold truncate">
+                          @{u.username}
+                        </div>
+                      )}
 
                       <div className="flex items-center gap-1.5 text-[10px] text-slate-500  font-bold truncate pt-2.5 border-t border-slate-100  mt-1">
                         <School className="w-3.5 h-3.5 shrink-0 text-slate-400" />
@@ -548,6 +591,7 @@ const Users: React.FC = () => {
                           first_name: u.first_name,
                           last_name: u.last_name,
                           email: u.email,
+                          username: u.username || '',
                           password: '',
                           confirm_password: '',
                           role: u.role,
@@ -556,6 +600,7 @@ const Users: React.FC = () => {
                         });
                         setFormErrors({});
                         setOriginalEmail(u.email || '');
+                        setOriginalUsername(u.username || '');
                         setShowModal(true);
                       }}
                       className="action-btn action-btn-edit"
@@ -570,22 +615,24 @@ const Users: React.FC = () => {
                     >
                       <Key className="w-3.5 h-3.5" />
                     </button>
-                    {u.is_active ? (
-                      <button
-                        onClick={() => handleDelete(u)}
-                        className="action-btn action-btn-delete"
-                        title="Deactivate User"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => handleRestore(u)}
-                        className="action-btn action-btn-edit"
-                        title="Restore User"
-                      >
-                        <RotateCcw className="w-3.5 h-3.5" />
-                      </button>
+                    {(currentUser?.utype === 'admin' || currentUser?.utype === 'superadmin') && (
+                      u.is_active ? (
+                        <button
+                          onClick={() => handleDelete(u)}
+                          className="action-btn action-btn-delete"
+                          title="Deactivate User"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleRestore(u)}
+                          className="action-btn action-btn-edit text-emerald-600 hover:text-emerald-700"
+                          title="Restore User"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                        </button>
+                      )
                     )}
                   </div>
                 </div>
@@ -643,21 +690,35 @@ const Users: React.FC = () => {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400  uppercase tracking-wider mb-2 ml-1">Email Address</label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="email"
-                    required
-                    disabled={!!editingId}
-                    value={formData.email}
-                    onChange={e => { setFormData({ ...formData, email: e.target.value }); clearFieldError('email'); }}
-                    onBlur={e => checkEmailDuplicate(e.target.value)}
-                    className={`w-full pl-11 pr-4 py-2.5 bg-white border rounded-md focus:ring-2 transition-all outline-none font-medium text-sm text-slate-800 disabled:bg-slate-50 disabled:text-slate-450 shadow-sm ${formErrors.email ? 'border-rose-300 focus:ring-rose-500/20 focus:border-rose-400' : 'border-slate-200 focus:ring-primary/20 focus:border-primary'}`}
-                  />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">Email Address</label>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="email"
+                      required
+                      disabled={!!editingId}
+                      value={formData.email}
+                      onChange={e => { setFormData({ ...formData, email: e.target.value }); clearFieldError('email'); }}
+                      onBlur={e => checkEmailDuplicate(e.target.value)}
+                      className={`w-full pl-11 pr-4 py-2.5 bg-white border rounded-md focus:ring-2 transition-all outline-none font-medium text-sm text-slate-800 disabled:bg-slate-50 disabled:text-slate-450 shadow-sm ${formErrors.email ? 'border-rose-300 focus:ring-rose-500/20 focus:border-rose-400' : 'border-slate-200 focus:ring-primary/20 focus:border-primary'}`}
+                    />
+                  </div>
+                  <FieldError message={formErrors.email} />
                 </div>
-                <FieldError message={formErrors.email} />
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">Username <span className="text-slate-400 font-normal normal-case">(optional)</span></label>
+                  <input
+                    type="text"
+                    value={formData.username}
+                    onChange={e => { setFormData({ ...formData, username: e.target.value.toLowerCase().replace(/\s+/g, '') }); clearFieldError('username'); }}
+                    onBlur={e => checkUsernameDuplicate(e.target.value)}
+                    placeholder="e.g. john.doe"
+                    className={`w-full px-4 py-2.5 bg-white border rounded-md focus:ring-2 transition-all outline-none font-medium text-sm text-slate-800 shadow-sm ${formErrors.username ? 'border-rose-300 focus:ring-rose-500/20 focus:border-rose-400' : 'border-slate-200 focus:ring-primary/20 focus:border-primary'}`}
+                  />
+                  <FieldError message={formErrors.username} />
+                </div>
               </div>
 
               {!editingId && (
@@ -773,6 +834,32 @@ const Users: React.FC = () => {
                       </select>
                       <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                     </div>
+                  </div>
+                )}
+
+                {editingId && (
+                  <div className="sm:col-span-2 bg-slate-50 p-3 rounded-lg border border-slate-200 flex items-center justify-between">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">Account Status</label>
+                      <p className="text-[11px] text-slate-500 font-medium">
+                        {(currentUser?.utype === 'admin' || currentUser?.utype === 'superadmin')
+                          ? 'Set whether this user account is Active or Inactive'
+                          : 'Modifying account status requires Admin privileges'}
+                      </p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.is_active}
+                        disabled={currentUser?.utype !== 'admin' && currentUser?.utype !== 'superadmin'}
+                        onChange={e => setFormData({ ...formData, is_active: e.target.checked })}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600 disabled:opacity-50"></div>
+                      <span className={`ml-2 text-xs font-bold ${formData.is_active ? 'text-emerald-600' : 'text-rose-600'}`}>
+                        {formData.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                    </label>
                   </div>
                 )}
               </div>

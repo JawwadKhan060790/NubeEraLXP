@@ -538,9 +538,9 @@ public class OrderService : IOrderService
 
         return new
         {
-            companyName = "NUBEERA Tech STEM Marketplace",
+            companyName = "VERITON Tech STEM Marketplace",
             companyAddress = "STEM Learning Innovation Center, Tech Park",
-            companyContact = "support@nubeera.tech",
+            companyContact = "support@veriton.tech",
             invoiceNumber = !string.IsNullOrEmpty(order.OrderNumber)
                 ? order.OrderNumber.Replace("ORD-", "INV-")
                 : $"INV-{order.Id.ToString().Substring(0, 8).ToUpper()}",

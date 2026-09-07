@@ -7,7 +7,7 @@
 
 export const APP_CONFIG = {
   /** Application name shown in the browser tab and headers. */
-  APP_NAME: "NubeEra LXP",
+  APP_NAME: "NubeEra Tech",
 
   /** Short tagline used on the login page. */
   APP_TAGLINE: "Learning Management System",

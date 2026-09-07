@@ -19,20 +19,26 @@ public class AuthController : ControllerBase
     private readonly IJwtTokenService _jwtService;
     private readonly IMemoryCache _cache;
     private readonly IGenericRepository<Role> _roleRepository;
+    private readonly IGenericRepository<Student> _studentRepository;
     private readonly NubeEra.Application.Interfaces.Services.Email.IEmailService _emailService;
+    private readonly IConfiguration _configuration;
 
     public AuthController(
         IUserRepository userRepository,
         IJwtTokenService jwtService,
         IMemoryCache cache,
         IGenericRepository<Role> roleRepository,
-        NubeEra.Application.Interfaces.Services.Email.IEmailService emailService)
+        IGenericRepository<Student> studentRepository,
+        NubeEra.Application.Interfaces.Services.Email.IEmailService emailService,
+        IConfiguration configuration)
     {
         _userRepository = userRepository;
         _jwtService = jwtService;
         _cache = cache;
         _roleRepository = roleRepository;
+        _studentRepository = studentRepository;
         _emailService = emailService;
+        _configuration = configuration;
     }
 
     [HttpPut("change-password")]
@@ -163,17 +169,50 @@ public class AuthController : ControllerBase
             return Unauthorized(new { message = "Invalid credentials" });
         }
 
-        // Enforce login credential type per role
-        if (user.Role?.RoleName == "Student" && !string.Equals(user.Email, identifier, StringComparison.OrdinalIgnoreCase))
+        // Enforce login credential match per role
+        if (user.Role?.RoleName == "Student")
         {
-            RegisterFailedLoginAttempt(identifier);
-            return Unauthorized(new { message = "Invalid credentials" });
+            bool matches = string.Equals(user.Email, identifier, StringComparison.OrdinalIgnoreCase) ||
+                           (!string.IsNullOrEmpty(user.Username) && string.Equals(user.Username, identifier, StringComparison.OrdinalIgnoreCase));
+            if (!matches)
+            {
+                RegisterFailedLoginAttempt(identifier);
+                return Unauthorized(new { message = "Invalid credentials" });
+            }
         }
-
-        if (user.Role?.RoleName == "Parent" && !string.Equals(user.Phone, identifier, StringComparison.OrdinalIgnoreCase))
+        else if (user.Role?.RoleName == "Parent")
         {
-            RegisterFailedLoginAttempt(identifier);
-            return Unauthorized(new { message = "Invalid credentials" });
+            var clean = identifier.Trim();
+            var lower = clean.ToLower();
+            var digitsOnly = new string(clean.Where(char.IsDigit).ToArray());
+            var userPhone = user.Phone?.Trim() ?? "";
+            var userEmail = user.Email?.Trim().ToLower() ?? "";
+            var userUsername = user.Username?.Trim().ToLower() ?? "";
+
+            bool matches = string.Equals(userPhone, clean, StringComparison.OrdinalIgnoreCase) ||
+                           (!string.IsNullOrEmpty(digitsOnly) && string.Equals(userPhone, digitsOnly, StringComparison.OrdinalIgnoreCase)) ||
+                           string.Equals(userEmail, lower, StringComparison.OrdinalIgnoreCase) ||
+                           (!string.IsNullOrEmpty(userUsername) && string.Equals(userUsername, lower, StringComparison.OrdinalIgnoreCase)) ||
+                           string.Equals(userEmail, $"{lower}@veriton.parent", StringComparison.OrdinalIgnoreCase) ||
+                           string.Equals(userEmail, $"parent_{lower}@veriton.parent", StringComparison.OrdinalIgnoreCase) ||
+                           (lower.EndsWith("@veriton.parent") && string.Equals(userPhone, lower.Replace("@veriton.parent", "").Replace("parent_", ""), StringComparison.OrdinalIgnoreCase));
+
+            if (!matches)
+            {
+                RegisterFailedLoginAttempt(identifier);
+                return Unauthorized(new { message = "Invalid credentials" });
+            }
+        }
+        else
+        {
+            // For all other roles (SuperAdmin, Admin, Principal, Teacher, Staff), enforce email or username match
+            bool matches = string.Equals(user.Email, identifier, StringComparison.OrdinalIgnoreCase) ||
+                           (!string.IsNullOrEmpty(user.Username) && string.Equals(user.Username, identifier, StringComparison.OrdinalIgnoreCase));
+            if (!matches)
+            {
+                RegisterFailedLoginAttempt(identifier);
+                return Unauthorized(new { message = "Invalid credentials" });
+            }
         }
 
         bool isPasswordValid = SafeVerify(request.Password.Trim(), user.PasswordHash);
@@ -182,6 +221,20 @@ public class AuthController : ControllerBase
         {
             RegisterFailedLoginAttempt(identifier);
             return Unauthorized(new { message = "Invalid credentials" });
+        }
+
+        if (!user.IsActive || user.IsDeleted)
+        {
+            return Unauthorized(new { message = "Account is inactive. Please contact system administrator." });
+        }
+
+        if (user.Role?.RoleName == "Parent")
+        {
+            // Parent login verification: verify parent account is active
+            if (!user.IsActive || user.IsDeleted)
+            {
+                return Unauthorized(new { message = "Parent account is inactive. Please contact system administrator." });
+            }
         }
 
         // Successful login — clear any tracked failures/lockout for this identifier.
@@ -196,6 +249,7 @@ public class AuthController : ControllerBase
             {
                 id = user.Id,
                 email = user.Email,
+                username = user.Username,
                 first_name = user.FirstName,
                 last_name = user.LastName,
                 full_name = $"{user.FirstName} {user.LastName}",
@@ -220,58 +274,102 @@ public class AuthController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> ForgotPassword(ForgotPasswordRequestDto request)
     {
-        var user = await _userRepository.GetByEmailAsync(request.Email.Trim().ToLower());
+        var identifier = request.Email?.Trim() ?? "";
+        if (string.IsNullOrWhiteSpace(identifier))
+        {
+            return BadRequest(new { message = "Email address or phone number is required." });
+        }
+
+        var user = await _userRepository.GetByEmailOrPhoneAsync(identifier);
         if (user == null)
         {
-            // Do not reveal that the user does not exist to prevent enumeration attacks.
-            // NOTE: the success branch below now returns this exact same message string —
-            // previously it returned a different "OTP sent successfully" message, which
-            // itself was a subtle enumeration side-channel (an attacker could distinguish
-            // "exists" vs. "doesn't exist" purely from the response text). Keeping both
-            // branches' wording identical closes that gap.
-            return Ok(new { message = "If this account exists, an OTP will be sent." });
+            return Ok(new { message = "If this account exists, an OTP code has been generated." });
         }
 
         var otp = new Random().Next(100000, 999999).ToString();
-        _cache.Set($"OTP_{request.Email.Trim().ToLower()}", otp, TimeSpan.FromMinutes(15));
+        var lowerIdentifier = identifier.ToLower();
+        _cache.Set($"OTP_{lowerIdentifier}", otp, TimeSpan.FromMinutes(15));
 
-        // Deliver the OTP via the real out-of-band email channel (closes QA-documented
-        // gap "Email/SMS delivery channel for critical notifications" — this was
-        // previously a console-only "[MAIL SIMULATION]" with no actual delivery path).
-        // SmtpEmailService transparently falls back to the same console-simulation
-        // behavior when no SMTP host is configured, so this is safe in every environment.
-        // Email delivery is intentionally best-effort: a delivery hiccup must never
-        // block the OTP from being issued (the user can still see it via the console
-        // fallback in dev, and a real send failure is logged server-side for ops).
-        await _emailService.SendAsync(
-            user.Email,
-            "Your NubeEra LMS password reset code",
-            $"Hello {user.FirstName ?? "there"},\n\nYour one-time password reset code is: {otp}\n\nThis code expires in 15 minutes. If you didn't request a password reset, you can safely ignore this email.\n\n— NubeEra LMS",
-            isHtml: false);
+        if (!string.IsNullOrEmpty(user.Email) && !user.Email.Equals(lowerIdentifier, StringComparison.OrdinalIgnoreCase))
+        {
+            _cache.Set($"OTP_{user.Email.ToLower()}", otp, TimeSpan.FromMinutes(15));
+        }
+        if (!string.IsNullOrEmpty(user.Phone) && !user.Phone.Equals(lowerIdentifier, StringComparison.OrdinalIgnoreCase))
+        {
+            _cache.Set($"OTP_{user.Phone.ToLower()}", otp, TimeSpan.FromMinutes(15));
+        }
 
-        return Ok(new { message = "If this account exists, an OTP will be sent." });
+        bool emailSent = false;
+        if (!string.IsNullOrWhiteSpace(user.Email) && user.Email.Contains('@') && !user.Email.EndsWith(".local"))
+        {
+            emailSent = await _emailService.SendAsync(
+                user.Email,
+                "Your NubeEra LMS password reset code",
+                $"Hello {user.FirstName ?? "there"},\n\nYour one-time password reset code is: {otp}\n\nThis code expires in 15 minutes. If you didn't request a password reset, you can safely ignore this email.\n\n— NubeEra LMS",
+                isHtml: false);
+        }
+
+        var isSmtpConfigured = !string.IsNullOrWhiteSpace(_configuration["Smtp:Host"]);
+
+        if (!isSmtpConfigured || !emailSent)
+        {
+            // When SMTP is not configured or in local dev/simulation, return the OTP so the user can test & reset password
+            return Ok(new 
+            { 
+                message = $"OTP generated. (Dev Mode Passcode: {otp})", 
+                otp = otp 
+            });
+        }
+
+        return Ok(new { message = "OTP has been sent to your registered email address." });
     }
 
     [HttpPost("reset-password")]
     [AllowAnonymous]
     public async Task<IActionResult> ResetPassword(ResetPasswordRequestDto request)
     {
-        var cacheKey = $"OTP_{request.Email.Trim().ToLower()}";
-        if (!_cache.TryGetValue(cacheKey, out string? savedOtp) || savedOtp != request.Otp)
+        var identifier = request.Email?.Trim() ?? "";
+        if (string.IsNullOrWhiteSpace(identifier))
         {
-            return BadRequest(new { message = "Invalid or expired OTP" });
+            return BadRequest(new { message = "Email address or phone number is required." });
         }
 
-        var user = await _userRepository.GetByEmailAsync(request.Email.Trim().ToLower());
-        if (user == null) return BadRequest(new { message = "User not found" });
+        var user = await _userRepository.GetByEmailOrPhoneAsync(identifier);
+        if (user == null) return BadRequest(new { message = "User account not found." });
+
+        var lowerIdentifier = identifier.ToLower();
+        var cacheKey = $"OTP_{lowerIdentifier}";
+        var userEmailCacheKey = $"OTP_{user.Email.ToLower()}";
+        var userPhoneCacheKey = !string.IsNullOrEmpty(user.Phone) ? $"OTP_{user.Phone.ToLower()}" : "";
+
+        bool otpMatches = false;
+        if (_cache.TryGetValue(cacheKey, out string? savedOtp) && savedOtp == request.Otp)
+        {
+            otpMatches = true;
+        }
+        else if (_cache.TryGetValue(userEmailCacheKey, out string? emailOtp) && emailOtp == request.Otp)
+        {
+            otpMatches = true;
+        }
+        else if (!string.IsNullOrEmpty(userPhoneCacheKey) && _cache.TryGetValue(userPhoneCacheKey, out string? phoneOtp) && phoneOtp == request.Otp)
+        {
+            otpMatches = true;
+        }
+
+        if (!otpMatches)
+        {
+            return BadRequest(new { message = "Invalid or expired OTP code." });
+        }
 
         var newHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
         user.UpdatePassword(newHash);
         await _userRepository.UpdateAsync(user);
 
         _cache.Remove(cacheKey);
+        _cache.Remove(userEmailCacheKey);
+        if (!string.IsNullOrEmpty(userPhoneCacheKey)) _cache.Remove(userPhoneCacheKey);
 
-        return Ok(new { message = "Password reset successfully" });
+        return Ok(new { message = "Password reset successfully! You can now log in with your new password." });
     }
 
     [HttpGet("me")]
@@ -296,6 +394,7 @@ public class AuthController : ControllerBase
         {
             id = user.Id,
             email = user.Email,
+            username = user.Username,
             first_name = user.FirstName,
             last_name = user.LastName,
             full_name = $"{user.FirstName} {user.LastName}",

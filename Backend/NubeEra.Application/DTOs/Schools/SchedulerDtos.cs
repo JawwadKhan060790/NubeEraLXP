@@ -49,4 +49,10 @@ public class SchedulerDto
     public TimeSpan  StartTime    { get; set; }
     public TimeSpan  EndTime      { get; set; }
     public bool IsActive { get; set; }
+
+    // Real-time period status & completion fields
+    public string Status { get; set; } = "NotStarted";
+    public DateTime? ActualStartTime { get; set; }
+    public DateTime? ActualEndTime { get; set; }
+    public string? Remarks { get; set; }
 }

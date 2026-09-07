@@ -103,7 +103,9 @@ const StudentAttendancePage: React.FC = () => {
   const fetchStudentsAttendance = async () => {
     try {
       setLoading(true);
-      const response = await api.get(`/attendance/students?gradeId=${selectedGradeId}&date=${selectedDate}`);
+      const response = await api.get(`/attendance/students?gradeId=${selectedGradeId}&date=${selectedDate}`, {
+        headers: selectedSchoolId ? { 'X-School-Id': selectedSchoolId } : {}
+      });
       const rawStudents = Array.isArray(response.data) ? response.data : (response.data.value || []);
       setStudents(rawStudents.map((s: any) => ({
         id: s.id || s.Id || '00000000-0000-0000-0000-000000000000',
@@ -152,8 +154,11 @@ const StudentAttendancePage: React.FC = () => {
         date: selectedDate,
         status: s.status,
         remarks: s.remarks,
+        studentId: s.studentId,
         student_id: s.studentId,
+        studentName: s.studentName,
         student_name: s.studentName,
+        teacherId: null,
         teacher_id: null
       }));
 

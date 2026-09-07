@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  AlertCircle, Calendar as CalendarIcon, Check, ClipboardList, Save,
+  AlertCircle, Calendar as CalendarIcon, Check, ClipboardList,
   Search, UserCheck, Users, LayoutGrid, List, ChevronDown, Building2,
   GraduationCap, Briefcase,
 } from 'lucide-react';
@@ -19,6 +19,7 @@ interface AttendancePerson {
   remarks: string | null;
   personId: string;
   personName: string;
+  gender?: string | null;
 }
 interface School { id: string; name: string; }
 interface Grade  { id: string; grade_name: string; }
@@ -44,6 +45,7 @@ const UnifiedAttendancePage: React.FC = () => {
 
   const [people, setPeople]   = useState<AttendancePerson[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedGender, setSelectedGender] = useState('All');
   const [viewMode, setViewMode]     = useState<'grid' | 'list'>('list');
 
   const [schoolsLoading, setSchoolsLoading] = useState(true);
@@ -60,20 +62,33 @@ const UnifiedAttendancePage: React.FC = () => {
     (async () => {
       try {
         setSchoolsLoading(true);
-        const { data } = await api.get('/schools');
+        let res: any;
+        try {
+          if (user?.utype === 'teacher') {
+            res = await api.get('/teacher-schools/my-schools');
+          } else {
+            res = await api.get('/schools');
+          }
+        } catch {
+          res = await api.get('/schools');
+        }
+        const data = res.data;
         const raw = Array.isArray(data) ? data : (data.value || []);
-        const mapped = raw.map((s: any) => ({ id: s.id || s.Id, name: s.name || s.Name || 'Unknown' }));
-        if (isPrincipal && user?.school_id) {
-          const filtered = mapped.filter((s: any) => s.id === user.school_id);
-          setSchools(filtered);
-          setSelectedSchoolId(user.school_id);
-        } else {
-          setSchools(mapped);
+        const mapped = raw.map((s: any) => ({
+          id: s.id || s.Id || s.schoolId || s.school_id,
+          name: s.name || s.Name || s.schoolName || s.school_name || 'Unknown School'
+        }));
+        setSchools(mapped);
+        
+        if (mapped.length > 0) {
+          const userSchoolId = user?.school_id || (user as any)?.schoolId;
+          const exists = userSchoolId ? mapped.some((s: any) => s.id === userSchoolId) : false;
+          setSelectedSchoolId(exists ? userSchoolId! : mapped[0].id);
         }
       } catch { toast.error('Failed to load schools.'); }
       finally { setSchoolsLoading(false); }
     })();
-  }, [isPrincipal, user?.school_id]);
+  }, [user?.school_id, (user as any)?.schoolId, user?.utype]);
 
   // ── Fetch grades when school changes (students only) ───────────────────────
   useEffect(() => {
@@ -83,10 +98,16 @@ const UnifiedAttendancePage: React.FC = () => {
           setGradesLoading(true);
           const { data } = await api.get(`/grades/by-school/${selectedSchoolId}`);
           const raw = Array.isArray(data) ? data : (data.value || []);
-          setGrades(raw.map((g: any) => ({
+          const mappedGrades = raw.map((g: any) => ({
             id: g.id || g.Id,
             grade_name: g.grade_name || g.GradeName || `Grade ${g.grade_level}`,
-          })));
+          }));
+          setGrades(mappedGrades);
+          if (mappedGrades.length > 0) {
+            setSelectedGradeId(mappedGrades[0].id);
+          } else {
+            setSelectedGradeId('');
+          }
         } catch { toast.error('Failed to load grades.'); }
         finally { setGradesLoading(false); }
       })();
@@ -113,7 +134,9 @@ const UnifiedAttendancePage: React.FC = () => {
       setLoading(true);
       let raw: any[] = [];
       if (mode === 'students') {
-        const { data } = await api.get(`/attendance/students?gradeId=${selectedGradeId}&date=${selectedDate}`);
+        const { data } = await api.get(`/attendance/students?gradeId=${selectedGradeId}&date=${selectedDate}`, {
+          headers: selectedSchoolId ? { 'X-School-Id': selectedSchoolId } : {}
+        });
         raw = Array.isArray(data) ? data : (data.value || []);
         setPeople(raw.map((s: any) => ({
           id: s.id || s.Id || '00000000-0000-0000-0000-000000000000',
@@ -122,9 +145,12 @@ const UnifiedAttendancePage: React.FC = () => {
           remarks: s.remarks || null,
           personId: s.student_id || s.studentId || s.StudentId,
           personName: s.student_name || s.studentName || s.StudentName || 'Unknown',
+          gender: s.gender || s.Gender || null,
         })));
       } else {
-        const { data } = await api.get(`/attendance/teachers?date=${selectedDate}&schoolId=${selectedSchoolId}`);
+        const { data } = await api.get(`/attendance/teachers?date=${selectedDate}&schoolId=${selectedSchoolId}`, {
+          headers: selectedSchoolId ? { 'X-School-Id': selectedSchoolId } : {}
+        });
         raw = Array.isArray(data) ? data : (data.value || []);
         setPeople(raw.map((t: any) => ({
           id: t.id || t.Id || '00000000-0000-0000-0000-000000000000',
@@ -133,50 +159,87 @@ const UnifiedAttendancePage: React.FC = () => {
           remarks: t.remarks || null,
           personId: t.teacher_id || t.teacherId || t.TeacherId,
           personName: t.teacher_name || t.teacherName || t.TeacherName || 'Unknown',
+          gender: t.gender || t.Gender || null,
         })));
       }
     } catch { toast.error(`Failed to load ${mode} attendance.`); }
     finally { setLoading(false); }
   };
 
-  // ── Toggle / Bulk ──────────────────────────────────────────────────────────
-  const toggle = (personId: string) =>
-    setPeople(prev => prev.map(p =>
-      p.personId === personId ? { ...p, status: p.status === 'Present' ? 'Absent' : 'Present' } : p
-    ));
-
-  const markAll = (status: 'Present' | 'Absent') => {
-    setPeople(prev => prev.map(p => ({ ...p, status })));
-    toast.success(`Marked all ${mode} as ${status}`);
+  // ── Auto Save Mechanics ───────────────────────────────────────────────────
+  const saveSinglePerson = async (personToSave: AttendancePerson) => {
+    try {
+      if (mode === 'students') {
+        const payload = [{
+          id: personToSave.id, date: selectedDate, status: personToSave.status,
+          remarks: personToSave.remarks, studentId: personToSave.personId, student_id: personToSave.personId, studentName: personToSave.personName, student_name: personToSave.personName, teacherId: null, teacher_id: null,
+        }];
+        await api.post('/attendance/save', payload,
+          { headers: selectedSchoolId ? { 'X-School-Id': selectedSchoolId } : {} });
+      } else {
+        const payload = [{
+          id: personToSave.id, date: selectedDate, status: personToSave.status,
+          remarks: personToSave.remarks, teacherId: personToSave.personId, teacher_id: personToSave.personId, teacherName: personToSave.personName, teacher_name: personToSave.personName, studentId: null, student_id: null,
+        }];
+        await api.post('/attendance/teachers/save', payload,
+          { headers: selectedSchoolId ? { 'X-School-Id': selectedSchoolId } : {} });
+      }
+      toast.success(`${personToSave.personName} marked ${personToSave.status}`, { duration: 1500 });
+    } catch {
+      toast.error(`Failed to save attendance for ${personToSave.personName}.`);
+    }
   };
 
-  // ── Save ───────────────────────────────────────────────────────────────────
-  const save = async () => {
+  const saveAllPeople = async (updatedPeople: AttendancePerson[], statusLabel: string) => {
     try {
       setSaving(true);
       if (mode === 'students') {
-        const payload = people.map(p => ({
+        const payload = updatedPeople.map(p => ({
           id: p.id, date: selectedDate, status: p.status,
-          remarks: p.remarks, student_id: p.personId, student_name: p.personName, teacher_id: null,
+          remarks: p.remarks, studentId: p.personId, student_id: p.personId, studentName: p.personName, student_name: p.personName, teacherId: null, teacher_id: null,
         }));
         await api.post('/attendance/save', payload,
           { headers: selectedSchoolId ? { 'X-School-Id': selectedSchoolId } : {} });
       } else {
-        const payload = people.map(p => ({
+        const payload = updatedPeople.map(p => ({
           id: p.id, date: selectedDate, status: p.status,
-          remarks: p.remarks, teacher_id: p.personId, teacher_name: p.personName, student_id: null,
+          remarks: p.remarks, teacherId: p.personId, teacher_id: p.personId, teacherName: p.personName, teacher_name: p.personName, studentId: null, student_id: null,
         }));
         await api.post('/attendance/teachers/save', payload,
-          { headers: { 'X-School-Id': selectedSchoolId } });
+          { headers: selectedSchoolId ? { 'X-School-Id': selectedSchoolId } : {} });
       }
-      toast.success('Attendance saved successfully!');
-      fetchAttendance();
-    } catch { toast.error('Failed to save attendance.'); }
-    finally { setSaving(false); }
+      toast.success(`Marked all ${mode} as ${statusLabel} & saved!`);
+    } catch {
+      toast.error('Failed to save attendance.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggle = (personId: string) => {
+    const person = people.find(p => p.personId === personId);
+    if (!person) return;
+
+    const updatedPerson = {
+      ...person,
+      status: person.status === 'Present' ? 'Absent' : 'Present'
+    };
+
+    setPeople(prev => prev.map(p => p.personId === personId ? updatedPerson : p));
+    saveSinglePerson(updatedPerson);
+  };
+
+  const markAll = (status: 'Present' | 'Absent') => {
+    const updated = people.map(p => ({ ...p, status }));
+    setPeople(updated);
+    saveAllPeople(updated, status);
   };
 
   // ── Derived ────────────────────────────────────────────────────────────────
-  const filtered    = people.filter(p => p.personName.toLowerCase().includes(searchTerm.toLowerCase()));
+  const filtered    = people.filter(p =>
+    p.personName.toLowerCase().includes(searchTerm.toLowerCase()) &&
+    (selectedGender === 'All' || (p.gender || '').trim().toLowerCase() === selectedGender.trim().toLowerCase())
+  );
   const presentCount = people.filter(p => p.status === 'Present').length;
   const absentCount  = people.filter(p => p.status === 'Absent').length;
   const isReady = mode === 'students' ? !!selectedGradeId : !!selectedSchoolId;
@@ -268,7 +331,7 @@ const UnifiedAttendancePage: React.FC = () => {
           </div>
 
           {/* Bulk Buttons */}
-          {isReady && people.length > 0 && !isPrincipal && isToday && (
+          {isReady && people.length > 0 && !isPrincipal && (
             <div className="flex gap-2">
               <button onClick={() => markAll('Present')}
                 className="flex-1 px-3 py-3 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 border border-emerald-200 dark:border-emerald-500/20 rounded-xl text-[10px] font-extrabold uppercase transition-all cursor-pointer">
@@ -295,6 +358,19 @@ const UnifiedAttendancePage: React.FC = () => {
                 <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
                   placeholder={`Search ${label}s by name…`}
                   className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-[#283548] text-slate-800 dark:text-white rounded-xl text-xs font-medium outline-none focus:border-primary transition-all" />
+              </div>
+              <div className="relative">
+                <select
+                  value={selectedGender}
+                  onChange={e => setSelectedGender(e.target.value)}
+                  className="px-3 py-2.5 bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-[#283548] text-slate-800 dark:text-white rounded-xl text-xs font-semibold outline-none focus:border-primary transition-all appearance-none cursor-pointer pr-8"
+                >
+                  <option value="All">All Genders</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Other">Other</option>
+                </select>
+                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
               </div>
               <div className="flex items-center bg-gray-100 dark:bg-[#283548] border border-gray-200 dark:border-[#283548] rounded-xl p-0.5 self-start sm:self-auto">
                 {(['grid', 'list'] as const).map(v => (
@@ -370,10 +446,17 @@ const UnifiedAttendancePage: React.FC = () => {
                         </div>
                         <div className="space-y-1">
                           <h4 className="font-extrabold text-sm text-slate-800 dark:text-white tracking-tight group-hover:text-primary transition-colors">{p.personName}</h4>
-                          <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border ${
-                            isPresent ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-100 dark:border-emerald-500/20'
-                                      : 'bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-300 border-rose-100 dark:border-rose-500/20'
-                          }`}>{p.status}</span>
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border ${
+                              isPresent ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-100 dark:border-emerald-500/20'
+                                        : 'bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-300 border-rose-100 dark:border-rose-500/20'
+                            }`}>{p.status}</span>
+                            {p.gender && (
+                              <span className="text-[10px] font-extrabold text-slate-400 dark:text-slate-400 capitalize">
+                                {p.gender}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                       <button type="button" onClick={e => { e.stopPropagation(); !isPrincipal && toggle(p.personId); }}
@@ -390,11 +473,6 @@ const UnifiedAttendancePage: React.FC = () => {
                   );
                 })}
               </div>
-              {!isPrincipal && (
-                <div className="pt-6 border-t border-gray-100 dark:border-[#283548] flex justify-end">
-                  <SaveButton saving={saving} onClick={save} />
-                </div>
-              )}
             </div>
           ) : (
             <div className="p-0">
@@ -403,7 +481,7 @@ const UnifiedAttendancePage: React.FC = () => {
                   <thead>
                     <tr>
                       <th className="px-6 py-4">Full Name</th>
-                      <th>Date</th>
+                      <th className="px-4 py-4">Gender</th>
                       <th>Status</th>
                       <th className="text-right px-6 py-4">Toggle</th>
                     </tr>
@@ -412,9 +490,9 @@ const UnifiedAttendancePage: React.FC = () => {
                     {filtered.map(p => {
                       const isPresent = p.status === 'Present';
                       return (
-                        <tr key={p.personId} onClick={() => !isPrincipal && isToday && toggle(p.personId)}
+                        <tr key={p.personId} onClick={() => !isPrincipal && toggle(p.personId)}
                           className={`group transition-colors ${
-                            isPrincipal || !isToday ? '' : 'cursor-pointer hover:bg-slate-50/70 dark:hover:bg-[#283548]/30'
+                            isPrincipal ? '' : 'cursor-pointer hover:bg-slate-50/70 dark:hover:bg-[#283548]/30'
                           }`}>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center gap-3">
@@ -424,7 +502,9 @@ const UnifiedAttendancePage: React.FC = () => {
                               <span className="text-sm font-extrabold text-slate-900 dark:text-white group-hover:text-primary transition-colors">{p.personName}</span>
                             </div>
                           </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-xs font-bold text-slate-500 font-mono">{selectedDate}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-xs font-bold text-slate-600 dark:text-slate-300 capitalize">
+                            {p.gender || '-'}
+                          </td>
                           <td className="px-4 py-3 whitespace-nowrap">
                             <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${
                               isPresent ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-100 dark:border-emerald-500/20'
@@ -433,10 +513,10 @@ const UnifiedAttendancePage: React.FC = () => {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right" onClick={e => e.stopPropagation()}>
                             <div className="flex justify-end">
-                              <button type="button" onClick={() => !isPrincipal && isToday && toggle(p.personId)}
-                                disabled={isPrincipal || !isToday}
+                              <button type="button" onClick={() => !isPrincipal && toggle(p.personId)}
+                                disabled={isPrincipal}
                                 className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
-                                  isPrincipal || !isToday ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                                  isPrincipal ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
                                 } ${
                                   isPresent ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/15'
                                             : 'bg-slate-50 dark:bg-[#283548] border border-slate-200 dark:border-[#283548] text-slate-400 hover:bg-emerald-50 hover:text-emerald-500'
@@ -451,11 +531,6 @@ const UnifiedAttendancePage: React.FC = () => {
                   </tbody>
                 </table>
               </div>
-              {!isPrincipal && isToday && (
-                <div className="p-6 border-t border-gray-100 dark:border-[#283548] flex justify-end">
-                  <SaveButton saving={saving} onClick={save} />
-                </div>
-              )}
             </div>
           )}
         </div>
@@ -477,16 +552,5 @@ const UnifiedAttendancePage: React.FC = () => {
     </div>
   );
 };
-
-// ── Save Button ────────────────────────────────────────────────────────────────
-const SaveButton: React.FC<{ saving: boolean; onClick: () => void }> = ({ saving, onClick }) => (
-  <button type="button" onClick={onClick} disabled={saving}
-    className="px-6 py-3 bg-primary text-white rounded-xl text-xs font-black uppercase tracking-wider hover:bg-primary/90 transition-all flex items-center gap-2 shadow-md shadow-primary/20 disabled:opacity-75 cursor-pointer">
-    {saving
-      ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-      : <Save className="w-4 h-4" />}
-    Save Attendance
-  </button>
-);
 
 export default UnifiedAttendancePage;

@@ -28,6 +28,10 @@ namespace NubeEra.Infrastructure.Services
         private readonly IGenericRepository<Question> _questionRepository;
         private readonly IGenericRepository<Module> _moduleRepository;
         private readonly IGenericRepository<Lesson> _lessonRepository;
+        private readonly IGenericRepository<GradeLevel> _gradeLevelRepository;
+        private readonly IGenericRepository<Subject> _subjectRepository;
+        private readonly IGenericRepository<SchoolUnitAssignment> _unitAssignmentRepository;
+        private readonly IGenericRepository<SchoolTopicAssignment> _topicAssignmentRepository;
 
         public BulkImportService(
             IGenericRepository<Student> studentRepository,
@@ -42,7 +46,11 @@ namespace NubeEra.Infrastructure.Services
             IGenericRepository<Exam> examRepository,
             IGenericRepository<Question> questionRepository,
             IGenericRepository<Module> moduleRepository,
-            IGenericRepository<Lesson> lessonRepository)
+            IGenericRepository<Lesson> lessonRepository,
+            IGenericRepository<GradeLevel> gradeLevelRepository,
+            IGenericRepository<Subject> subjectRepository,
+            IGenericRepository<SchoolUnitAssignment> unitAssignmentRepository,
+            IGenericRepository<SchoolTopicAssignment> topicAssignmentRepository)
         {
             _studentRepository = studentRepository;
             _userRepository = userRepository;
@@ -57,6 +65,10 @@ namespace NubeEra.Infrastructure.Services
             _questionRepository = questionRepository;
             _moduleRepository = moduleRepository;
             _lessonRepository = lessonRepository;
+            _gradeLevelRepository = gradeLevelRepository;
+            _subjectRepository = subjectRepository;
+            _unitAssignmentRepository = unitAssignmentRepository;
+            _topicAssignmentRepository = topicAssignmentRepository;
         }
 
         public async Task<ImportResultDto> ImportStudentsAsync(Guid schoolId, Stream excelStream)
@@ -80,7 +92,8 @@ namespace NubeEra.Infrastructure.Services
                     ?? throw new Exception("Parent role not found in database.");
 
                 var grades = await _gradeRepository.GetAllAsync(q => q.Where(g => g.SchoolId == schoolId && g.IsActive));
-                var passwordHash = BCrypt.Net.BCrypt.HashPassword("123456");
+                var studentPasswordHash = BCrypt.Net.BCrypt.HashPassword("123456");
+                var parentPasswordHash = BCrypt.Net.BCrypt.HashPassword("123456");
 
                 int importedCount = 0;
 
@@ -89,171 +102,292 @@ namespace NubeEra.Infrastructure.Services
                     var row = table[r];
                     if (row.Count == 0 || row.All(string.IsNullOrWhiteSpace)) continue;
 
-                    var firstName = GetVal(row, headers, "firstname", "first name");
-                    var lastName = GetVal(row, headers, "lastname", "last name");
+                    var firstName = GetVal(row, headers, "firstname", "first name", "studentname", "student name", "student firstname", "student first name", "full name", "fullname");
+                    var lastName = GetVal(row, headers, "lastname", "last name", "studentlastname", "student last name", "surname");
+
+                    if (string.IsNullOrEmpty(firstName))
+                    {
+                        firstName = GetVal(row, headers, "name", "student");
+                    }
+
+                    var parentName = GetVal(row, headers, "parentguardianname", "parent guardian name", "parent name", "guardian name", "father name", "mother name", "parent");
+                    var parentPhone = GetVal(row, headers, "parentguardianphone", "parent phone", "parent guardian phone", "guardian phone");
+                    var parentEmail = GetVal(row, headers, "parentguardianemail", "parent email", "parent guardian email", "guardian email");
+
+                    if (!string.IsNullOrEmpty(firstName) && string.IsNullOrEmpty(lastName))
+                    {
+                        var nameParts = firstName.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                        if (nameParts.Length > 1)
+                        {
+                            firstName = nameParts[0];
+                            lastName = string.Join(" ", nameParts[1..]);
+                        }
+                        else
+                        {
+                            lastName = ".";
+                        }
+                    }
+
                     var email = GetVal(row, headers, "email", "studentemail", "student email");
                     var phone = GetVal(row, headers, "phone", "studentphone", "student phone");
                     var studentId = GetVal(row, headers, "studentid", "student id");
                     var rollNo = GetVal(row, headers, "rollno", "roll no");
                     var gradeName = GetVal(row, headers, "gradename", "grade name", "grade");
                     var sectionCode = GetVal(row, headers, "sectioncode", "section code", "section", "division");
-                    var parentName = GetVal(row, headers, "parentguardianname", "parent name", "parent guardian name");
-                    var parentPhone = GetVal(row, headers, "parentguardianphone", "parent phone", "parent guardian phone");
-                    var parentEmail = GetVal(row, headers, "parentguardianemail", "parent email", "parent guardian email");
                     var gender = GetVal(row, headers, "gender");
                     var address = GetVal(row, headers, "address");
                     var dobStr = GetVal(row, headers, "dateofbirth", "dob", "date of birth");
 
-                    if (string.IsNullOrEmpty(firstName) || string.IsNullOrEmpty(lastName))
-                    {
-                        result.Errors.Add($"Row {r + 1}: First Name and Last Name are required.");
-                        continue;
-                    }
-
-                    if (string.IsNullOrEmpty(gradeName))
-                    {
-                        result.Errors.Add($"Row {r + 1}: Grade Name is required.");
-                        continue;
-                    }
-
-                    var grade = grades.FirstOrDefault(g => 
-                        g.GradeName.Equals(gradeName, StringComparison.OrdinalIgnoreCase) || 
-                        g.GradeLevel.Equals(gradeName, StringComparison.OrdinalIgnoreCase));
-
-                    if (grade == null)
-                    {
-                        result.Errors.Add($"Row {r + 1}: Grade '{gradeName}' not found in school.");
-                        continue;
-                    }
-
-                    GradeSection? section = null;
-                    if (!string.IsNullOrEmpty(sectionCode))
-                    {
-                        var sections = await _sectionRepository.GetAllAsync(q => q.Where(s => s.SchoolId == schoolId && s.GradeId == grade.Id && s.IsActive));
-                        section = sections.FirstOrDefault(s => s.SectionCode.Equals(sectionCode, StringComparison.OrdinalIgnoreCase));
-                        if (section == null)
-                        {
-                            // Auto create section
-                            section = new GradeSection
-                            {
-                                SchoolId = schoolId,
-                                GradeId = grade.Id,
-                                SectionCode = sectionCode.ToUpper(),
-                                SectionName = $"{sectionCode.ToUpper()} Section",
-                                Capacity = 40,
-                                IsActive = true
-                            };
-                            await _sectionRepository.AddAsync(section);
-                        }
-                    }
-
-                    DateTime? dob = null;
-                    if (!string.IsNullOrEmpty(dobStr) && DateTime.TryParse(dobStr, out var d))
-                    {
-                        dob = d;
-                    }
-
-                    // Student user account
-                    var emailToUse = email;
-                    if (string.IsNullOrEmpty(emailToUse))
-                    {
-                        var cleanFirst = firstName.ToLower().Replace(" ", "");
-                        var cleanLast = lastName.ToLower().Replace(" ", "");
-                        var cleanRoll = string.IsNullOrEmpty(rollNo) ? Guid.NewGuid().ToString("N")[..4] : rollNo.Replace(" ", "");
-                        emailToUse = $"{cleanFirst}.{cleanLast}.{cleanRoll}@nubeera.student";
-                    }
-
-                    var existingUser = await _userRepository.GetByEmailAsync(emailToUse.Trim().ToLower());
-                    if (existingUser != null && !string.IsNullOrEmpty(email))
-                    {
-                        result.Errors.Add($"Row {r + 1}: User with student email '{email}' already exists.");
-                        continue;
-                    }
-
-                    User? studentUser = existingUser;
-                    if (studentUser == null)
-                    {
-                        studentUser = new User(
-                            email: emailToUse.Trim().ToLower(),
-                            passwordHash: passwordHash,
-                            roleId: studentRole.Id,
-                            schoolId: schoolId
-                        )
-                        {
-                            FirstName = firstName,
-                            LastName = lastName,
-                            Phone = phone
-                        };
-                        await _userRepository.AddAsync(studentUser);
-                    }
-
-                    // Parent user account
+                    User? studentUser = null;
                     User? parentUser = null;
-                    if (!string.IsNullOrEmpty(parentPhone) || !string.IsNullOrEmpty(parentEmail))
+                    GradeSection? section = null;
+                    Student? student = null;
+
+                    try
                     {
-                        var pPhone = parentPhone?.Trim() ?? "";
-                        var pEmail = parentEmail?.Trim().ToLower() ?? "";
-
-                        if (!string.IsNullOrEmpty(pPhone))
+                        if (string.IsNullOrEmpty(firstName))
                         {
-                            parentUser = await _userRepository.GetByEmailOrPhoneAsync(pPhone);
-                        }
-                        if (parentUser == null && !string.IsNullOrEmpty(pEmail))
-                        {
-                            parentUser = await _userRepository.GetByEmailOrPhoneAsync(pEmail);
+                            result.Errors.Add($"Row {r + 1}: Student Name / First Name is required.");
+                            continue;
                         }
 
-                        if (parentUser == null)
+                        if (string.IsNullOrEmpty(gradeName))
                         {
-                            var pEmailToUse = pEmail;
-                            if (string.IsNullOrEmpty(pEmailToUse))
+                            result.Errors.Add($"Row {r + 1}: Grade Name is required.");
+                            continue;
+                        }
+
+                        var grade = grades.FirstOrDefault(g => 
+                            g.GradeName.Equals(gradeName, StringComparison.OrdinalIgnoreCase) || 
+                            g.GradeLevel.Equals(gradeName, StringComparison.OrdinalIgnoreCase));
+
+                        if (grade == null)
+                        {
+                            result.Errors.Add($"Row {r + 1}: Grade '{gradeName}' not found in school.");
+                            continue;
+                        }
+
+                        if (!string.IsNullOrEmpty(sectionCode))
+                        {
+                            var sections = await _sectionRepository.GetAllAsync(q => q.Where(s => s.SchoolId == schoolId && s.GradeId == grade.Id && s.IsActive));
+                            section = sections.FirstOrDefault(s => s.SectionCode.Equals(sectionCode, StringComparison.OrdinalIgnoreCase));
+                            if (section == null)
                             {
-                                pEmailToUse = $"{pPhone}@nubeera.parent";
+                                // Auto create section
+                                section = new GradeSection
+                                {
+                                    SchoolId = schoolId,
+                                    GradeId = grade.Id,
+                                    SectionCode = sectionCode.ToUpper(),
+                                    SectionName = $"{sectionCode.ToUpper()} Section",
+                                    Capacity = 40,
+                                    IsActive = true
+                                };
+                                await _sectionRepository.AddAsync(section);
                             }
-                            var existingParentByEmail = await _userRepository.GetByEmailOrPhoneAsync(pEmailToUse);
-                            if (existingParentByEmail != null)
+                        }
+
+                        DateTime? dob = null;
+                        if (!string.IsNullOrEmpty(dobStr) && DateTime.TryParse(dobStr, out var d))
+                        {
+                            dob = d;
+                        }
+
+                        // Student user account
+                        var emailToUse = email;
+                        if (string.IsNullOrEmpty(emailToUse))
+                        {
+                            var cleanFirst = firstName.ToLower().Replace(" ", "");
+                            var cleanLast = lastName.ToLower().Replace(" ", "");
+                            var cleanRoll = string.IsNullOrEmpty(rollNo) ? Guid.NewGuid().ToString("N")[..4] : rollNo.Replace(" ", "");
+                            emailToUse = $"{cleanFirst}.{cleanLast}.{cleanRoll}@veriton.student";
+                        }
+
+                        var existingUser = await _userRepository.Query()
+                            .IgnoreQueryFilters()
+                            .FirstOrDefaultAsync(u => u.Email.ToLower() == emailToUse.Trim().ToLower());
+
+                        if (existingUser != null)
+                        {
+                            if (!existingUser.IsDeleted && existingUser.SchoolId != schoolId)
                             {
-                                pEmailToUse = $"{pPhone}_{Guid.NewGuid().ToString("N")[..4]}@nubeera.parent";
+                                result.Errors.Add($"Row {r + 1}: User with student email '{emailToUse}' is already registered at another school.");
+                                continue;
                             }
 
-                            parentUser = new User(
-                                email: pEmailToUse,
-                                passwordHash: passwordHash,
-                                roleId: parentRole.Id,
+                            if (existingUser.IsDeleted)
+                            {
+                                existingUser.IsDeleted = false;
+                                existingUser.DeletedDate = null;
+                                existingUser.DeletedBy = null;
+                            }
+                            existingUser.Activate();
+                            existingUser.FirstName = firstName;
+                            existingUser.LastName = lastName;
+                            existingUser.Phone = phone;
+                            existingUser.SchoolId = schoolId;
+                            existingUser.RoleId = studentRole.Id;
+                            await _userRepository.UpdateAsync(existingUser);
+                            studentUser = existingUser;
+                        }
+                        else
+                        {
+                            studentUser = new User(
+                                email: emailToUse.Trim().ToLower(),
+                                passwordHash: studentPasswordHash,
+                                roleId: studentRole.Id,
                                 schoolId: schoolId
                             )
                             {
-                                FirstName = parentName ?? "Parent",
-                                LastName = "",
-                                Phone = pPhone
+                                FirstName = firstName,
+                                LastName = lastName,
+                                Phone = phone
                             };
-                            await _userRepository.AddAsync(parentUser);
+                            await _userRepository.AddAsync(studentUser);
                         }
-                    }
 
-                    var student = new Student
+                        // Parent user account
+                        if (!string.IsNullOrEmpty(parentPhone) || !string.IsNullOrEmpty(parentEmail))
+                        {
+                            var pPhone = parentPhone?.Trim() ?? "";
+                            var pEmail = parentEmail?.Trim().ToLower() ?? "";
+
+                            if (!string.IsNullOrEmpty(pPhone))
+                            {
+                                parentUser = await _userRepository.Query()
+                                    .IgnoreQueryFilters()
+                                    .Where(u => u.Id != studentUser.Id && (u.RoleId == parentRole.Id || (u.IsParent && u.RoleId != studentRole.Id)))
+                                    .FirstOrDefaultAsync(u => u.Phone == pPhone || u.Email.ToLower() == pPhone.ToLower());
+                            }
+                            if (parentUser == null && !string.IsNullOrEmpty(pEmail))
+                            {
+                                parentUser = await _userRepository.Query()
+                                    .IgnoreQueryFilters()
+                                    .Where(u => u.Id != studentUser.Id && (u.RoleId == parentRole.Id || (u.IsParent && u.RoleId != studentRole.Id)))
+                                    .FirstOrDefaultAsync(u => u.Email.ToLower() == pEmail.ToLower() || u.Phone == pEmail);
+                            }
+
+                            if (parentUser != null)
+                            {
+                                parentUser.IsParent = true;
+                                if (parentUser.IsDeleted)
+                                {
+                                    parentUser.IsDeleted = false;
+                                    parentUser.DeletedDate = null;
+                                    parentUser.DeletedBy = null;
+                                }
+                                parentUser.Activate();
+                                parentUser.FirstName = parentName ?? parentUser.FirstName;
+                                parentUser.Phone = pPhone;
+                                parentUser.SchoolId = schoolId;
+                                await _userRepository.UpdateAsync(parentUser);
+                            }
+                            else
+                            {
+                                var pEmailToUse = pEmail;
+                                if (string.IsNullOrEmpty(pEmailToUse))
+                                {
+                                    pEmailToUse = $"{pPhone}@veriton.parent";
+                                }
+                                var existingParentByEmail = await _userRepository.Query()
+                                    .IgnoreQueryFilters()
+                                    .FirstOrDefaultAsync(u => u.Email.ToLower() == pEmailToUse.ToLower() || u.Phone == pEmailToUse);
+                                if (existingParentByEmail != null)
+                                {
+                                    pEmailToUse = $"{pPhone}_{Guid.NewGuid().ToString("N")[..4]}@veriton.parent";
+                                }
+
+                                var pPasswordToUse = "123456";
+                                var pPasswordHash = BCrypt.Net.BCrypt.HashPassword(pPasswordToUse);
+
+                                parentUser = new User(
+                                    email: pEmailToUse,
+                                    passwordHash: pPasswordHash,
+                                    roleId: parentRole.Id,
+                                    schoolId: schoolId
+                                )
+                                {
+                                    FirstName = parentName ?? "Parent",
+                                    LastName = "",
+                                    Phone = pPhone,
+                                    IsParent = true
+                                };
+                                await _userRepository.AddAsync(parentUser);
+                            }
+                        }
+
+                        // Retrieve the student record linked to this user ID, if any (ignoring filters)
+                        student = await _studentRepository.Query()
+                            .IgnoreQueryFilters()
+                            .FirstOrDefaultAsync(s => s.UserId == studentUser.Id);
+
+                        if (student != null)
+                        {
+                            if (student.IsDeleted)
+                            {
+                                student.IsDeleted = false;
+                                student.DeletedDate = null;
+                                student.DeletedBy = null;
+                            }
+                            student.IsActive = true;
+                            student.SchoolId = schoolId;
+                            student.GradeId = grade.Id;
+                            student.SectionId = section?.Id;
+                            student.RollNo = rollNo;
+                            student.FirstName = firstName;
+                            student.LastName = lastName;
+                            student.Email = studentUser.Email;
+                            student.Phone = phone;
+                            student.DateOfBirth = dob;
+                            student.Gender = gender;
+                            student.Address = address;
+                            student.ParentGuardianName = parentName ?? parentUser?.FirstName ?? student.ParentGuardianName ?? "Parent";
+                            student.ParentGuardianPhone = parentPhone ?? parentUser?.Phone ?? student.ParentGuardianPhone;
+                            student.ParentGuardianEmail = parentEmail ?? parentUser?.Email ?? student.ParentGuardianEmail;
+
+                            await _studentRepository.UpdateAsync(student);
+                        }
+                        else
+                        {
+                            var finalStudentId = string.IsNullOrEmpty(studentId)
+                                ? await NubeEra.Application.Common.Helpers.StudentIdGenerator.GenerateNextStudentIdAsync(schoolId, _schoolRepository, _studentRepository)
+                                : studentId;
+
+                            student = new Student
+                            {
+                                SchoolId = schoolId,
+                                GradeId = grade.Id,
+                                SectionId = section?.Id,
+                                UserId = studentUser.Id,
+                                StudentId = finalStudentId,
+                                RollNo = rollNo,
+                                FirstName = firstName,
+                                LastName = lastName,
+                                Email = studentUser.Email,
+                                Phone = phone,
+                                DateOfBirth = dob,
+                                Gender = gender,
+                                Address = address,
+                                AdmissionDate = DateTime.UtcNow,
+                                ParentGuardianName = parentName ?? parentUser?.FirstName ?? "Parent",
+                                ParentGuardianPhone = parentPhone ?? parentUser?.Phone,
+                                ParentGuardianEmail = parentEmail ?? parentUser?.Email,
+                                IsActive = true
+                            };
+                            await _studentRepository.AddAsync(student);
+                        }
+                        importedCount++;
+                    }
+                    catch (Exception ex)
                     {
-                        SchoolId = schoolId,
-                        GradeId = grade.Id,
-                        SectionId = section?.Id,
-                        UserId = studentUser.Id,
-                        StudentId = string.IsNullOrEmpty(studentId) ? $"STU-{Guid.NewGuid().ToString("N")[..8].ToUpper()}" : studentId,
-                        RollNo = rollNo,
-                        FirstName = firstName,
-                        LastName = lastName,
-                        Email = studentUser.Email,
-                        Phone = phone,
-                        DateOfBirth = dob,
-                        Gender = gender,
-                        Address = address,
-                        AdmissionDate = DateTime.UtcNow,
-                        ParentGuardianName = parentName ?? parentUser?.FirstName ?? "Parent",
-                        ParentGuardianPhone = parentPhone ?? parentUser?.Phone,
-                        ParentGuardianEmail = parentEmail ?? parentUser?.Email,
-                        IsActive = true
-                    };
-                    await _studentRepository.AddAsync(student);
-                    importedCount++;
+                        var errMsg = ex.InnerException != null ? ex.InnerException.Message : ex.Message;
+                        result.Errors.Add($"Row {r + 1}: {errMsg}");
+
+                        if (student != null) _studentRepository.Detach(student);
+                        if (parentUser != null) _userRepository.Detach(parentUser);
+                        if (studentUser != null) _userRepository.Detach(studentUser);
+                        if (section != null) _sectionRepository.Detach(section);
+                    }
                 }
 
                 result.Success = result.Errors.Count == 0;
@@ -667,6 +801,318 @@ namespace NubeEra.Infrastructure.Services
             {
                 result.Success = false;
                 result.Errors.Add($"General error parsing MCQ file: {ex.Message}");
+            }
+            return result;
+        }
+
+        public async Task<ImportResultDto> ImportUnitsAsync(Guid schoolId, Stream excelStream)
+        {
+            var result = new ImportResultDto();
+            try
+            {
+                var table = await ParseStreamAsync(excelStream);
+                if (table.Count <= 1)
+                {
+                    result.Success = false;
+                    result.Errors.Add("File is empty or has no data rows.");
+                    return result;
+                }
+
+                var headers = GetHeaders(table[0]);
+                var gradeLevels = await _gradeLevelRepository.GetAllAsync(q => q.Where(g => g.IsActive));
+                var subjects = await _subjectRepository.GetAllAsync(q => q.Where(s => s.IsActive));
+
+                int importedCount = 0;
+
+                for (int r = 1; r < table.Count; r++)
+                {
+                    var row = table[r];
+                    if (row.Count == 0 || row.All(string.IsNullOrWhiteSpace)) continue;
+
+                    var unitName = GetVal(row, headers, "unitname", "unit name", "unit", "modulename", "module name", "module", "name");
+                    var gradeLevelStr = GetVal(row, headers, "gradelevel", "grade level", "grade", "grade level name", "grade name");
+                    var subjectName = GetVal(row, headers, "subjectname", "subject name", "subject");
+                    var description = GetVal(row, headers, "description", "unit description", "desc");
+                    var creditsVal = GetVal(row, headers, "credits", "credit");
+                    var pdfFileUrl = GetVal(row, headers, "pdffileurl", "pdf file url", "pdf url", "pdf");
+                    var isActiveVal = GetVal(row, headers, "isactive", "is active", "active");
+
+                    if (string.IsNullOrWhiteSpace(unitName))
+                    {
+                        result.Errors.Add($"Row {r + 1}: Unit Name is required.");
+                        continue;
+                    }
+
+                    if (string.IsNullOrWhiteSpace(gradeLevelStr))
+                    {
+                        result.Errors.Add($"Row {r + 1}: Grade Level is required.");
+                        continue;
+                    }
+
+                    var cleanGradeStr = gradeLevelStr.Trim();
+                    GradeLevel? gradeLevel = gradeLevels.FirstOrDefault(gl =>
+                        gl.Name.Equals(cleanGradeStr, StringComparison.OrdinalIgnoreCase));
+
+                    if (gradeLevel == null)
+                    {
+                        var digitsOnly = new string(cleanGradeStr.Where(char.IsDigit).ToArray());
+                        if (int.TryParse(digitsOnly, out var lvlNum))
+                        {
+                            gradeLevel = gradeLevels.FirstOrDefault(gl => gl.LevelNumber == lvlNum);
+                        }
+                    }
+
+                    if (gradeLevel == null)
+                    {
+                        result.Errors.Add($"Row {r + 1}: Grade Level '{gradeLevelStr}' not found.");
+                        continue;
+                    }
+
+                    Subject? subject = null;
+                    if (!string.IsNullOrWhiteSpace(subjectName))
+                    {
+                        subject = subjects.FirstOrDefault(s => s.Name.Equals(subjectName.Trim(), StringComparison.OrdinalIgnoreCase));
+                    }
+
+                    var existingModules = await _moduleRepository.GetAllAsync(q => q.Where(m =>
+                        m.GradeLevelId == gradeLevel.Id && m.Name.Equals(unitName.Trim(), StringComparison.OrdinalIgnoreCase)));
+                    var unit = existingModules.FirstOrDefault();
+
+                    bool isActive = true;
+                    if (!string.IsNullOrWhiteSpace(isActiveVal) && bool.TryParse(isActiveVal, out var actParsed))
+                        isActive = actParsed;
+
+                    int credits = 0;
+                    if (!string.IsNullOrWhiteSpace(creditsVal) && int.TryParse(creditsVal, out var crdParsed))
+                        credits = crdParsed;
+
+                    if (unit == null)
+                    {
+                        unit = new Module
+                        {
+                            GradeLevelId = gradeLevel.Id,
+                            SubjectId = subject?.Id,
+                            Name = unitName.Trim(),
+                            Description = description,
+                            Credits = credits,
+                            PdfFileUrl = pdfFileUrl,
+                            IsActive = isActive
+                        };
+                        await _moduleRepository.AddAsync(unit);
+                    }
+                    else
+                    {
+                        unit.SubjectId = subject?.Id ?? unit.SubjectId;
+                        unit.Description = description ?? unit.Description;
+                        unit.Credits = credits != 0 ? credits : unit.Credits;
+                        unit.PdfFileUrl = pdfFileUrl ?? unit.PdfFileUrl;
+                        unit.IsActive = isActive;
+                        await _moduleRepository.UpdateAsync(unit);
+                    }
+
+                    if (schoolId != Guid.Empty)
+                    {
+                        var existingAssign = (await _unitAssignmentRepository.GetAllAsync(q =>
+                            q.Where(a => a.SchoolId == schoolId && a.UnitId == unit.Id))).FirstOrDefault();
+                        if (existingAssign == null)
+                        {
+                            await _unitAssignmentRepository.AddAsync(new SchoolUnitAssignment
+                            {
+                                SchoolId = schoolId,
+                                UnitId = unit.Id,
+                                AssignedBy = Guid.Empty,
+                                AssignedDate = DateTime.UtcNow
+                            });
+                        }
+                    }
+
+                    importedCount++;
+                }
+
+                result.Success = result.Errors.Count == 0;
+                result.ImportedCount = importedCount;
+            }
+            catch (Exception ex)
+            {
+                result.Success = false;
+                result.Errors.Add($"General error parsing units file: {ex.Message}");
+            }
+            return result;
+        }
+
+        public async Task<ImportResultDto> ImportTopicsAsync(Guid schoolId, Stream excelStream)
+        {
+            var result = new ImportResultDto();
+            try
+            {
+                var table = await ParseStreamAsync(excelStream);
+                if (table.Count <= 1)
+                {
+                    result.Success = false;
+                    result.Errors.Add("File is empty or has no data rows.");
+                    return result;
+                }
+
+                var headers = GetHeaders(table[0]);
+                var allModules = await _moduleRepository.GetAllAsync(q => q.Where(m => m.IsActive));
+
+                int importedCount = 0;
+
+                for (int r = 1; r < table.Count; r++)
+                {
+                    var row = table[r];
+                    if (row.Count == 0 || row.All(string.IsNullOrWhiteSpace)) continue;
+
+                    var subTopic = GetVal(row, headers, "topicname", "topic name", "topic", "subtopic", "sub topic", "lessonname", "lesson name", "lesson");
+                    var unitName = GetVal(row, headers, "unitname", "unit name", "unit", "modulename", "module name", "module");
+                    var displayOrderVal = GetVal(row, headers, "displayorder", "display order", "order");
+                    var serialNumberVal = GetVal(row, headers, "serialnumber", "serial number", "serial");
+                    var totalHoursVal = GetVal(row, headers, "totalhours", "total hours", "hours");
+                    var expectedPeriodsVal = GetVal(row, headers, "expectedperiods", "expected periods", "periods");
+                    var activity = GetVal(row, headers, "activity", "activity type", "activity name");
+                    var videoUrl = GetVal(row, headers, "videourl", "video url", "video");
+                    var diagramUrl = GetVal(row, headers, "diagramurl", "diagram url", "diagram");
+                    var pdfFileUrl = GetVal(row, headers, "pdffileurl", "pdf file url", "pdf url", "pdf");
+                    var source = GetVal(row, headers, "source");
+                    var procedure = GetVal(row, headers, "procedure");
+                    var code = GetVal(row, headers, "code");
+                    var requiredMaterial = GetVal(row, headers, "requiredmaterial", "required material", "materials");
+                    var whatYouGet = GetVal(row, headers, "whatyouget", "what you get");
+                    var isActivityVal = GetVal(row, headers, "isactivity", "is activity");
+                    var isPythonVal = GetVal(row, headers, "ispythonactivity", "is python activity", "python");
+                    var isRoboticsVal = GetVal(row, headers, "isroboticsactivity", "is robotics activity", "robotics");
+                    var isAiToolVal = GetVal(row, headers, "isaitoolactivity", "is ai tool activity", "aitool", "ai tool");
+                    var browserUrl = GetVal(row, headers, "browserurl", "browser url");
+                    var isActiveVal = GetVal(row, headers, "isactive", "is active", "active");
+
+                    if (string.IsNullOrWhiteSpace(subTopic))
+                    {
+                        result.Errors.Add($"Row {r + 1}: Topic Name / SubTopic is required.");
+                        continue;
+                    }
+
+                    if (string.IsNullOrWhiteSpace(unitName))
+                    {
+                        result.Errors.Add($"Row {r + 1}: Unit / Module Name is required.");
+                        continue;
+                    }
+
+                    var parentModule = allModules.FirstOrDefault(m =>
+                        m.Name.Equals(unitName.Trim(), StringComparison.OrdinalIgnoreCase));
+
+                    if (parentModule == null)
+                    {
+                        result.Errors.Add($"Row {r + 1}: Unit '{unitName}' not found.");
+                        continue;
+                    }
+
+                    int displayOrder = int.TryParse(displayOrderVal, out var dispOrd) ? dispOrd : 0;
+                    int serialNumber = int.TryParse(serialNumberVal, out var serNum) ? serNum : r;
+                    int totalHours = int.TryParse(totalHoursVal, out var hrs) ? hrs : 0;
+                    int expectedPeriods = int.TryParse(expectedPeriodsVal, out var expP) ? expP : 1;
+
+                    bool isActive = true;
+                    if (!string.IsNullOrWhiteSpace(isActiveVal) && bool.TryParse(isActiveVal, out var actParsed))
+                        isActive = actParsed;
+
+                    bool isActivity = false;
+                    if (!string.IsNullOrWhiteSpace(isActivityVal) && bool.TryParse(isActivityVal, out var actvParsed))
+                        isActivity = actvParsed;
+                    else if (!string.IsNullOrWhiteSpace(activity))
+                        isActivity = true;
+
+                    bool isPython = !string.IsNullOrWhiteSpace(isPythonVal) && bool.TryParse(isPythonVal, out var pyParsed) && pyParsed;
+                    bool isRobotics = !string.IsNullOrWhiteSpace(isRoboticsVal) && bool.TryParse(isRoboticsVal, out var robParsed) && robParsed;
+                    bool isAiTool = !string.IsNullOrWhiteSpace(isAiToolVal) && bool.TryParse(isAiToolVal, out var aiParsed) && aiParsed;
+
+                    var existingLessons = await _lessonRepository.GetAllAsync(q => q.Where(l =>
+                        l.ModuleId == parentModule.Id && l.SubTopic.Equals(subTopic.Trim(), StringComparison.OrdinalIgnoreCase)));
+                    var topic = existingLessons.FirstOrDefault();
+
+                    var videoUrlsJson = !string.IsNullOrWhiteSpace(videoUrl)
+                        ? System.Text.Json.JsonSerializer.Serialize(new List<string> { videoUrl })
+                        : null;
+
+                    if (topic == null)
+                    {
+                        topic = new Lesson
+                        {
+                            ModuleId = parentModule.Id,
+                            SubTopic = subTopic.Trim(),
+                            DisplayOrder = displayOrder,
+                            SerialNumber = serialNumber,
+                            TotalHours = totalHours,
+                            ExpectedPeriods = expectedPeriods,
+                            Activity = activity,
+                            VideoUrl = videoUrl,
+                            VideoUrls = videoUrlsJson,
+                            DiagramUrl = diagramUrl,
+                            PdfFileUrl = pdfFileUrl,
+                            Source = source,
+                            Procedure = procedure,
+                            Code = code,
+                            RequiredMaterial = requiredMaterial,
+                            WhatYouGet = whatYouGet,
+                            IsActivity = isActivity,
+                            IsPythonActivity = isPython,
+                            IsRoboticsActivity = isRobotics,
+                            IsAiToolActivity = isAiTool,
+                            BrowserUrl = browserUrl,
+                            IsActive = isActive
+                        };
+                        await _lessonRepository.AddAsync(topic);
+                    }
+                    else
+                    {
+                        topic.DisplayOrder = displayOrder != 0 ? displayOrder : topic.DisplayOrder;
+                        topic.SerialNumber = serialNumber != r ? serialNumber : topic.SerialNumber;
+                        topic.TotalHours = totalHours != 0 ? totalHours : topic.TotalHours;
+                        topic.ExpectedPeriods = expectedPeriods != 1 ? expectedPeriods : topic.ExpectedPeriods;
+                        topic.Activity = activity ?? topic.Activity;
+                        topic.VideoUrl = videoUrl ?? topic.VideoUrl;
+                        topic.VideoUrls = videoUrlsJson ?? topic.VideoUrls;
+                        topic.DiagramUrl = diagramUrl ?? topic.DiagramUrl;
+                        topic.PdfFileUrl = pdfFileUrl ?? topic.PdfFileUrl;
+                        topic.Source = source ?? topic.Source;
+                        topic.Procedure = procedure ?? topic.Procedure;
+                        topic.Code = code ?? topic.Code;
+                        topic.RequiredMaterial = requiredMaterial ?? topic.RequiredMaterial;
+                        topic.WhatYouGet = whatYouGet ?? topic.WhatYouGet;
+                        topic.IsActivity = isActivity || topic.IsActivity;
+                        topic.IsPythonActivity = isPython || topic.IsPythonActivity;
+                        topic.IsRoboticsActivity = isRobotics || topic.IsRoboticsActivity;
+                        topic.IsAiToolActivity = isAiTool || topic.IsAiToolActivity;
+                        topic.BrowserUrl = browserUrl ?? topic.BrowserUrl;
+                        topic.IsActive = isActive;
+                        await _lessonRepository.UpdateAsync(topic);
+                    }
+
+                    if (schoolId != Guid.Empty)
+                    {
+                        var existingAssign = (await _topicAssignmentRepository.GetAllAsync(q =>
+                            q.Where(a => a.SchoolId == schoolId && a.TopicId == topic.Id))).FirstOrDefault();
+                        if (existingAssign == null)
+                        {
+                            await _topicAssignmentRepository.AddAsync(new SchoolTopicAssignment
+                            {
+                                SchoolId = schoolId,
+                                TopicId = topic.Id,
+                                AssignedBy = Guid.Empty,
+                                AssignedDate = DateTime.UtcNow
+                            });
+                        }
+                    }
+
+                    importedCount++;
+                }
+
+                result.Success = result.Errors.Count == 0;
+                result.ImportedCount = importedCount;
+            }
+            catch (Exception ex)
+            {
+                result.Success = false;
+                result.Errors.Add($"General error parsing topics file: {ex.Message}");
             }
             return result;
         }

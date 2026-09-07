@@ -10,6 +10,7 @@ public class AttendanceDto
     public string? TeacherName { get; set; }
     public Guid? StudentId { get; set; }
     public string? StudentName { get; set; }
+    public string? Gender { get; set; }
 }
 
 public class TeacherAttendanceReportDto

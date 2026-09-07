@@ -11,6 +11,8 @@ public class SchedulerService : IGenericService<SchedulerCreateDto, SchedulerUpd
 {
     private readonly IGenericRepository<Scheduler> _repository;
     private readonly IGenericRepository<Grade> _gradeRepository;
+    private readonly IGenericRepository<TeacherSchedulePeriod> _periodRepo;
+    private readonly IGenericRepository<TeacherLessonProgress> _progressRepo;
     private readonly ICurrentUserService _currentUserService;
     private readonly ITenantService       _tenantService;
     private readonly IGradeAccessService _gradeAccessService;
@@ -18,12 +20,16 @@ public class SchedulerService : IGenericService<SchedulerCreateDto, SchedulerUpd
     public SchedulerService(
         IGenericRepository<Scheduler> repository,
         IGenericRepository<Grade> gradeRepository,
+        IGenericRepository<TeacherSchedulePeriod> periodRepo,
+        IGenericRepository<TeacherLessonProgress> progressRepo,
         ICurrentUserService currentUserService,
         ITenantService tenantService,
         IGradeAccessService gradeAccessService)
     {
         _repository = repository;
         _gradeRepository = gradeRepository;
+        _periodRepo = periodRepo;
+        _progressRepo = progressRepo;
         _currentUserService = currentUserService;
         _tenantService       = tenantService;
         _gradeAccessService = gradeAccessService;
@@ -38,7 +44,11 @@ public class SchedulerService : IGenericService<SchedulerCreateDto, SchedulerUpd
             .Include(s => s.Lesson)
             .Include(s => s.Teacher));
 
-        return schedules.Select(MapToDto).ToList();
+        var schedulerIds = schedules.Select(s => s.Id).ToList();
+        var periods = await _periodRepo.GetAllAsync(q => q.Where(p => schedulerIds.Contains(p.SchedulerId)));
+        var periodMap = periods.GroupBy(p => p.SchedulerId).ToDictionary(g => g.Key, g => g.FirstOrDefault());
+
+        return schedules.Select(s => MapToDto(s, periodMap.GetValueOrDefault(s.Id))).ToList();
     }
 
     public async Task<SchedulerDto?> GetByIdAsync(Guid id)
@@ -51,7 +61,8 @@ public class SchedulerService : IGenericService<SchedulerCreateDto, SchedulerUpd
             .Include(s => s.Teacher));
         if (s == null) return null;
 
-        return MapToDto(s);
+        var period = (await _periodRepo.GetAllAsync(q => q.Where(p => p.SchedulerId == id))).FirstOrDefault();
+        return MapToDto(s, period);
     }
 
     public async Task<Guid> CreateAsync(SchedulerCreateDto dto)
@@ -84,6 +95,20 @@ public class SchedulerService : IGenericService<SchedulerCreateDto, SchedulerUpd
         };
 
         await _repository.AddAsync(scheduler);
+
+        // Reset lesson progress status if re-adding schedule for a lesson so it starts fresh from attendance
+        if (dto.LessonId.HasValue)
+        {
+            var progressList = await _progressRepo.GetAllAsync(q =>
+                q.Where(p => p.TeacherId == dto.TeacherId && p.LessonId == dto.LessonId.Value));
+            foreach (var prog in progressList)
+            {
+                prog.Status = TeacherTopicStatus.NotStarted;
+                prog.CompletedAt = null;
+                await _progressRepo.UpdateAsync(prog);
+            }
+        }
+
         return scheduler.Id;
     }
 
@@ -93,6 +118,12 @@ public class SchedulerService : IGenericService<SchedulerCreateDto, SchedulerUpd
             ?? throw new Exception("Schedule not found");
 
         await _gradeAccessService.EnsureGradeAccessibleToCurrentUserAsync(dto.GradeId);
+
+        bool dateOrTimeChanged = scheduler.Date.Date != dto.Date.Date ||
+                                 scheduler.StartTime != dto.StartTime ||
+                                 scheduler.EndTime != dto.EndTime ||
+                                 scheduler.LessonId != dto.LessonId ||
+                                 scheduler.TeacherId != dto.TeacherId;
 
         scheduler.GradeId   = dto.GradeId;
         scheduler.SectionId = dto.SectionId;
@@ -105,6 +136,33 @@ public class SchedulerService : IGenericService<SchedulerCreateDto, SchedulerUpd
         scheduler.IsActive  = dto.IsActive;
 
         await _repository.UpdateAsync(scheduler);
+
+        // If date/time or session details changed, reset period status & completion state so session restarts from attendance
+        if (dateOrTimeChanged)
+        {
+            var existingPeriods = await _periodRepo.GetAllAsync(q => q.Where(p => p.SchedulerId == id));
+            foreach (var period in existingPeriods)
+            {
+                period.Status = PeriodStatus.NotStarted;
+                period.ActualStartTime = null;
+                period.ActualEndTime = null;
+                period.Remarks = null;
+                period.PeriodDate = dto.Date.Date;
+                await _periodRepo.UpdateAsync(period);
+            }
+
+            if (dto.LessonId.HasValue)
+            {
+                var progressList = await _progressRepo.GetAllAsync(q =>
+                    q.Where(p => p.TeacherId == dto.TeacherId && p.LessonId == dto.LessonId.Value));
+                foreach (var prog in progressList)
+                {
+                    prog.Status = TeacherTopicStatus.NotStarted;
+                    prog.CompletedAt = null;
+                    await _progressRepo.UpdateAsync(prog);
+                }
+            }
+        }
     }
 
     public async Task DeleteAsync(Guid id)
@@ -113,11 +171,18 @@ public class SchedulerService : IGenericService<SchedulerCreateDto, SchedulerUpd
             ?? throw new Exception("Schedule not found");
 
         await _repository.DeleteAsync(scheduler);
+
+        // Soft-delete associated periods so deleted schedule rows don't linger
+        var periods = await _periodRepo.GetAllAsync(q => q.Where(p => p.SchedulerId == id));
+        foreach (var p in periods)
+        {
+            await _periodRepo.DeleteAsync(p);
+        }
     }
 
     // ── Mapping helper ────────────────────────────────────────────────────────
 
-    private static SchedulerDto MapToDto(Scheduler s) => new()
+    private static SchedulerDto MapToDto(Scheduler s, TeacherSchedulePeriod? period = null) => new()
     {
         Id             = s.Id,
         SchoolId       = s.SchoolId,
@@ -132,9 +197,13 @@ public class SchedulerService : IGenericService<SchedulerCreateDto, SchedulerUpd
         TeacherId      = s.TeacherId,
         TeacherName    = s.Teacher != null
             ? $"{s.Teacher.FirstName} {s.Teacher.LastName}" : "",
-        Date      = s.Date,
-        StartTime = s.StartTime,
-        EndTime   = s.EndTime,
-        IsActive  = s.IsActive
+        Date            = s.Date,
+        StartTime       = s.StartTime,
+        EndTime         = s.EndTime,
+        IsActive        = s.IsActive,
+        Status          = period?.Status.ToString() ?? "NotStarted",
+        ActualStartTime = period?.ActualStartTime,
+        ActualEndTime   = period?.ActualEndTime,
+        Remarks         = period?.Remarks
     };
 }

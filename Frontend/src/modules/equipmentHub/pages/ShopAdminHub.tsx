@@ -125,13 +125,7 @@ const ShopAdminHub: React.FC = () => {
       ]);
       setProducts(prods);
       setCategories(cats);
-      setOrders(ords.map((o: any) => ({
-        ...o,
-        orderNumber: o.order_number,
-        studentName: o.student_name,
-        schoolName: o.school_name,
-        deliveryNotes: o.delivery_notes
-      })));
+      setOrders(ords);
     } catch (err) {
       console.error('Failed to load shop administration records', err);
       toast.error('Could not fetch records.');
@@ -205,15 +199,59 @@ const ShopAdminHub: React.FC = () => {
     const isEditing = Boolean(currentProduct.id);
     const payload = {
       ...currentProduct,
+      title: currentProduct.title,
+      shortDescription: currentProduct.short_description || currentProduct.shortDescription || '',
+      fullDescription: currentProduct.full_description || currentProduct.fullDescription || '',
+      categoryId: currentProduct.category_id || currentProduct.categoryId || '',
+      skuCode: currentProduct.sku_code || currentProduct.skuCode || '',
       price: Number(currentProduct.price),
-      discount_price: currentProduct.discount_price ? Number(currentProduct.discount_price) : null,
-      stock_quantity: Number(currentProduct.stock_quantity),
-      images_json: isEditing && currentProduct.images_json
-        ? currentProduct.images_json
-        : JSON.stringify([currentProduct.thumbnail_url].filter(Boolean)),
-      features_json: isEditing && currentProduct.features_json ? currentProduct.features_json : JSON.stringify([]),
-      specifications_json: isEditing && currentProduct.specifications_json ? currentProduct.specifications_json : JSON.stringify({}),
-      tags_json: isEditing && currentProduct.tags_json ? currentProduct.tags_json : JSON.stringify([])
+      discountPrice: currentProduct.discount_price ? Number(currentProduct.discount_price) : (currentProduct.discountPrice ? Number(currentProduct.discountPrice) : null),
+      stockQuantity: Number(currentProduct.stock_quantity ?? currentProduct.stockQuantity ?? 0),
+      brandName: currentProduct.brand_name || currentProduct.brandName || '',
+      thumbnailUrl: currentProduct.thumbnail_url || currentProduct.thumbnailUrl || '',
+      schoolGradeCompatibility: currentProduct.school_grade_compatibility || currentProduct.schoolGradeCompatibility || '',
+      recommendedAgeGroup: currentProduct.recommended_age_group || currentProduct.recommendedAgeGroup || '',
+      isFeatured: Boolean(currentProduct.is_featured ?? currentProduct.isFeatured),
+      isTrending: Boolean(currentProduct.is_trending ?? currentProduct.isTrending),
+      isNewArrival: Boolean(currentProduct.is_new_arrival ?? currentProduct.isNewArrival),
+      isVisible: currentProduct.is_visible !== undefined ? currentProduct.is_visible : (currentProduct.isVisible !== undefined ? currentProduct.isVisible : true),
+      imagesJson: isEditing && (currentProduct.images_json || currentProduct.imagesJson)
+        ? (currentProduct.images_json || currentProduct.imagesJson)
+        : JSON.stringify([currentProduct.thumbnail_url || currentProduct.thumbnailUrl].filter(Boolean)),
+      featuresJson: isEditing && (currentProduct.features_json || currentProduct.featuresJson)
+        ? (currentProduct.features_json || currentProduct.featuresJson)
+        : JSON.stringify([]),
+      specificationsJson: isEditing && (currentProduct.specifications_json || currentProduct.specificationsJson)
+        ? (currentProduct.specifications_json || currentProduct.specificationsJson)
+        : JSON.stringify({}),
+      tagsJson: isEditing && (currentProduct.tags_json || currentProduct.tagsJson)
+        ? (currentProduct.tags_json || currentProduct.tagsJson)
+        : JSON.stringify([]),
+
+      short_description: currentProduct.short_description || currentProduct.shortDescription || '',
+      full_description: currentProduct.full_description || currentProduct.fullDescription || '',
+      category_id: currentProduct.category_id || currentProduct.categoryId || '',
+      sku_code: currentProduct.sku_code || currentProduct.skuCode || '',
+      discount_price: currentProduct.discount_price ? Number(currentProduct.discount_price) : (currentProduct.discountPrice ? Number(currentProduct.discountPrice) : null),
+      stock_quantity: Number(currentProduct.stock_quantity ?? currentProduct.stockQuantity ?? 0),
+      brand_name: currentProduct.brand_name || currentProduct.brandName || '',
+      thumbnail_url: currentProduct.thumbnail_url || currentProduct.thumbnailUrl || '',
+      is_featured: Boolean(currentProduct.is_featured ?? currentProduct.isFeatured),
+      is_trending: Boolean(currentProduct.is_trending ?? currentProduct.isTrending),
+      is_new_arrival: Boolean(currentProduct.is_new_arrival ?? currentProduct.isNewArrival),
+      is_visible: currentProduct.is_visible !== undefined ? currentProduct.is_visible : (currentProduct.isVisible !== undefined ? currentProduct.isVisible : true),
+      images_json: isEditing && (currentProduct.images_json || currentProduct.imagesJson)
+        ? (currentProduct.images_json || currentProduct.imagesJson)
+        : JSON.stringify([currentProduct.thumbnail_url || currentProduct.thumbnailUrl].filter(Boolean)),
+      features_json: isEditing && (currentProduct.features_json || currentProduct.featuresJson)
+        ? (currentProduct.features_json || currentProduct.featuresJson)
+        : JSON.stringify([]),
+      specifications_json: isEditing && (currentProduct.specifications_json || currentProduct.specificationsJson)
+        ? (currentProduct.specifications_json || currentProduct.specificationsJson)
+        : JSON.stringify({}),
+      tags_json: isEditing && (currentProduct.tags_json || currentProduct.tagsJson)
+        ? (currentProduct.tags_json || currentProduct.tagsJson)
+        : JSON.stringify([])
     };
 
     try {

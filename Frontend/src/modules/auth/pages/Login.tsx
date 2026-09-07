@@ -75,12 +75,20 @@ const Login: React.FC = () => {
 
     try {
       if (forgotStep === 'request') {
-        const res = await api.post('/auth/forgot-password', { email: forgotEmail });
+        const res = await api.post('/auth/forgot-password', { email: forgotEmail.trim() });
         setForgotSuccess(res.data.message || 'OTP has been sent to your registered email.');
+        if (res.data.otp) {
+          setOtp(res.data.otp);
+        }
         setForgotStep('otp');
       } else if (forgotStep === 'otp') {
         if (!otp || !newPassword || !confirmNewPassword) {
           setForgotError("Please fill out all fields.");
+          setForgotLoading(false);
+          return;
+        }
+        if (newPassword.length < 6) {
+          setForgotError("New password must be at least 6 characters.");
           setForgotLoading(false);
           return;
         }
@@ -89,7 +97,7 @@ const Login: React.FC = () => {
           setForgotLoading(false);
           return;
         }
-        const res = await api.post('/auth/reset-password', { email: forgotEmail, otp, newPassword });
+        const res = await api.post('/auth/reset-password', { email: forgotEmail.trim(), otp: otp.trim(), newPassword });
         setForgotSuccess(res.data.message || 'Password reset successful!');
         setTimeout(() => {
           setShowForgotModal(false);
@@ -185,7 +193,7 @@ const Login: React.FC = () => {
                 <span className="text-[10px] font-extrabold text-indigo-300 uppercase tracking-wider">AI Robotics Lab</span>
                 <span className="text-[9px] font-black text-emerald-400 bg-emerald-500/20 px-1.5 py-0.5 rounded">ONLINE</span>
               </div>
-              <p className="text-xs font-bold text-white truncate">1,250+ Active Simulators</p>
+              <p className="text-xs font-bold text-white truncate">1,250+ Active Students</p>
             </div>
           </div>
 
@@ -313,22 +321,22 @@ const Login: React.FC = () => {
               {/* Sign In Form */}
               <form id="login-form" onSubmit={handleLogin} className="space-y-5" noValidate>
 
-                {/* Email or Mobile Field */}
+                {/* Email, Username, or Mobile Field */}
                 <div className="space-y-1.5">
                   <label htmlFor="login-email" className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    Email or Mobile Number
+                    Email, Username, or Mobile
                   </label>
                   <div className="relative">
                     <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                     <input
                       id="login-email"
                       type="text"
-                      inputMode="email"
+                      inputMode="text"
                       autoComplete="username"
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value.trim())}
-                      placeholder="name@school.com or mobile"
+                      placeholder="Email, username, or mobile"
                       className="w-full pl-10 pr-4 py-3.5 bg-slate-50/70 border border-slate-200 focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 rounded-2xl text-slate-900 placeholder-slate-400 focus:outline-none text-sm font-semibold transition-all shadow-xs"
                     />
                   </div>
@@ -462,20 +470,20 @@ const Login: React.FC = () => {
 
               {forgotStep === 'request' && (
                 <div className="space-y-1.5">
-                  <label htmlFor="forgot-email" className="text-slate-700 font-bold uppercase tracking-wider">Email Address</label>
+                  <label htmlFor="forgot-email" className="text-slate-700 font-bold uppercase tracking-wider">Email Address or Mobile Number</label>
                   <div className="relative">
                     <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                     <input
                       id="forgot-email"
-                      type="email"
+                      type="text"
                       required
                       value={forgotEmail}
                       onChange={(e) => setForgotEmail(e.target.value)}
-                      placeholder="name@school.com"
+                      placeholder="Enter registered email or mobile number"
                       className="w-full pl-10 pr-4 py-3.5 bg-slate-50/70 border border-slate-200 rounded-2xl text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 text-sm font-semibold transition-all shadow-xs"
                     />
                   </div>
-                  <p className="text-[11px] text-slate-500 mt-1.5">A verification passcode will be sent to your inbox.</p>
+                  <p className="text-[11px] text-slate-500 mt-1.5">A verification passcode will be sent to your registered email or account.</p>
                 </div>
               )}
 

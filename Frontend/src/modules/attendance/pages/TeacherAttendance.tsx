@@ -157,7 +157,6 @@ const TeacherAttendance: React.FC = () => {
   };
 
   const toggleAttendanceStatus = (studentId: string) => {
-    if (!isToday) return;
     setStudents(prev => prev.map(s => {
       if (s.studentId === studentId) {
         return {
@@ -188,8 +187,11 @@ const TeacherAttendance: React.FC = () => {
         date: selectedDate,
         status: s.status,
         remarks: s.remarks,
+        teacherId: null,
         teacher_id: null,
+        studentId: s.studentId,
         student_id: s.studentId,
+        studentName: s.studentName,
         student_name: s.studentName
       }));
 
@@ -295,7 +297,7 @@ const TeacherAttendance: React.FC = () => {
             </div>
           </div>
 
-          {selectedGradeId && students.length > 0 && isToday && (
+          {selectedGradeId && students.length > 0 && (
             <div className="flex gap-2">
               <button
                 onClick={markAllAsPresent}
@@ -403,13 +405,11 @@ const TeacherAttendance: React.FC = () => {
                   return (
                     <div
                       key={s.studentId}
-                      onClick={() => isToday && toggleAttendanceStatus(s.studentId)}
-                      className={`p-4 rounded-[10px] border transition-all flex items-center justify-between gap-4 select-none relative overflow-hidden group ${
-                        isToday ? 'cursor-pointer hover:shadow-md active:scale-98' : ''
-                      } ${
+                      onClick={() => toggleAttendanceStatus(s.studentId)}
+                      className={`p-4 rounded-[10px] border transition-all flex items-center justify-between gap-4 select-none relative overflow-hidden group cursor-pointer hover:shadow-md active:scale-98 ${
                         isPresent
                           ? 'bg-emerald-50/40 border-emerald-500/70 shadow-sm'
-                          : 'bg-white border-gray-200' + (isToday ? ' hover:border-gray-300' : '')
+                          : 'bg-white border-gray-200 hover:border-gray-300'
                       }`}
                     >
                       {isPresent && <div className="absolute top-0 left-0 bottom-0 w-1 bg-emerald-500" />}
@@ -438,15 +438,12 @@ const TeacherAttendance: React.FC = () => {
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          isToday && toggleAttendanceStatus(s.studentId);
+                          toggleAttendanceStatus(s.studentId);
                         }}
-                        disabled={!isToday}
-                        className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${
-                          !isToday ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
-                        } ${
+                        className={`w-9 h-9 rounded-full flex items-center justify-center transition-all cursor-pointer ${
                           isPresent
                             ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/25 scale-105'
-                            : 'bg-slate-50 border border-slate-200 text-slate-400' + (isToday ? ' hover:bg-emerald-50 hover:text-emerald-500 hover:border-emerald-200' : '')
+                            : 'bg-slate-50 border border-slate-200 text-slate-400 hover:bg-emerald-50 hover:text-emerald-500 hover:border-emerald-200'
                         }`}
                       >
                         <Check className="w-5 h-5" />
@@ -457,8 +454,7 @@ const TeacherAttendance: React.FC = () => {
               </div>
 
               {/* Action Save Button */}
-              {isToday && (
-                <div className="pt-6 border-t border-gray-100 dark:border-[#334155]/60 flex justify-end">
+              <div className="pt-6 border-t border-gray-100 dark:border-[#334155]/60 flex justify-end">
                   <button
                     type="button"
                     onClick={saveAttendance}
@@ -473,7 +469,6 @@ const TeacherAttendance: React.FC = () => {
                     Save Attendance Sheet
                   </button>
                 </div>
-              )}
             </div>
           ) : (
             /* LIST VIEW TABLE */
@@ -492,7 +487,7 @@ const TeacherAttendance: React.FC = () => {
                     {filteredStudents.map((s) => {
                       const isPresent = s.status === 'Present';
                       return (
-                         <tr key={s.studentId} onClick={() => isToday && toggleAttendanceStatus(s.studentId)} className={`group transition-colors ${isToday ? 'cursor-pointer hover:bg-slate-50/70' : ''}`}>
+                         <tr key={s.studentId} onClick={() => toggleAttendanceStatus(s.studentId)} className="group transition-colors cursor-pointer hover:bg-slate-50/70">
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center gap-3">
                               <div className={`w-8.5 h-8.5 rounded-full flex items-center justify-center text-xs font-black uppercase tracking-wider transition-colors shadow-sm ${
@@ -519,14 +514,11 @@ const TeacherAttendance: React.FC = () => {
                             <div className="flex justify-end">
                               <button
                                 type="button"
-                                onClick={(e) => { e.stopPropagation(); isToday && toggleAttendanceStatus(s.studentId); }}
-                                disabled={!isToday}
-                                className={`w-8.5 h-8.5 rounded-full flex items-center justify-center transition-all ${
-                                  !isToday ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
-                                } ${
+                                onClick={(e) => { e.stopPropagation(); toggleAttendanceStatus(s.studentId); }}
+                                className={`w-8.5 h-8.5 rounded-full flex items-center justify-center transition-all cursor-pointer ${
                                   isPresent
                                     ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/15'
-                                    : 'bg-slate-50 border border-slate-200 text-slate-400' + (isToday ? ' hover:bg-emerald-50 hover:text-emerald-500' : '')
+                                    : 'bg-slate-50 border border-slate-200 text-slate-400 hover:bg-emerald-50 hover:text-emerald-500'
                                 }`}
                               >
                                 <Check className="w-4 h-4" />
@@ -541,8 +533,7 @@ const TeacherAttendance: React.FC = () => {
               </div>
 
               {/* Action Save Button */}
-              {isToday && (
-                <div className="p-6 border-t border-slate-100 dark:border-[#334155]/60 flex justify-end">
+              <div className="p-6 border-t border-slate-100 dark:border-[#334155]/60 flex justify-end">
                   <button
                     type="button"
                     onClick={saveAttendance}
@@ -557,7 +548,6 @@ const TeacherAttendance: React.FC = () => {
                     Save Attendance Sheet
                   </button>
                 </div>
-              )}
             </div>
           )}
         </div>

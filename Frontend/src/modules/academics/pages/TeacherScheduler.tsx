@@ -418,6 +418,7 @@ const TeacherScheduler: React.FC = () => {
           </span>
         );
       case 'inprogress':
+      case 'incomplete':
         return (
           <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-50 text-amber-600 border border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800">
             In Progress
@@ -753,6 +754,13 @@ const TeacherScheduler: React.FC = () => {
                         {s.lesson_sub_topic && (
                           <div className="bg-white dark:bg-[#162032] border border-slate-100 dark:border-[#283548] rounded-lg p-2 text-[10px] font-bold text-slate-500 dark:text-[#94a3b8] flex items-center gap-1.5">
                             <BookOpen className="w-3.5 h-3.5 text-slate-400 dark:text-[#64748b] animate-pulse" /> Subtopic: {s.lesson_sub_topic}
+                          </div>
+                        )}
+
+                        {s.actual_end_time && (
+                          <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-800/40 rounded-lg p-2 text-[10px] font-bold text-emerald-700 dark:text-emerald-400 flex items-center justify-between font-mono">
+                            <span>Completed At:</span>
+                            <span>{new Date(s.actual_end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                           </div>
                         )}
                       </div>

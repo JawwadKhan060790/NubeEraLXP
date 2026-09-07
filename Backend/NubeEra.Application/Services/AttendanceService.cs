@@ -83,7 +83,8 @@ public class AttendanceService : IAttendanceService
                 Status = att?.Status.ToString() ?? "Absent", // Default to Absent or empty
                 Remarks = att?.Remarks,
                 StudentId = s.Id,
-                StudentName = $"{s.FirstName} {s.LastName}"
+                StudentName = $"{s.FirstName} {s.LastName}",
+                Gender = s.Gender
             };
         }).ToList();
     }
@@ -106,7 +107,8 @@ public class AttendanceService : IAttendanceService
                 Status = att?.Status.ToString() ?? "Present", // Default to Present
                 Remarks = att?.Remarks,
                 TeacherId = t.Id,
-                TeacherName = $"{t.FirstName} {t.LastName}"
+                TeacherName = $"{t.FirstName} {t.LastName}",
+                Gender = t.Gender
             };
         }).ToList();
     }
@@ -128,27 +130,33 @@ public class AttendanceService : IAttendanceService
                 throw new AppException($"Invalid attendance status \"{dto.Status}\". Allowed values: {string.Join(", ", Enum.GetNames<AttendanceStatus>())}.");
             }
             parsedStatuses[dto] = status;
+        }        // Authorization: confirm every student/teacher referenced belongs to the
+        // caller's school (or is unassigned/global) so attendance can't be written for other schools (IDOR).
+        List<Student> students = new();
+        List<Teacher> teachers = new();
+
+        var studentIds = dtos.Where(d => d.StudentId.HasValue).Select(d => d.StudentId!.Value).Distinct().ToList();
+        if (studentIds.Count > 0)
+        {
+            students = await _studentRepo.GetAllAsync(q => q.IgnoreQueryFilters().Where(s => studentIds.Contains(s.Id) && !s.IsDeleted));
+            if (students.Count != studentIds.Count)
+            {
+                throw new UnauthorizedAccessException("One or more student records could not be found.");
+            } 
         }
 
-        // Authorization: confirm every student/teacher referenced belongs to the
-        // caller's school so attendance can't be written for other schools (IDOR).
-        if (callerSchoolId.HasValue)
+        var teacherIds = dtos.Where(d => d.TeacherId.HasValue && !d.StudentId.HasValue).Select(d => d.TeacherId!.Value).Distinct().ToList();
+        if (teacherIds.Count > 0)
         {
-            var studentIds = dtos.Where(d => d.StudentId.HasValue).Select(d => d.StudentId!.Value).Distinct().ToList();
-            if (studentIds.Count > 0)
+            teachers = await _teacherRepo.GetAllAsync(q => q.IgnoreQueryFilters().Where(t => teacherIds.Contains(t.Id) && !t.IsDeleted));
+            if (teachers.Count != teacherIds.Count)
             {
-                var students = await _studentRepo.GetAllAsync(q => q.Where(s => studentIds.Contains(s.Id)));
-                if (students.Any(s => s.SchoolId != callerSchoolId.Value) || students.Count != studentIds.Count)
-                {
-                    throw new UnauthorizedAccessException("You are not authorized to record attendance for students outside your school.");
-                }
+                throw new UnauthorizedAccessException("One or more teacher records could not be found.");
             }
 
-            var teacherIds = dtos.Where(d => d.TeacherId.HasValue && !d.StudentId.HasValue).Select(d => d.TeacherId!.Value).Distinct().ToList();
-            if (teacherIds.Count > 0)
+            if (callerSchoolId.HasValue)
             {
-                var teachers = await _teacherRepo.GetAllAsync(q => q.Where(t => teacherIds.Contains(t.Id)));
-                if (teachers.Any(t => t.SchoolId != callerSchoolId.Value) || teachers.Count != teacherIds.Count)
+                if (teachers.Any(t => t.SchoolId != Guid.Empty && t.SchoolId != callerSchoolId.Value))
                 {
                     throw new UnauthorizedAccessException("You are not authorized to record attendance for teachers outside your school.");
                 }
@@ -165,19 +173,19 @@ public class AttendanceService : IAttendanceService
                 {
                     if (dto.StudentId.HasValue)
                     {
-                        var student = await _studentRepo.GetByIdAsync(dto.StudentId.Value);
-                        schoolId = student?.SchoolId;
+                        var student = students.FirstOrDefault(s => s.Id == dto.StudentId.Value) ?? await _studentRepo.GetByIdAsync(dto.StudentId.Value);
+                        if (student != null && student.SchoolId != Guid.Empty) schoolId = student.SchoolId;
                     }
                     else if (dto.TeacherId.HasValue && !dto.StudentId.HasValue)
                     {
-                        var teacher = await _teacherRepo.GetByIdAsync(dto.TeacherId.Value);
-                        schoolId = teacher?.SchoolId;
+                        var teacher = teachers.FirstOrDefault(t => t.Id == dto.TeacherId.Value) ?? await _teacherRepo.GetByIdAsync(dto.TeacherId.Value);
+                        if (teacher != null && teacher.SchoolId != Guid.Empty) schoolId = teacher.SchoolId;
                     }
                 }
 
                 var attendance = new Attendance
                 {
-                    SchoolId = schoolId ?? Guid.Empty,
+                    SchoolId = (schoolId.HasValue && schoolId.Value != Guid.Empty) ? schoolId.Value : (callerSchoolId ?? Guid.Empty),
                     Date = dto.Date.Date,
                     Status = status,
                     Remarks = dto.Remarks,
@@ -191,7 +199,7 @@ public class AttendanceService : IAttendanceService
                 var attendance = await _repository.GetByIdAsync(dto.Id);
                 if (attendance != null)
                 {
-                    if (callerSchoolId.HasValue && attendance.SchoolId != callerSchoolId.Value)
+                    if (callerSchoolId.HasValue && attendance.SchoolId != Guid.Empty && attendance.SchoolId != callerSchoolId.Value)
                     {
                         throw new UnauthorizedAccessException("You are not authorized to modify attendance records outside your school.");
                     }

@@ -6,6 +6,7 @@ using System.Security.Claims;
 using System.IdentityModel.Tokens.Jwt;
 using NubeEra.Application.Interfaces.Repositories;
 using NubeEra.Domain.Common;
+using NubeEra.Domain.Constants;
 using NubeEra.Domain.Entities;
 using NubeEra.Application.Interfaces.Security;
 
@@ -59,21 +60,28 @@ public class UsersController : ControllerBase
         if (normalizedField == "email")
         {
             var lower = normalizedValue.ToLowerInvariant();
-            var userMatches = await _userRepository.GetAllAsync(q => q.Where(u => u.Email.ToLower() == lower && u.IsActive));
-            var studentMatches = await _studentRepository.GetAllAsync(q => q.Where(s => s.Email != null && s.Email.ToLower() == lower && s.IsActive));
-            var teacherMatches = await _teacherRepository.GetAllAsync(q => q.Where(t => t.Email != null && t.Email.ToLower() == lower && t.IsActive));
-            exists = userMatches.Any() || studentMatches.Any() || teacherMatches.Any();
+            var userMatches = await _userRepository.Query().IgnoreQueryFilters().AnyAsync(u => u.Email.ToLower() == lower && !u.IsDeleted);
+            var studentMatches = await _studentRepository.Query().IgnoreQueryFilters().AnyAsync(s => s.Email != null && s.Email.ToLower() == lower && !s.IsDeleted);
+            var teacherMatches = await _teacherRepository.Query().IgnoreQueryFilters().AnyAsync(t => t.Email != null && t.Email.ToLower() == lower && !t.IsDeleted);
+            exists = userMatches || studentMatches || teacherMatches;
         }
         else if (normalizedField == "phone")
         {
-            var userMatches = await _userRepository.GetAllAsync(q => q.Where(u => u.Phone == normalizedValue && u.IsActive));
-            var studentMatches = await _studentRepository.GetAllAsync(q => q.Where(s => s.Phone == normalizedValue && s.IsActive));
-            var teacherMatches = await _teacherRepository.GetAllAsync(q => q.Where(t => t.Phone == normalizedValue && t.IsActive));
-            exists = userMatches.Any() || studentMatches.Any() || teacherMatches.Any();
+            var userMatches = await _userRepository.Query().IgnoreQueryFilters().AnyAsync(u => u.Phone == normalizedValue && !u.IsDeleted);
+            var studentMatches = await _studentRepository.Query().IgnoreQueryFilters().AnyAsync(s => s.Phone == normalizedValue && !s.IsDeleted);
+            var teacherMatches = await _teacherRepository.Query().IgnoreQueryFilters().AnyAsync(t => t.Phone == normalizedValue && !t.IsDeleted);
+            exists = userMatches || studentMatches || teacherMatches;
+        }
+        else if (normalizedField == "username")
+        {
+            var lower = normalizedValue.ToLowerInvariant();
+            exists = await _userRepository.Query()
+                .IgnoreQueryFilters()
+                .AnyAsync(u => u.Username != null && u.Username.ToLower() == lower && !u.IsDeleted);
         }
         else
         {
-            return BadRequest(new { message = "field must be 'email' or 'phone'" });
+            return BadRequest(new { message = "field must be 'email', 'phone' or 'username'" });
         }
 
         return Ok(new { exists });
@@ -99,6 +107,7 @@ public class UsersController : ControllerBase
         {
             id = user.Id,
             email = user.Email,
+            username = user.Username,
             first_name = user.FirstName,
             last_name = user.LastName,
             full_name = $"{user.FirstName} {user.LastName}",
@@ -152,6 +161,35 @@ public class UsersController : ControllerBase
         var user = await _userRepository.GetByIdAsync(Guid.Parse(userIdStr));
         if (user == null) return NotFound();
 
+        // Email update & uniqueness check
+        if (!string.IsNullOrWhiteSpace(request.Email) && !string.Equals(user.Email, request.Email.Trim(), StringComparison.OrdinalIgnoreCase))
+        {
+            var cleanEmail = request.Email.Trim();
+            var existingUser = await _userRepository.GetByEmailAsync(cleanEmail);
+            if (existingUser != null && existingUser.Id != user.Id)
+            {
+                return BadRequest(new { message = "Email is already in use by another account." });
+            }
+            user.UpdateEmail(cleanEmail);
+        }
+
+        // Username update & uniqueness check
+        if (request.Username != null)
+        {
+            var cleanUsername = string.IsNullOrWhiteSpace(request.Username) ? null : request.Username.Trim().ToLowerInvariant();
+            if (cleanUsername != null && !string.Equals(user.Username, cleanUsername, StringComparison.OrdinalIgnoreCase))
+            {
+                var existingUser = await _userRepository.Query()
+                    .IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(u => u.Id != user.Id && u.Username != null && u.Username.ToLower() == cleanUsername && !u.IsDeleted);
+                if (existingUser != null)
+                {
+                    return BadRequest(new { message = "Username is already in use by another account." });
+                }
+            }
+            user.UpdateUsername(cleanUsername);
+        }
+
         user.FirstName = request.FirstName;
         user.LastName = request.LastName;
         user.Phone = request.Phone;
@@ -166,6 +204,10 @@ public class UsersController : ControllerBase
         {
             student.FirstName = request.FirstName ?? student.FirstName;
             student.LastName = request.LastName ?? student.LastName;
+            if (!string.IsNullOrWhiteSpace(request.Email))
+            {
+                student.Email = request.Email.Trim();
+            }
             student.Phone = request.Phone;
             student.ProfilePictureUrl = request.ProfileImageUrl ?? student.ProfilePictureUrl;
             student.DateOfBirth = request.DateOfBirth;
@@ -186,6 +228,10 @@ public class UsersController : ControllerBase
         {
             teacher.FirstName = request.FirstName ?? teacher.FirstName;
             teacher.LastName = request.LastName ?? teacher.LastName;
+            if (!string.IsNullOrWhiteSpace(request.Email))
+            {
+                teacher.Email = request.Email.Trim();
+            }
             teacher.Phone = request.Phone;
             teacher.ProfilePictureUrl = request.ProfileImageUrl ?? teacher.ProfilePictureUrl;
             teacher.DateOfBirth = request.DateOfBirth;
@@ -222,6 +268,7 @@ public class UsersController : ControllerBase
         {
             id = u.Id,
             email = u.Email,
+            username = u.Username,
             first_name = u.FirstName,
             last_name = u.LastName,
             full_name = $"{u.FirstName} {u.LastName}",
@@ -253,21 +300,49 @@ public class UsersController : ControllerBase
 
         Console.WriteLine($"[UserCreate] Role: {request.Role}, Email: {request.Email}, SchoolId: {request.SchoolId}");
 
-        // Enforce the same standard password policy used at Register/ChangePassword
-        // (see RegisterRequestValidator) — this endpoint previously accepted any
-        // non-empty password, including single-character ones, when an Admin/Staff
-        // created a new account.
-        if (string.IsNullOrEmpty(request.Password) || request.Password.Length < 8)
-            return BadRequest(new { message = "Password must be at least 8 characters." });
-        if (!System.Text.RegularExpressions.Regex.IsMatch(request.Password, "[A-Z]"))
-            return BadRequest(new { message = "Password must contain at least one uppercase letter." });
-        if (!System.Text.RegularExpressions.Regex.IsMatch(request.Password, "[0-9]"))
-            return BadRequest(new { message = "Password must contain at least one digit." });
+        // Student and Parent roles allow simple passwords (minimum 6 characters, e.g. '123456').
+        // Other staff/teacher/admin roles enforce standard policy (8+ chars, uppercase, digit).
+        var isStudentOrParentRole = string.Equals(request.Role, "Student", StringComparison.OrdinalIgnoreCase) ||
+                                    string.Equals(request.Role, "Parent", StringComparison.OrdinalIgnoreCase);
+
+        if (isStudentOrParentRole)
+        {
+            if (string.IsNullOrEmpty(request.Password) || request.Password.Length < 6)
+                return BadRequest(new { message = "Password must be at least 6 characters." });
+        }
+        else
+        {
+            if (string.IsNullOrEmpty(request.Password) || request.Password.Length < 8)
+                return BadRequest(new { message = "Password must be at least 8 characters." });
+            if (!System.Text.RegularExpressions.Regex.IsMatch(request.Password, "[A-Z]"))
+                return BadRequest(new { message = "Password must contain at least one uppercase letter." });
+            if (!System.Text.RegularExpressions.Regex.IsMatch(request.Password, "[0-9]"))
+                return BadRequest(new { message = "Password must contain at least one digit." });
+        }
 
         var schoolId = _tenantService.GetEffectiveSchoolIdOrEmpty(request.SchoolId);
         var existingUser = await _userRepository.GetByEmailAsync(request.Email.Trim().ToLower(), null);
         if (existingUser != null)
             return BadRequest(new { message = "User with this email already exists" });
+
+        var username = request.Username?.Trim();
+        if (!string.IsNullOrWhiteSpace(username))
+        {
+            var existingByUsername = await _userRepository.Query()
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(u => u.Username != null && u.Username.ToLower() == username.ToLower() && !u.IsDeleted);
+            if (existingByUsername != null)
+                return BadRequest(new { message = "User with this username already exists" });
+
+            var deletedUser = await _userRepository.Query()
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(u => u.Username != null && u.Username.ToLower() == username.ToLower() && u.IsDeleted);
+            if (deletedUser != null)
+            {
+                deletedUser.Username = MakeUniqueAfterDelete(deletedUser.Username!, deletedUser.Id, 100);
+                await _userRepository.UpdateAsync(deletedUser);
+            }
+        }
 
         var passwordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
 
@@ -294,7 +369,7 @@ public class UsersController : ControllerBase
                 return BadRequest(new { message = "An Admin account already exists. Only one Admin account is permitted on this platform." });
         }
 
-        var user = new User(request.Email.Trim().ToLower(), passwordHash, roleObj.Id, schoolId);
+        var user = new User(request.Email.Trim().ToLower(), passwordHash, roleObj.Id, schoolId, username);
         user.FirstName = request.FirstName;
         user.LastName = request.LastName;
 
@@ -327,6 +402,17 @@ public class UsersController : ControllerBase
         var user = await _userRepository.GetByIdAsync(id, q => q.Include(u => u.Role));
         if (user == null) return NotFound();
 
+        var username = request.Username?.Trim();
+        if (!string.IsNullOrWhiteSpace(username) && !string.Equals(user.Username, username, StringComparison.OrdinalIgnoreCase))
+        {
+            var existingByUsername = await _userRepository.Query()
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(u => u.Id != user.Id && u.Username != null && u.Username.ToLower() == username.ToLower() && !u.IsDeleted);
+            if (existingByUsername != null)
+                return BadRequest(new { message = "User with this username already exists" });
+        }
+
+        user.Username = username;
         user.FirstName = request.FirstName;
         user.LastName = request.LastName;
 
@@ -348,35 +434,40 @@ public class UsersController : ControllerBase
         if (_tenantService.CanSelectSchool())
             user.SchoolId = request.SchoolId;
         
-        if (request.IsActive) user.Activate();
-        else user.Deactivate();
+        var callerRole = _currentUserService.Role ?? "";
+        bool isAdmin = callerRole.Equals("SuperAdmin", StringComparison.OrdinalIgnoreCase) || callerRole.Equals("Admin", StringComparison.OrdinalIgnoreCase);
+
+        // Only Admin accounts can change active/inactive status
+        if (isAdmin)
+        {
+            if (request.IsActive) user.Activate();
+            else user.Deactivate();
+        }
 
         await _userRepository.UpdateAsync(user);
 
-        // Sync SchoolId to linked Teacher/Student profiles
+        // Sync IsActive and SchoolId to linked Teacher/Student profiles
+        var teachersToSync = await _teacherRepository.GetAllAsync(q => q.Where(t => t.UserId == user.Id));
+        foreach (var t in teachersToSync)
+        {
+            if (user.SchoolId.HasValue) t.SchoolId = user.SchoolId.Value;
+            if (isAdmin) t.IsActive = user.IsActive;
+            await _teacherRepository.UpdateAsync(t);
+        }
+
+        var studentsToSync = await _studentRepository.GetAllAsync(q => q.Where(s => s.UserId == user.Id));
+        foreach (var s in studentsToSync)
+        {
+            if (user.SchoolId.HasValue) s.SchoolId = user.SchoolId.Value;
+            if (isAdmin) s.IsActive = user.IsActive;
+            await _studentRepository.UpdateAsync(s);
+        }
+
         if (user.SchoolId.HasValue)
         {
-            var teachers = await _teacherRepository.GetAllAsync(q => q.Where(t => t.UserId == user.Id));
-            foreach (var t in teachers)
-            {
-                t.SchoolId = user.SchoolId.Value;
-                await _teacherRepository.UpdateAsync(t);
-            }
-
-            var students = await _studentRepository.GetAllAsync(q => q.Where(s => s.UserId == user.Id));
-            foreach (var s in students)
-            {
-                s.SchoolId = user.SchoolId.Value;
-                await _studentRepository.UpdateAsync(s);
-            }
-
             // If the role was just changed to Teacher and this user has no linked
-            // Teacher profile yet, create one now — mirroring the auto-create logic
-            // in Create() above. Without this, promoting an existing user to the
-            // Teacher role left them missing from the Teacher panel entirely, which
-            // is what QA reported as a teacher-count mismatch between the Users and
-            // Teacher panels.
-            if (roleObj.RoleName.Equals("Teacher", StringComparison.OrdinalIgnoreCase) && !teachers.Any())
+            // Teacher profile yet, create one now
+            if (roleObj.RoleName.Equals("Teacher", StringComparison.OrdinalIgnoreCase) && !teachersToSync.Any())
             {
                 var newTeacher = new Teacher
                 {
@@ -396,10 +487,10 @@ public class UsersController : ControllerBase
     }
 
     /// <summary>
-    /// Toggle user active/hold status
+    /// Toggle user active/hold status (Admin only)
     /// </summary>
     [HttpPut("{id}/toggle-status")]
-    [Authorize(Policy = "StaffOnly")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> ToggleStatus(Guid id)
     {
         var user = await _userRepository.GetByIdAsync(id);
@@ -409,6 +500,22 @@ public class UsersController : ControllerBase
         else user.Activate();
 
         await _userRepository.UpdateAsync(user);
+
+        // Sync status to linked Teacher/Student profiles
+        var teachers = await _teacherRepository.GetAllAsync(q => q.Where(t => t.UserId == user.Id));
+        foreach (var t in teachers)
+        {
+            t.IsActive = user.IsActive;
+            await _teacherRepository.UpdateAsync(t);
+        }
+
+        var students = await _studentRepository.GetAllAsync(q => q.Where(s => s.UserId == user.Id));
+        foreach (var s in students)
+        {
+            s.IsActive = user.IsActive;
+            await _studentRepository.UpdateAsync(s);
+        }
+
         return Ok(new { is_active = user.IsActive, message = user.IsActive ? "User activated" : "User put on hold" });
     }
 
@@ -508,6 +615,10 @@ public class UsersController : ControllerBase
         if (user == null) return NotFound();
 
         user.Deactivate();
+        if (!string.IsNullOrWhiteSpace(user.Username))
+        {
+            user.Username = MakeUniqueAfterDelete(user.Username, user.Id, 100);
+        }
         await _userRepository.UpdateAsync(user);
 
         // Deactivate associated Teacher profile(s) if any (soft delete, preserves history)
@@ -518,17 +629,51 @@ public class UsersController : ControllerBase
             await _teacherRepository.UpdateAsync(t);
         }
 
-        // Deactivate associated Student profile(s) if any (soft delete, preserves history;
-        // also keeps parent dashboards able to show the child's prior records rather than
-        // having them vanish/break because the row no longer exists)
+        // Deactivate & soft-delete associated Student profile(s) if any and sync parent status
         var students = await _studentRepository.GetAllAsync(q => q.Where(s => s.UserId == user.Id));
         foreach (var s in students)
         {
             s.IsActive = false;
+            s.IsDeleted = true;
+            s.DeletedDate = DateTime.UtcNow;
             await _studentRepository.UpdateAsync(s);
+
+            await SyncParentOnUserDeleteAsync(s);
         }
 
         return NoContent();
+    }
+
+    private async Task SyncParentOnUserDeleteAsync(Student student)
+    {
+        var phone = student.ParentGuardianPhone?.Trim();
+        var email = student.ParentGuardianEmail?.Trim().ToLower();
+
+        if (string.IsNullOrEmpty(phone) && string.IsNullOrEmpty(email)) return;
+
+        var parentUser = await _userRepository.Query()
+            .IgnoreQueryFilters()
+            .Include(u => u.Role)
+            .FirstOrDefaultAsync(u => u.Role != null && u.Role.RoleName == "Parent" && (
+                (!string.IsNullOrEmpty(phone) && (u.Phone == phone || u.Email.ToLower() == phone.ToLower())) ||
+                (!string.IsNullOrEmpty(email) && (u.Email.ToLower() == email || u.Phone == email))));
+
+        if (parentUser == null) return;
+
+        var otherActiveStudents = await _studentRepository.Query()
+            .IgnoreQueryFilters()
+            .Where(s => s.Id != student.Id && !s.IsDeleted && s.IsActive &&
+                ((!string.IsNullOrEmpty(phone) && (s.ParentGuardianPhone == phone || (s.ParentGuardianEmail != null && s.ParentGuardianEmail.ToLower() == phone))) ||
+                 (!string.IsNullOrEmpty(email) && ((s.ParentGuardianEmail != null && s.ParentGuardianEmail.ToLower() == email) || s.ParentGuardianPhone == email))))
+            .ToListAsync();
+
+        if (!otherActiveStudents.Any())
+        {
+            parentUser.IsDeleted = true;
+            parentUser.DeletedDate = DateTime.UtcNow;
+            parentUser.Deactivate();
+            await _userRepository.UpdateAsync(parentUser);
+        }
     }
 
     /// <summary>
@@ -562,12 +707,53 @@ public class UsersController : ControllerBase
 
         return Ok(new { message = "User restored successfully", is_active = user.IsActive });
     }
+
+    /// <summary>
+    /// Repairs and restores any student accounts that were mistakenly tagged with Parent role.
+    /// Ensures every User linked to a Student profile has Role='Student' and IsParent=false.
+    /// </summary>
+    [HttpPost("fix-student-roles")]
+    [Authorize(Policy = AppPolicies.AdminOnly)]
+    public async Task<IActionResult> FixStudentRoles()
+    {
+        var studentRole = (await _roleRepository.GetAllAsync(q => q.Where(r => r.RoleName == "Student"))).FirstOrDefault();
+        if (studentRole == null) return BadRequest(new { message = "Student role not found." });
+
+        var students = await _studentRepository.Query()
+            .IgnoreQueryFilters()
+            .Where(s => s.UserId.HasValue)
+            .ToListAsync();
+
+        int fixedCount = 0;
+        foreach (var s in students)
+        {
+            var u = await _userRepository.GetByIdAsync(s.UserId!.Value);
+            if (u != null && (u.RoleId != studentRole.Id || u.IsParent))
+            {
+                u.SetRole(studentRole.Id);
+                u.IsParent = false;
+                await _userRepository.UpdateAsync(u);
+                fixedCount++;
+            }
+        }
+
+        return Ok(new { success = true, fixed_count = fixedCount, message = $"Successfully restored {fixedCount} student accounts." });
+    }
+
+    private static string MakeUniqueAfterDelete(string original, Guid id, int maxLength)
+    {
+        var suffix = $"~del~{id:N}";
+        var keep = Math.Max(0, maxLength - suffix.Length);
+        var trimmedOriginal = original.Length > keep ? original[..keep] : original;
+        return trimmedOriginal + suffix;
+    }
 }
 
 // Records use PascalCase properties that match snake_case JSON thanks to SnakeCaseLower policy
 public class UserCreateRequest
 {
     public string Email { get; set; } = "";
+    public string? Username { get; set; }
     public string Password { get; set; } = "";
     public string Role { get; set; } = "Teacher";
     public Guid? SchoolId { get; set; }
@@ -579,6 +765,7 @@ public class UserUpdateRequest
 {
     public string? FirstName { get; set; }
     public string? LastName { get; set; }
+    public string? Username { get; set; }
     public string Role { get; set; } = "Teacher";
     public Guid? SchoolId { get; set; }
     public bool IsActive { get; set; }
@@ -588,6 +775,8 @@ public class UpdateProfileRequest
 {
     public string? FirstName { get; set; }
     public string? LastName { get; set; }
+    public string? Email { get; set; }
+    public string? Username { get; set; }
     public string? Phone { get; set; }
     public string? ProfileImageUrl { get; set; }
     

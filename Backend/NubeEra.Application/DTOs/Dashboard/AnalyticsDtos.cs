@@ -162,6 +162,7 @@ public class StudentAnalyticsDto
 {
     // KPI Cards
     public int    TotalModules          { get; set; }
+    public int    TotalLessons          { get; set; }
     public int    CompletedLessons      { get; set; }
     public int    TotalExams            { get; set; }
     public double AverageScore          { get; set; }
@@ -238,6 +239,8 @@ public class StaffAnalyticsDto
     public int TotalEvents           { get; set; }
     public int ResolvedTickets       { get; set; }
     public int NewStudentsThisMonth  { get; set; }
+    public int TotalDoubts           { get; set; }
+    public int TotalUnits            { get; set; }
 
     // Ticket trend — monthly new tickets (last 6 months)
     public List<TrendPoint> TicketTrend              { get; set; } = new();

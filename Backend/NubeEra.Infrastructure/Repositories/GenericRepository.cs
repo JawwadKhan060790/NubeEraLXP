@@ -190,6 +190,11 @@ namespace NubeEra.Infrastructure.Repositories
             return await query.CountAsync();
         }
 
+        public void Detach(T entity)
+        {
+            _context.Entry(entity).State = EntityState.Detached;
+        }
+
         /// <summary>
         /// Attaches <paramref name="entity"/> to the context for a write (Update/soft-Delete/
         /// Restore). All read methods on this repository use AsNoTracking, so callers that

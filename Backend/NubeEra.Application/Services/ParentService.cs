@@ -51,42 +51,34 @@ public class ParentService : IParentService
         }
 
         var parentUser = await _userRepository.GetByIdAsync(Guid.Parse(userIdStr));
-        if (parentUser == null || string.IsNullOrEmpty(parentUser.Phone))
+        if (parentUser == null || !parentUser.IsActive || parentUser.IsDeleted)
         {
-            return parentDashboard;
+            throw new UnauthorizedAccessException("Account is inactive or deleted.");
         }
 
-        var parentPhone = parentUser.Phone.Trim();
+        var parentPhone = parentUser.Phone?.Trim() ?? "";
+        var parentEmail = parentUser.Email?.Trim().ToLower() ?? "";
         var normalizedParentPhone = NormalizePhoneForMatching(parentPhone);
 
-        // Fetch active students with a non-null guardian phone (DB-side filter — IsActive
-        // exclusion explained below), then resolve the actual match in memory using
-        // NormalizePhoneForMatching. We can't push the normalization itself into SQL
-        // (the EF/MySQL provider can't translate the digit-stripping + suffix comparison),
-        // so we narrow with the cheap DB predicates first and do the precise compare here.
-        //
-        // IMPORTANT: exclude deactivated/deleted students (IsActive == false). Student
-        // removal is a soft delete (see StudentService.DeleteAsync / UsersController.Delete),
-        // and without this filter a removed child's progress/results kept showing up on
-        // the parent dashboard indefinitely - contradicting the requirement that parent
-        // dashboards reflect a student's deletion/deactivation.
         var candidates = await _studentRepository.GetAllAsync(q => q
             .Include(s => s.Grade)
             .Include(s => s.School)
             .Include(s => s.Section)
-            .Where(s => s.IsActive && s.ParentGuardianPhone != null && s.ParentGuardianPhone.Trim() != ""));
+            .Where(s => s.IsActive && !s.IsDeleted &&
+                ((s.ParentGuardianPhone != null && s.ParentGuardianPhone.Trim() != "") ||
+                 (s.ParentGuardianEmail != null && s.ParentGuardianEmail.Trim() != ""))));
 
-        // Match using normalized phone numbers so that purely cosmetic differences in
-        // formatting — spaces, dashes, parentheses, a leading "+", or a leading national
-        // trunk/country-code prefix — don't cause a real parent-child link to be missed.
-        // (See QA finding: "Parent-student linkage integrity (phone-based matching)".)
         var children = candidates
-            .Where(s => PhonesLikelyMatch(normalizedParentPhone, NormalizePhoneForMatching(s.ParentGuardianPhone!)))
+            .Where(s => (!string.IsNullOrEmpty(parentPhone) && PhonesLikelyMatch(normalizedParentPhone, NormalizePhoneForMatching(s.ParentGuardianPhone!))) ||
+                        (!string.IsNullOrEmpty(parentEmail) && s.ParentGuardianEmail?.Trim().ToLower() == parentEmail))
             .ToList();
 
         if (!children.Any())
         {
-            return parentDashboard;
+            parentUser.IsDeleted = true;
+            parentUser.Deactivate();
+            await _userRepository.UpdateAsync(parentUser);
+            throw new UnauthorizedAccessException("Account disabled. No active students linked to this parent account.");
         }
 
         var studentIds = children.Select(c => c.Id).ToList();

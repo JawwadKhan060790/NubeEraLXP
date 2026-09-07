@@ -16,7 +16,7 @@ const ThemeContext = createContext<ThemeContextType>({
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [theme, setTheme] = useState<Theme>(() => {
-    const saved = localStorage.getItem('nubeera-theme') || localStorage.getItem('veriton-theme');
+    const saved = localStorage.getItem('nubeera-theme');
     return (saved as Theme) || 'light';
   });
 

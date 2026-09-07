@@ -24,7 +24,9 @@ public static class JwtAuthenticationExtensions
                     ValidIssuer      = configuration["Jwt:Issuer"],
                     ValidAudience    = configuration["Jwt:Audience"],
                     IssuerSigningKey = new SymmetricSecurityKey(
-                        Encoding.UTF8.GetBytes(configuration["Jwt:Key"]!))
+                        Encoding.UTF8.GetBytes(configuration["Jwt:Key"]!)),
+                    RoleClaimType    = System.Security.Claims.ClaimTypes.Role,
+                    NameClaimType    = System.Security.Claims.ClaimTypes.NameIdentifier
                 };
             });
 

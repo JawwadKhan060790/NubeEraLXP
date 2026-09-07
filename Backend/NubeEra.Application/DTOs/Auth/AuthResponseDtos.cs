@@ -19,6 +19,7 @@ public class UserProfileDto
 {
     public Guid Id { get; set; }
     public string Email { get; set; } = string.Empty;
+    public string? Username { get; set; }
     public string? FirstName { get; set; }
     public string? LastName { get; set; }
     public string FullName => $"{FirstName} {LastName}".Trim();
@@ -37,4 +38,5 @@ public class UserProfileDto
     public string? Phone { get; set; }
     public string? ProfileImageUrl { get; set; }
     public bool IsActive { get; set; }
+    public bool IsParent { get; set; }
 }

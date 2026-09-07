@@ -11,5 +11,7 @@ namespace NubeEra.Application.Interfaces.Services
         Task<ImportResultDto> ImportAttendanceAsync(Guid schoolId, Stream excelStream);
         Task<ImportResultDto> ImportTeacherScheduleAsync(Guid schoolId, Stream excelStream);
         Task<ImportResultDto> ImportMcqsAsync(Guid schoolId, Stream excelStream);
+        Task<ImportResultDto> ImportUnitsAsync(Guid schoolId, Stream excelStream);
+        Task<ImportResultDto> ImportTopicsAsync(Guid schoolId, Stream excelStream);
     }
 }

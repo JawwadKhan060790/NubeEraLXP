@@ -45,7 +45,11 @@ export function parseApiErrors(error: any): ParsedErrors {
     if (responseData.message && Object.keys(parsed).length === 0) {
       const msg = responseData.message;
       const lowerMsg = msg.toLowerCase();
-      if (lowerMsg.includes('email')) {
+      if (lowerMsg.includes('parent_username') || lowerMsg.includes('parent username') || (lowerMsg.includes('parent') && lowerMsg.includes('username'))) {
+        parsed['parent_username'] = msg;
+      } else if (lowerMsg.includes('username')) {
+        parsed['username'] = msg;
+      } else if (lowerMsg.includes('email')) {
         parsed['email'] = msg;
       } else if (lowerMsg.includes('phone') || lowerMsg.includes('mobile')) {
         parsed['phone'] = msg;

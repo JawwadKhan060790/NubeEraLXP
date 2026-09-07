@@ -11,7 +11,7 @@ using NubeEra.Seeder.Performance;
 
 Console.OutputEncoding = System.Text.Encoding.UTF8;
 
-Banner("NUBEERA LMS -- PERFORMANCE TEST DATA SEEDER");
+Banner("VERITON LMS -- PERFORMANCE TEST DATA SEEDER");
 Console.WriteLine($"  Target Database  : nubeera_db  (existing database)");
 Console.WriteLine($"  MySQL Host       : localhost:3306 (root)");
 Console.WriteLine($"  Started          : {DateTime.Now:yyyy-MM-dd HH:mm:ss}");

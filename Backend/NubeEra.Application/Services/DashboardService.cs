@@ -280,18 +280,55 @@ public class DashboardService : IDashboardService
         if (student == null)
             return null;
 
-        // Units are keyed by the school-agnostic master GradeLevelId now — resolve via
-        // the student's already-Included Grade nav, then scope to this school via
-        // SchoolUnitAssignment (fail closed to an empty list if unresolved).
         var studentGradeLevelId = student.Grade?.GradeLevelId;
-        var modules = studentGradeLevelId.HasValue
-            ? await _moduleRepo.GetAllAsync(q => q.Where(m => m.IsActive &&
-                m.GradeLevelId == studentGradeLevelId.Value &&
-                m.SchoolAssignments.Any(a => !a.IsDeleted && a.SchoolId == student.SchoolId)))
-            : new List<Module>();
-        var moduleIds = modules.Select(m => m.Id).ToList();
+        if (!studentGradeLevelId.HasValue && student.Grade != null)
+        {
+            var gLevelStr = student.Grade.GradeLevel;
+            if (!string.IsNullOrEmpty(gLevelStr))
+            {
+                var cleanLevel = gLevelStr.Replace("Grade", "").Trim();
+                if (int.TryParse(cleanLevel, out var lvlNum))
+                {
+                    var allGrades = await _gradeRepo.GetAllAsync(q => q.Include(g => g.Level));
+                    var gl = allGrades.FirstOrDefault(g => g.Id == student.GradeId)?.Level;
+                    studentGradeLevelId = gl?.Id;
+                }
+            }
+        }
 
-        var lessons = await _lessonRepo.GetAllAsync(q => q.Where(l => l.IsActive && moduleIds.Contains(l.ModuleId)));
+        var modulesList = new List<Module>();
+        if (studentGradeLevelId.HasValue)
+        {
+            var scopedModules = await _moduleRepo.GetAllAsync(q => q.Where(m => m.IsActive &&
+                m.GradeLevelId == studentGradeLevelId.Value &&
+                m.SchoolAssignments.Any(a => !a.IsDeleted && a.SchoolId == student.SchoolId)));
+            
+            if (scopedModules.Any())
+            {
+                modulesList = scopedModules.ToList();
+            }
+            else
+            {
+                var allGradeModules = await _moduleRepo.GetAllAsync(q => q.Where(m => m.IsActive && m.GradeLevelId == studentGradeLevelId.Value));
+                modulesList = allGradeModules.ToList();
+            }
+        }
+
+        modulesList = modulesList
+            .OrderBy(m => GetUnitNumber(m.Name))
+            .ThenBy(m => m.Name)
+            .ToList();
+
+        var moduleIds = modulesList.Select(m => m.Id).ToList();
+
+        var lessonsRaw = await _lessonRepo.GetAllAsync(q => q.Where(l => l.IsActive && moduleIds.Contains(l.ModuleId)));
+        var lessons = lessonsRaw.ToList();
+
+        if (!lessons.Any() && studentGradeLevelId.HasValue)
+        {
+            var directLessons = await _lessonRepo.GetAllAsync(q => q.Include(l => l.Module).Where(l => l.IsActive && l.Module != null && l.Module.GradeLevelId == studentGradeLevelId.Value));
+            lessons = directLessons.ToList();
+        }
         
         var completionsRaw = await _completionRepo.GetAllAsync(q => q.Include(c => c.Lesson).ThenInclude(l => l.Module).Where(c => c.StudentId == student.Id));
         var completions = completionsRaw
@@ -300,7 +337,7 @@ public class DashboardService : IDashboardService
             .ToList();
 
         var modulesProgress = new List<StudentModuleProgressDto>();
-        foreach (var module in modules)
+        foreach (var module in modulesList)
         {
             var moduleLessonsCount = lessons.Count(l => l.ModuleId == module.Id);
             var completedCount = completions.Count(c => c.Lesson?.ModuleId == module.Id);
@@ -317,6 +354,11 @@ public class DashboardService : IDashboardService
                 CompletionPercentage = pct
             });
         }
+
+        modulesProgress = modulesProgress
+            .OrderBy(m => GetUnitNumber(m.ModuleName))
+            .ThenBy(m => m.ModuleName)
+            .ToList();
 
         var recentCompletions = completions
             .OrderByDescending(c => c.CreatedAt)
@@ -421,6 +463,10 @@ public class DashboardService : IDashboardService
             };
         }).ToList();
 
+        var attendances = await _attendanceRepo.GetAllAsync(q => q.Where(a => a.StudentId == student.Id));
+        var attendCount = attendances.Count;
+        var attendRate = attendCount == 0 ? 0.0 : Math.Round((double)attendances.Count(a => a.Status == AttendanceStatus.Present) / attendCount * 100, 1);
+
         return new StudentDashboardDto
         {
             Id = student.Id,
@@ -430,10 +476,12 @@ public class DashboardService : IDashboardService
             StudentId = student.StudentId,
             RollNo = student.RollNo,
             GradeId = student.GradeId,
-            TotalModules = modules.Count,
+            TotalModules = modulesList.Count,
+            TotalLessons = totalLessons,
             CompletedLessons = totalCompleted,
             PendingLessons = pendingLessons,
             SyllabusCompletionPercentage = syllabusPct,
+            AttendanceRate = attendRate,
             TotalExams = examCount,
             AverageExamScore = avgScore,
             ModulesProgress = modulesProgress,
@@ -568,5 +616,12 @@ public class DashboardService : IDashboardService
             RecentActivities = recentActivities,
             WeakAreas = weakAreasList
         };
+    }
+
+    private static int GetUnitNumber(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return 999;
+        var match = System.Text.RegularExpressions.Regex.Match(name, @"\d+");
+        return match.Success && int.TryParse(match.Value, out int num) ? num : 999;
     }
 }

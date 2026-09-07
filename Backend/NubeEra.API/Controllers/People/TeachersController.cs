@@ -128,9 +128,13 @@ public class TeachersController : ControllerBase
         {
             return BadRequest(new { message = ex.Message });
         }
+        catch (AppException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
         catch (InvalidOperationException ex)
         {
-            return Conflict(new { message = ex.Message });
+            return BadRequest(new { message = ex.Message });
         }
     }
 
@@ -138,8 +142,23 @@ public class TeachersController : ControllerBase
     [Authorize(Policy = "PrincipalOnly")]
     public async Task<IActionResult> Update(Guid id, TeacherUpdateDto dto)
     {
-        await _service.UpdateAsync(id, dto);
-        return NoContent();
+        try
+        {
+            await _service.UpdateAsync(id, dto);
+            return NoContent();
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (AppException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     [HttpDelete("{id}")]

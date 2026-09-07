@@ -59,7 +59,12 @@ public static class AuthorizationPoliciesExtensions
     private static bool HasAnyRole(
         Microsoft.AspNetCore.Authorization.AuthorizationHandlerContext ctx,
         params string[] roles)
-        => ctx.User.HasClaim(c =>
-            c.Type == ClaimTypes.Role &&
-            roles.Contains(c.Value, StringComparer.OrdinalIgnoreCase));
+    {
+        if (ctx?.User == null) return false;
+
+        return ctx.User.HasClaim(c =>
+            (c.Type == ClaimTypes.Role || c.Type == "role" || c.Type == "utype" || c.Type.EndsWith("/role")) &&
+            roles.Contains(c.Value, StringComparer.OrdinalIgnoreCase)) ||
+               roles.Any(r => ctx.User.IsInRole(r));
+    }
 }

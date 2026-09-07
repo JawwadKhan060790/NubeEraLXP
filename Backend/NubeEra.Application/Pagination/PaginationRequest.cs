@@ -29,6 +29,12 @@ namespace NubeEra.Application.Pagination
         /// <summary>Filter by grade ID.</summary>
         public Guid? GradeId { get; set; }
 
+        /// <summary>Filter by unit/module ID.</summary>
+        public Guid? UnitId { get; set; }
+
+        /// <summary>Alias for UnitId.</summary>
+        public Guid? ModuleId { get; set; }
+
         /// <summary>Filter by school ID (only applied when the caller is not school-scoped).</summary>
         public Guid? SchoolId { get; set; }
 

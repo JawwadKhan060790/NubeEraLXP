@@ -92,9 +92,11 @@ interface StudentDashboardData {
   roll_no: string;
   grade_id?: string;
   total_modules: number;
+  total_lessons: number;
   completed_lessons: number;
   pending_lessons: number;
   syllabus_completion_percentage: number;
+  attendance_rate: number;
   total_exams: number;
   average_exam_score: number;
   modules_progress: StudentModuleProgress[];
@@ -574,23 +576,23 @@ const StudentDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* KPI Cards — Row 1: base data */}
+        {/* KPI Cards — Row 1: Units, Topics & Progress */}
         <StatGrid cols={4}>
           <StatGridCards stats={[
-            { title: 'Total Topics', value: analytics?.total_modules ?? data.total_modules, icon: <Bookmark className="w-5 h-5" />, color: 'sky', subtitle: 'Assigned curriculum topics' },
-            { title: 'Completed Lessons', value: analytics?.completed_lessons ?? data.completed_lessons, icon: <CheckCircle className="w-5 h-5" />, color: 'emerald', subtitle: 'Finished so far' },
-            { title: 'Total Exams', value: analytics?.total_exams ?? data.total_exams, icon: <Clock className="w-5 h-5" />, color: 'amber', subtitle: 'Taken to date' },
-            { title: 'Avg Exam Score', value: `${analytics?.average_score ?? data.average_exam_score}%`, icon: <TrendingUp className="w-5 h-5" />, color: 'indigo', subtitle: 'Overall average' },
+            { title: 'Total Units', value: analytics?.total_modules ?? data.total_modules, icon: <Bookmark className="w-5 h-5" />, color: 'sky', subtitle: 'Assigned curriculum units' },
+            { title: 'Total Topics', value: analytics?.total_lessons ?? data.total_lessons ?? 0, icon: <BookOpen className="w-5 h-5" />, color: 'indigo', subtitle: 'All curriculum topics' },
+            { title: 'Completed Topics', value: analytics?.completed_lessons ?? data.completed_lessons, icon: <CheckCircle className="w-5 h-5" />, color: 'emerald', subtitle: 'Finished topics so far' },
+            { title: 'Course Completion', value: `${analytics?.syllabus_completion ?? data.syllabus_completion_percentage ?? 0}%`, icon: <TrendingUp className="w-5 h-5" />, color: 'purple', subtitle: 'Curriculum coverage' },
           ]} />
         </StatGrid>
 
-        {/* KPI Cards — Row 2: analytics-derived */}
+        {/* KPI Cards — Row 2: Attendance & Exam Analytics */}
         <StatGrid cols={4}>
           <StatGridCards stats={[
-            { title: 'Attendance Rate', value: `${analytics?.attendance_rate ?? 0}%`, icon: <Activity className="w-5 h-5" />, color: 'teal', subtitle: 'Year to date' },
-            { title: 'Course Completion', value: `${analytics?.syllabus_completion ?? 0}%`, icon: <BookOpen className="w-5 h-5" />, color: 'purple', subtitle: 'Curriculum coverage' },
+            { title: 'Attendance Rate', value: `${analytics?.attendance_rate ?? data.attendance_rate ?? 0}%`, icon: <Activity className="w-5 h-5" />, color: 'teal', subtitle: 'Year to date attendance' },
+            { title: 'Total Exams', value: analytics?.total_exams ?? data.total_exams, icon: <Clock className="w-5 h-5" />, color: 'amber', subtitle: 'Taken to date' },
+            { title: 'Avg Exam Score', value: `${analytics?.average_score ?? data.average_exam_score}%`, icon: <TrendingUp className="w-5 h-5" />, color: 'indigo', subtitle: 'Overall score average' },
             { title: 'Exams Passed', value: analytics?.exams_passed ?? 0, icon: <CheckCircle className="w-5 h-5" />, color: 'emerald', subtitle: 'Exams cleared' },
-            { title: 'Exams Failed', value: analytics?.exams_failed ?? 0, icon: <Target className="w-5 h-5" />, color: 'rose', subtitle: 'Need a retake' },
           ]} />
         </StatGrid>
 
@@ -673,7 +675,7 @@ const StudentDashboard: React.FC = () => {
 
           <DashboardChartCard
             className="lg:col-span-5"
-            title="Learning Progress by Topic"
+            title="Learning Progress by Unit"
             icon={<PieIcon className="w-4.5 h-4.5 text-violet-600" />}
             badge="Completion %"
             badgeVariant="violet"
@@ -939,15 +941,28 @@ const StudentDashboard: React.FC = () => {
             <div className="p-6 border-b border-slate-100 dark:border-[#283548] flex items-center justify-between">
               <div>
                 <h3 className="font-black text-slate-900 dark:text-white tracking-tight text-base">Year-Round Progress</h3>
-                <p className="text-[11px] text-slate-400 dark:text-[#64748b] font-semibold tracking-wider mt-0.5">Topic completion dashboard</p>
+                <p className="text-[11px] text-slate-400 dark:text-[#64748b] font-semibold tracking-wider mt-0.5">Unit completion dashboard</p>
               </div>
               <span className="text-[10px] font-bold text-primary bg-primary/10 px-3 py-1 rounded-full tracking-wider">Interactive map</span>
             </div>
             <div className="p-6 md:p-8 space-y-4">
               {data.modules_progress.length === 0 ? (
-                <EmptyState title="No active topics configured for this grade." />
+                <EmptyState title="No active units configured for this grade." />
               ) : (
-                data.modules_progress.map((module) => {
+                data.modules_progress
+                  .slice()
+                  .sort((a, b) => {
+                    const getUnitNum = (name: string) => {
+                      if (!name) return 999;
+                      const match = name.match(/\d+/);
+                      return match ? parseInt(match[0], 10) : 999;
+                    };
+                    const numA = getUnitNum(a.module_name);
+                    const numB = getUnitNum(b.module_name);
+                    if (numA !== numB) return numA - numB;
+                    return a.module_name.localeCompare(b.module_name);
+                  })
+                  .map((module) => {
                   const isFullyDone = module.completion_percentage === 100;
                   return (
                     <div key={module.module_id} className="space-y-3 p-5 bg-slate-50/40 dark:bg-[#283548]/40 hover:bg-white dark:hover:bg-[#1e293b] rounded-[10px] shadow-sm hover:shadow-md transition-all duration-300">
@@ -1005,7 +1020,7 @@ const StudentDashboard: React.FC = () => {
                               {new Date(completion.completed_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                             </span>
                           </div>
-                          <span className="text-[9px] font-black text-emerald-600 tracking-wider block pt-1.5">Topic: {completion.module_name}</span>
+                          <span className="text-[9px] font-black text-emerald-600 tracking-wider block pt-1.5">Unit: {completion.module_name}</span>
                         </div>
                       </div>
                     ))}

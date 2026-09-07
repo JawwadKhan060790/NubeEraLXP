@@ -16,6 +16,7 @@ const CreateTeacher: React.FC = () => {
     firstName: '',
     lastName: '',
     email: '',
+    username: '',
     phone: '',
     password: '',
     confirmPassword: '',
@@ -40,6 +41,14 @@ const CreateTeacher: React.FC = () => {
     if (!trimmed || !isValidEmail(trimmed)) return;
     if (await isDuplicateValue('email', trimmed)) {
       setFormErrors(prev => ({ ...prev, email: DUPLICATE_MESSAGES.email }));
+    }
+  };
+
+  const checkUsernameDuplicate = async (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    if (await isDuplicateValue('username', trimmed)) {
+      setFormErrors(prev => ({ ...prev, username: DUPLICATE_MESSAGES.username }));
     }
   };
 
@@ -87,7 +96,7 @@ const CreateTeacher: React.FC = () => {
       return;
     }
 
-    if (formErrors.email) return;
+    if (formErrors.email || formErrors.username) return;
 
     if (schoolIds.length === 0) {
       // Inline "Select at least one School." message under the picker already covers this.
@@ -102,6 +111,7 @@ const CreateTeacher: React.FC = () => {
         first_name: formData.firstName,
         last_name: formData.lastName,
         email: formData.email,
+        username: formData.username || null,
         phone: formData.phone,
         password: formData.password,
         employee_id: formData.employeeId,
@@ -114,6 +124,7 @@ const CreateTeacher: React.FC = () => {
         firstName: '',
         lastName: '',
         email: '',
+        username: '',
         phone: '',
         password: '',
         confirmPassword: '',
@@ -205,6 +216,26 @@ const CreateTeacher: React.FC = () => {
 
             <div>
               <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">
+                Username <span className="text-gray-400 font-normal normal-case">(optional)</span>
+              </label>
+              <div className="relative">
+                <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  value={formData.username}
+                  onChange={(e) => { setFormData({ ...formData, username: e.target.value.toLowerCase().replace(/\s+/g, '') }); clearFieldError('username'); }}
+                  onBlur={(e) => checkUsernameDuplicate(e.target.value)}
+                  placeholder="e.g. teacher.smith"
+                  className={`w-full pl-11 pr-4 py-3 bg-white border rounded-md focus:ring-4 transition-all outline-none font-medium text-gray-900 text-sm shadow-sm ${formErrors.username ? 'border-rose-300 focus:ring-rose-500/10 focus:border-rose-400' : 'border-gray-200 focus:ring-primary/5 focus:border-primary'}`}
+                />
+              </div>
+              <FieldError message={formErrors.username} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">
                 Phone Number
               </label>
               <MobileNumberInput
@@ -214,23 +245,24 @@ const CreateTeacher: React.FC = () => {
                 error={formErrors.phone}
               />
             </div>
-          </div>
 
-          <div>
-            <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">
-              Employee ID
-            </label>
-            <div className="relative">
-              <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input
-                type="text"
-                value={formData.employeeId}
-                onChange={(e) => setFormData({ ...formData, employeeId: e.target.value })}
-                placeholder="Enter Employee ID"
-                className="w-full pl-11 pr-4 py-3 bg-white border border-gray-200 rounded-md focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all outline-none font-medium text-gray-900 text-sm shadow-sm"
-              />
+            <div>
+              <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">
+                Employee ID
+              </label>
+              <div className="relative">
+                <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  value={formData.employeeId}
+                  onChange={(e) => setFormData({ ...formData, employeeId: e.target.value })}
+                  onBlur={(e) => setFormData({ ...formData, employeeId: trimAndCollapseSpaces(e.target.value) })}
+                  placeholder="Enter Employee ID"
+                  className="w-full pl-11 pr-4 py-3 bg-white border border-gray-200 rounded-md focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all outline-none font-medium text-gray-900 text-sm shadow-sm font-mono"
+                />
+              </div>
+              <FieldError message={formErrors.employeeId || formErrors.employee_id} />
             </div>
-            <FieldError message={formErrors.employeeId || formErrors.employee_id} />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

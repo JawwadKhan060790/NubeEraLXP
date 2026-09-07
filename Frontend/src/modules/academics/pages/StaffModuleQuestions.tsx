@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Edit, Search, Trash2, X, LayoutGrid, List, HelpCircle, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '@/services/api';
@@ -76,9 +77,15 @@ const StaffModuleQuestions: React.FC = () => {
     });
   };
 
+  const location = useLocation();
+
   useEffect(() => {
     fetchData();
-  }, []);
+    const params = new URLSearchParams(location.search);
+    if (params.get('action') === 'create' || location.pathname.includes('/create')) {
+      setView('create');
+    }
+  }, [location]);
 
   const fetchData = async () => {
     setLoading(true);

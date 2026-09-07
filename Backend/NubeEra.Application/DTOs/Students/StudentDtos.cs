@@ -10,6 +10,9 @@ public class StudentCreateDto
     public string FirstName { get; set; } = null!;
     public string LastName { get; set; } = null!;
     public string? Email { get; set; }   // optional — no login account created if absent
+    public string? Username { get; set; }
+    public string? StudentUsername { get; set; }
+    public string? ParentUsername { get; set; }
     public string? Phone { get; set; }
     public DateTime? DateOfBirth { get; set; }
     public string? Gender { get; set; }
@@ -49,6 +52,9 @@ public class StudentDto
     public string LastName { get; set; } = null!;
     public string FullName { get; set; } = null!;
     public string? Email { get; set; }
+    public string? Username { get; set; }
+    public string? StudentUsername => Username;
+    public string? ParentUsername { get; set; }
     public string? Phone { get; set; }
     public DateTime? DateOfBirth { get; set; }
     public string? Gender { get; set; }

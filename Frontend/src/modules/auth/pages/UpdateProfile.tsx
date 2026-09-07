@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Camera, Edit3, Mail, MapPin, Phone, Shield, X, Check } from 'lucide-react';
+import { Camera, Edit3, Mail, MapPin, Phone, Shield, X, Check, AtSign } from 'lucide-react';
 import api from '@/services/api';
 import MobileNumberInput from '@/components/MobileNumberInput';
-import { trimAndCollapseSpaces } from '@/utils/validation';
+import FieldError from '@/components/FieldError';
+import { DUPLICATE_MESSAGES, isDuplicateValue } from '@/utils/duplicateCheck';
+import { isValidEmail, trimAndCollapseSpaces } from '@/utils/validation';
 import { getDefaultAvatar } from '@/utils';
 import { toast } from 'sonner';
 import { useAuthContext } from '@/context/AuthContext';
@@ -20,7 +22,7 @@ const getMediaUrl = (url: string | undefined) => {
     host.startsWith('10.') ||
     host.startsWith('172.')
   ) {
-    return `${protocol}//${host}:5001${url}`;
+    return `${protocol}//${host}:5000${url}`;
   }
   return url;
 };
@@ -41,6 +43,8 @@ const UpdateProfile: React.FC = () => {
   const [formData, setFormData] = useState({
     first_name: '',
     last_name: '',
+    email: '',
+    username: '',
     phone: '',
     date_of_birth: '',
     gender: '',
@@ -54,6 +58,32 @@ const UpdateProfile: React.FC = () => {
     specialization: '',
     profile_image_url: ''
   });
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [originalValues, setOriginalValues] = useState({ email: '', username: '' });
+
+  const clearFieldError = (field: string) =>
+    setFormErrors(prev => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+
+  const checkEmailDuplicate = async (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed || trimmed.toLowerCase() === originalValues.email.toLowerCase() || !isValidEmail(trimmed)) return;
+    if (await isDuplicateValue('email', trimmed)) {
+      setFormErrors(prev => ({ ...prev, email: DUPLICATE_MESSAGES.email }));
+    }
+  };
+
+  const checkUsernameDuplicate = async (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed || trimmed.toLowerCase() === originalValues.username.toLowerCase()) return;
+    if (await isDuplicateValue('username', trimmed)) {
+      setFormErrors(prev => ({ ...prev, username: DUPLICATE_MESSAGES.username }));
+    }
+  };
 
   useEffect(() => {
     fetchProfile();
@@ -67,6 +97,8 @@ const UpdateProfile: React.FC = () => {
       const newFormData = {
         first_name: data.first_name || '',
         last_name: data.last_name || '',
+        email: data.email || '',
+        username: data.username || '',
         phone: data.phone || '',
         date_of_birth: details.date_of_birth ? new Date(details.date_of_birth).toISOString().split('T')[0] : '',
         gender: details.gender || '',
@@ -82,6 +114,11 @@ const UpdateProfile: React.FC = () => {
       };
       
       setFormData(newFormData);
+      setOriginalValues({
+        email: data.email || '',
+        username: data.username || ''
+      });
+      setFormErrors({});
       
       // Update local storage user with most recent basic info
       const updatedUser = { ...user, ...data };
@@ -94,6 +131,9 @@ const UpdateProfile: React.FC = () => {
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (formErrors.email || formErrors.username) {
+      return;
+    }
     setLoading(true);
     try {
       let profileImageUrl = formData.profile_image_url;
@@ -118,6 +158,8 @@ const UpdateProfile: React.FC = () => {
       const updatedFields = {
         first_name: formData.first_name,
         last_name: formData.last_name,
+        email: formData.email,
+        username: formData.username,
         phone: formData.phone,
         profile_image_url: profileImageUrl,
         full_name: `${formData.first_name} ${formData.last_name}`.trim()
@@ -130,9 +172,7 @@ const UpdateProfile: React.FC = () => {
 
       // Push the same fields into AuthContext so every other component reading
       // the logged-in user (Dashboard welcome banner, sidebar avatar, etc.) picks
-      // up the change immediately. Previously this page only wrote to its own
-      // local state and localStorage directly — AuthContext never saw the update,
-      // which is why edits appeared "not to persist" anywhere outside this page.
+      // up the change immediately.
       updateUser(updatedFields);
 
       setPendingImageFile(null);
@@ -214,12 +254,15 @@ const UpdateProfile: React.FC = () => {
             <div className="h-px bg-slate-100 " />
 
             <div className="flex items-center gap-4">
-              <div className="w-10 h-10 rounded-xl bg-[#a353eb]/10 #a353eb]/20 flex items-center justify-center text-[#a353eb] shrink-0 shadow-sm">
+              <div className="w-10 h-10 rounded-xl bg-[#a353eb]/10 flex items-center justify-center text-[#a353eb] shrink-0 shadow-sm">
                 <Mail className="w-5 h-5" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 ">Identity Key</p>
-                <p className="text-sm font-bold text-slate-750  truncate mt-0.5">{user.email}</p>
+                <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 ">Identity & Login</p>
+                <p className="text-sm font-bold text-slate-750 truncate mt-0.5">{formData.email || user.email}</p>
+                {(formData.username || user.username) && (
+                  <p className="text-xs font-mono font-bold text-indigo-600 truncate mt-0.5">@{formData.username || user.username}</p>
+                )}
               </div>
             </div>
           </div>
@@ -298,6 +341,54 @@ const UpdateProfile: React.FC = () => {
                       />
                     ) : (
                       <p className="text-sm font-bold text-gray-800 bg-gray-50 p-4 rounded-md border border-gray-100">{user.last_name || '—'}</p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider ml-1">Email Address</label>
+                    {isEditing ? (
+                      <div>
+                        <div className="relative">
+                          <Mail className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                          <input
+                            type="email"
+                            value={formData.email}
+                            onChange={e => { setFormData({ ...formData, email: e.target.value }); clearFieldError('email'); }}
+                            onBlur={e => checkEmailDuplicate(e.target.value)}
+                            required
+                            className={`w-full pl-11 pr-4 py-3.5 bg-white border rounded-md focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all outline-none font-medium text-gray-900 text-sm shadow-sm ${formErrors.email ? 'border-rose-300 focus:ring-rose-500/10 focus:border-rose-400' : 'border-gray-200 focus:border-primary'}`}
+                          />
+                        </div>
+                        <FieldError message={formErrors.email} />
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-3 bg-gray-50 p-4 rounded-md border border-gray-100">
+                        <Mail className="w-4 h-4 text-primary" />
+                        <p className="text-sm font-bold text-gray-700">{formData.email || user.email || '—'}</p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider ml-1">Username <span className="text-gray-400 font-normal normal-case">(optional)</span></label>
+                    {isEditing ? (
+                      <div>
+                        <div className="relative">
+                          <AtSign className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                          <input
+                            type="text"
+                            value={formData.username}
+                            onChange={e => { setFormData({ ...formData, username: e.target.value.toLowerCase().replace(/\s+/g, '') }); clearFieldError('username'); }}
+                            onBlur={e => checkUsernameDuplicate(e.target.value)}
+                            placeholder="e.g. john.doe"
+                            className={`w-full pl-11 pr-4 py-3.5 bg-white border rounded-md focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all outline-none font-medium text-gray-900 text-sm shadow-sm ${formErrors.username ? 'border-rose-300 focus:ring-rose-500/10 focus:border-rose-400' : 'border-gray-200 focus:border-primary'}`}
+                          />
+                        </div>
+                        <FieldError message={formErrors.username} />
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-3 bg-gray-50 p-4 rounded-md border border-gray-100">
+                        <AtSign className="w-4 h-4 text-primary" />
+                        <p className="text-sm font-bold text-gray-700 font-mono">{formData.username || user.username || 'Not set'}</p>
+                      </div>
                     )}
                   </div>
                 </div>

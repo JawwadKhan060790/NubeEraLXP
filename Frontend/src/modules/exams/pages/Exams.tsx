@@ -76,8 +76,23 @@ const Exams: React.FC = () => {
     correct_answer: 'A'
   });
 
+  const resetForm = () => {
+    setEditingId(null);
+    setFormData({
+      title: '',
+      module_id: '',
+      lesson_id: '',
+      grade_id: '',
+      school_id: '',
+      date: '',
+      duration_minutes: 60,
+      total_marks: 100
+    });
+  };
+
   useEffect(() => {
-    if (location.pathname.includes('/create')) {
+    const params = new URLSearchParams(location.search);
+    if (location.pathname.includes('/create') || params.get('action') === 'create') {
       resetForm();
       setShowModal(true);
     }
@@ -396,19 +411,6 @@ const Exams: React.FC = () => {
     }
   };
 
-  const resetForm = () => {
-    setEditingId(null);
-    setFormData({
-      title: '',
-      module_id: '',
-      lesson_id: '',
-      grade_id: '',
-      school_id: '',
-      date: '',
-      duration_minutes: 60,
-      total_marks: 100
-    });
-  };
 
   const [examPage, setExamPage] = useState(1);
   const [examPageSize, setExamPageSize] = useState(10);

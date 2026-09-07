@@ -125,6 +125,7 @@ public class TeacherStudentRowDto
     public string  StudentName            { get; set; } = null!;
     public string? RollNo                 { get; set; }
     public string  GradeName              { get; set; } = null!;
+    public string? SectionName            { get; set; }
     public double  AttendancePercent      { get; set; }
     public double  CourseCompletionPercent{ get; set; }
     public int     WeakTopicsCount        { get; set; }

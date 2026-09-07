@@ -19,8 +19,8 @@ public interface ITeacherLearningPathService
     /// <summary>Returns the full syllabus completion summary with grade/subject/monthly breakdowns.</summary>
     Task<TeacherSyllabusCompletionDto> GetSyllabusCompletionAsync(Guid teacherId);
 
-    /// <summary>Returns grade-wise student list with progress, attendance and weakness counts.</summary>
-    Task<TeacherGradeStudentListDto> GetGradeStudentListAsync(Guid teacherId, Guid gradeId);
+    /// <summary>Returns grade-wise student list with progress, attendance and weakness counts (filtered optionally by section/division).</summary>
+    Task<TeacherGradeStudentListDto> GetGradeStudentListAsync(Guid teacherId, Guid gradeId, Guid? sectionId = null);
 
     /// <summary>Returns the enhanced teacher dashboard aggregates.</summary>
     Task<TeacherEnhancedDashboardDto> GetEnhancedDashboardAsync(Guid teacherId);

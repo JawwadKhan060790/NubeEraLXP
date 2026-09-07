@@ -21,5 +21,6 @@ namespace NubeEra.Application.Interfaces.Repositories
         /// <summary>Restores a soft-deleted entity (clears IsDeleted, DeletedDate, DeletedBy).</summary>
         Task RestoreAsync(T entity);
         Task<int> CountAsync(Func<IQueryable<T>, IQueryable<T>>? filter = null);
+        void Detach(T entity);
     }
 }

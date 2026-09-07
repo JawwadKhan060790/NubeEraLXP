@@ -9,6 +9,9 @@ export interface Student {
   last_name: string;
   full_name: string;
   email: string;
+  username?: string;
+  student_username?: string;
+  parent_username?: string;
   student_id: string;
   roll_no?: string;
   grade_id: string;
@@ -33,6 +36,9 @@ export interface StudentCreatePayload {
   first_name: string;
   last_name: string;
   email: string;
+  username?: string;
+  student_username?: string;
+  parent_username?: string;
   student_id: string;
   grade_id: string;
   school_id: string;

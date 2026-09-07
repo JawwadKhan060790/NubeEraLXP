@@ -186,11 +186,11 @@ public static class UserSeeder
 
             userRows.Add(
                 $"({G(userId)},{G(schoolId)},{G(roleId)},{Q(email)},{Q(ph)}," +
-                $"{Q("Parent")},{Q($"P{n}")},{Q($"+971-{60+n%40:D2}-{n:D7}")},1,NULL,NULL,{D(now)})");
+                $"{Q("Parent")},{Q($"P{n}")},{Q($"+971-{60+n%40:D2}-{n:D7}")},1,1,NULL,NULL,{D(now)})");
         }
 
         await bulk.BulkInsertAsync("users",
-            "Id,SchoolId,RoleId,Email,PasswordHash,FirstName,LastName,Phone,IsActive,ProfileImageUrl,LastLoginAt,CreatedAt",
+            "Id,SchoolId,RoleId,Email,PasswordHash,FirstName,LastName,Phone,IsActive,IsParent,ProfileImageUrl,LastLoginAt,CreatedAt",
             userRows, label: "Parent users");
     }
 }

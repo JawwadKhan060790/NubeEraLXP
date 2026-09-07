@@ -36,9 +36,9 @@ public class StudentWeakTopicController : ControllerBase
 
     /// <summary>GET /api/teacher/student-weakness/grade/{gradeId}</summary>
     [HttpGet("grade/{gradeId:guid}")]
-    public async Task<IActionResult> GetGradeWeakness(Guid gradeId)
+    public async Task<IActionResult> GetGradeWeakness(Guid gradeId, [FromQuery] Guid? sectionId = null)
     {
-        try   { return Ok(await _service.GetGradeWeaknessAsync(gradeId)); }
+        try   { return Ok(await _service.GetGradeWeaknessAsync(gradeId, sectionId)); }
         catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
     }
 

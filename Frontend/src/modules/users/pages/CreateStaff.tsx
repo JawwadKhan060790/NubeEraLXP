@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import api from '@/services/api';
-import { ArrowRight, Eye, EyeOff, Lock, Mail } from 'lucide-react';
+import { ArrowRight, Eye, EyeOff, Lock, Mail, User } from 'lucide-react';
 import FieldError from '@/components/FieldError';
 import { DUPLICATE_MESSAGES, isDuplicateValue } from '@/utils/duplicateCheck';
 import { isValidEmail } from '@/utils/validation';
@@ -10,6 +10,7 @@ const CreateStaff: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
+    username: '',
     password: '',
     confirmPassword: ''
   });
@@ -33,6 +34,14 @@ const CreateStaff: React.FC = () => {
     }
   };
 
+  const checkUsernameDuplicate = async (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    if (await isDuplicateValue('username', trimmed)) {
+      setFormErrors(prev => ({ ...prev, username: DUPLICATE_MESSAGES.username }));
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormErrors({});
@@ -40,22 +49,25 @@ const CreateStaff: React.FC = () => {
       setFormErrors(prev => ({ ...prev, confirmPassword: 'Passwords do not match.' }));
       return;
     }
-    if (formErrors.email) return;
+    if (formErrors.email || formErrors.username) return;
     setLoading(true);
     try {
       await api.post('/users', {
         email: formData.email,
+        username: formData.username || null,
         password: formData.password,
         role: 'Staff',
         first_name: 'Staff',
         last_name: 'User'
       });
       toast.success('Staff account created');
-      setFormData({ email: '', password: '', confirmPassword: '' });
+      setFormData({ email: '', username: '', password: '', confirmPassword: '' });
       setFormErrors({});
     } catch (error: any) {
       const msg = error?.response?.data?.message || 'Failed to create account';
-      if (/email/i.test(msg)) {
+      if (/username/i.test(msg)) {
+        setFormErrors(prev => ({ ...prev, username: msg }));
+      } else if (/email/i.test(msg)) {
         setFormErrors(prev => ({ ...prev, email: msg }));
       } else {
         toast.error(msg);
@@ -76,21 +88,41 @@ const CreateStaff: React.FC = () => {
         </div>
 
         <form onSubmit={handleSubmit} className="p-0 md:p-2 space-y-8">
-          <div className="max-w-4xl space-y-3">
-            <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider ml-1">Email</label>
-            <div className="relative">
-              <Mail className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type="email"
-                required
-                value={formData.email}
-                onChange={e => { setFormData({ ...formData, email: e.target.value }); clearFieldError('email'); }}
-                onBlur={e => { const trimmed = e.target.value.trim(); setFormData({ ...formData, email: trimmed }); checkEmailDuplicate(trimmed); }}
-                placeholder="Enter Email Address"
-                className={`w-full pl-11 pr-4 py-3 bg-white border rounded-xl focus:ring-4 transition-all outline-none font-medium text-gray-900 text-sm shadow-sm ${formErrors.email ? 'border-rose-300 focus:ring-rose-500/10 focus:border-rose-400' : 'border-gray-200 focus:ring-primary/5 focus:border-primary'}`}
-              />
+          <div className="max-w-4xl space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-3">
+                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider ml-1">Email</label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="email"
+                    required
+                    value={formData.email}
+                    onChange={e => { setFormData({ ...formData, email: e.target.value }); clearFieldError('email'); }}
+                    onBlur={e => { const trimmed = e.target.value.trim(); setFormData({ ...formData, email: trimmed }); checkEmailDuplicate(trimmed); }}
+                    placeholder="Enter Email Address"
+                    className={`w-full pl-11 pr-4 py-3 bg-white border rounded-xl focus:ring-4 transition-all outline-none font-medium text-gray-900 text-sm shadow-sm ${formErrors.email ? 'border-rose-300 focus:ring-rose-500/10 focus:border-rose-400' : 'border-gray-200 focus:ring-primary/5 focus:border-primary'}`}
+                  />
+                </div>
+                <FieldError message={formErrors.email} />
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider ml-1">Username <span className="text-gray-400 font-normal normal-case">(optional)</span></label>
+                <div className="relative">
+                  <User className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    value={formData.username}
+                    onChange={e => { setFormData({ ...formData, username: e.target.value.toLowerCase().replace(/\s+/g, '') }); clearFieldError('username'); }}
+                    onBlur={e => { const trimmed = e.target.value.trim(); checkUsernameDuplicate(trimmed); }}
+                    placeholder="e.g. staff.john"
+                    className={`w-full pl-11 pr-4 py-3 bg-white border rounded-xl focus:ring-4 transition-all outline-none font-medium text-gray-900 text-sm shadow-sm ${formErrors.username ? 'border-rose-300 focus:ring-rose-500/10 focus:border-rose-400' : 'border-gray-200 focus:ring-primary/5 focus:border-primary'}`}
+                  />
+                </div>
+                <FieldError message={formErrors.username} />
+              </div>
             </div>
-            <FieldError message={formErrors.email} />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
               <div className="space-y-3">
                 <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider ml-1">Password</label>

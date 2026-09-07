@@ -237,9 +237,9 @@ export const AuthenticatedRoutes = ({ userUtype }: { userUtype: string }): React
       <Route path={`${ROUTES.TEACHER_QUESTIONS}/*`}element={protect([ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER], <StaffModuleQuestions />)} />
       <Route path={`${ROUTES.TEACHER_SCHEDULER}/*`}element={protect([ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER], <TeacherScheduler />)} />
       <Route path={ROUTES.TEACHER_CALENDAR}   element={protect([ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER], <TeacherScheduler />)} />
-      <Route path={ROUTES.TEACHER_ATTENDANCE} element={protect([ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.STAFF, ROLES.TEACHER], <TeacherAttendance />)} />
-      {/* Unified Attendance Hub — replaces the two legacy routes */}
-      <Route path={ROUTES.ATTENDANCE} element={protect([ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.STAFF, ROLES.PRINCIPAL], <UnifiedAttendancePage />)} />
+      <Route path={ROUTES.TEACHER_ATTENDANCE} element={protect([ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.STAFF, ROLES.PRINCIPAL, ROLES.TEACHER], <UnifiedAttendancePage />)} />
+      {/* Unified Attendance Hub — replaces the legacy routes */}
+      <Route path={ROUTES.ATTENDANCE} element={protect([ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.STAFF, ROLES.PRINCIPAL, ROLES.TEACHER], <UnifiedAttendancePage />)} />
       {/* Legacy redirects so old bookmarks still work */}
       <Route path={ROUTES.STUDENT_ATTENDANCE}          element={<Navigate to={ROUTES.ATTENDANCE} replace />} />
       <Route path={ROUTES.TEACHER_ATTENDANCE_REGISTRY} element={<Navigate to={ROUTES.ATTENDANCE} replace />} />

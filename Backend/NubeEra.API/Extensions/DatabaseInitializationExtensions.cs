@@ -131,7 +131,13 @@ public static class DatabaseInitializationExtensions
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "EF migration failed: {Message}", ex.Message);
+            logger.LogError(ex, "EF Core Migration Failed: {Message}", ex.Message);
+            var env = app.Services.GetService<IWebHostEnvironment>();
+            if (env != null && env.IsDevelopment())
+            {
+                logger.LogCritical(ex, "Halting application startup due to unhandled EF Core Migration error in Development environment.");
+                throw;
+            }
         }
 
         // ── ExpectedPeriods fallback column ──────────────────────────────────
@@ -283,12 +289,7 @@ public static class DatabaseInitializationExtensions
             logger.LogWarning(ex, "student_doubts table check/create failed.");
         }
 
-        // ── Certificate tables (drop-recreate in dev to keep schema in sync) ─
-        db.Database.ExecuteSqlRaw("SET FOREIGN_KEY_CHECKS=0");
-        db.Database.ExecuteSqlRaw("DROP TABLE IF EXISTS certificates");
-        db.Database.ExecuteSqlRaw("DROP TABLE IF EXISTS certificate_templates");
-        db.Database.ExecuteSqlRaw("SET FOREIGN_KEY_CHECKS=1");
-
+        // ── Certificate tables (ensures tables exist without dropping data) ─
         db.Database.ExecuteSqlRaw(@"
             CREATE TABLE IF NOT EXISTS certificate_templates (
                 Id char(36) CHARACTER SET ascii NOT NULL,
@@ -352,7 +353,7 @@ public static class DatabaseInitializationExtensions
         try
         {
             db.Database.ExecuteSqlRaw(@"
-                INSERT INTO certificate_templates
+                INSERT IGNORE INTO certificate_templates
                     (Id, Name, ProgramType, GradeBand, Description, CertificateTitle, Tagline, DefaultPrincipalName, DefaultDirectorName, DefaultStaffName, DefaultStaffDesignation, IsActive, SchoolId, CreatedAt)
                 VALUES
                     ('d60df21d-927e-49b8-a6b1-b4f17f4a20b1', 'STEM Achievement Template', 'STEM', '1-10', 'Standard certificate for STEM workshops and programs.', 'CERTIFICATE OF STEM EXCELLENCE', 'For outstanding performance in science, technology, engineering, and mathematics', 'Dr. Sarah Jenkins', 'Mr. Robert Vance', 'Alice Carter', 'STEM Coordinator', 1, NULL, NOW()),
@@ -509,6 +510,24 @@ public static class DatabaseInitializationExtensions
         catch { /* already seeded */ }
 
         AdminSeeder.Seed(db, app.Configuration);
+
+        // ── Data Self-Healing: Ensure all User accounts linked to students have Role='Student' and IsParent=false ──
+        try
+        {
+            var studentRoleId = db.Roles.AsNoTracking().Where(r => r.RoleName == "Student").Select(r => r.Id).FirstOrDefault();
+            if (studentRoleId != Guid.Empty)
+            {
+                db.Database.ExecuteSqlRaw($@"
+                    UPDATE users u
+                    JOIN students s ON s.UserId = u.Id
+                    SET u.RoleId = '{studentRoleId}', u.IsParent = 0;
+                ");
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to run student user role healing script.");
+        }
 
         await Task.CompletedTask;
         return app;

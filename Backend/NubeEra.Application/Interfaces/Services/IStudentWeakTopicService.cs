@@ -10,8 +10,8 @@ public interface IStudentWeakTopicService
     /// <summary>Returns all weakness records for a student.</summary>
     Task<StudentWeaknessAnalysisDto> GetStudentWeaknessAsync(Guid studentId);
 
-    /// <summary>Returns grade-level weakness analysis (all students in a grade).</summary>
-    Task<GradeWeaknessAnalysisDto> GetGradeWeaknessAsync(Guid gradeId);
+    /// <summary>Returns grade-level weakness analysis (filtered optionally by section/division).</summary>
+    Task<GradeWeaknessAnalysisDto> GetGradeWeaknessAsync(Guid gradeId, Guid? sectionId = null);
 
     /// <summary>Teacher manually creates a weakness record.</summary>
     Task<Guid> CreateAsync(CreateStudentWeakTopicDto dto);

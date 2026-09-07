@@ -112,8 +112,11 @@ const TeacherAttendancePage: React.FC = () => {
         date: selectedDate,
         status: t.status,
         remarks: t.remarks,
+        teacherId: t.teacherId,
         teacher_id: t.teacherId,
+        teacherName: t.teacherName,
         teacher_name: t.teacherName,
+        studentId: null,
         student_id: null
       }));
 

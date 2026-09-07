@@ -64,7 +64,6 @@ const persistSession = (token: string, user: User): void => {
   // this was the root cause behind "Staff dashboard / Student panel show no data"
   // and a contributing cause of grades appearing to leak across schools.
   localStorage.removeItem('nubeera_selected_school_id');
-  localStorage.removeItem('veriton_selected_school_id');
 };
 
 /** Clears the session from localStorage (called on logout or 401). */
@@ -72,7 +71,6 @@ const clearSession = (): void => {
   localStorage.removeItem(APP_CONFIG.TOKEN_KEY);
   localStorage.removeItem(APP_CONFIG.USER_KEY);
   localStorage.removeItem('nubeera_selected_school_id');
-  localStorage.removeItem('veriton_selected_school_id');
 };
 
 /** Reads the current session from localStorage.  Returns null when not authenticated. */

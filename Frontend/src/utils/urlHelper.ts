@@ -30,7 +30,7 @@ export const resolveMediaUrl = (url: string | undefined | null): string => {
       host.startsWith('10.') ||
       host.startsWith('172.')
     ) {
-      baseUrl = `${window.location.protocol}//${window.location.hostname}:5001`;
+      baseUrl = `${window.location.protocol}//${window.location.hostname}:5000`;
     }
   }
 

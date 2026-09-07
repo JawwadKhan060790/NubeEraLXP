@@ -3,6 +3,7 @@ using NubeEra.Domain.Entities;
 using NubeEra.Infrastructure.Persistence.DbContext;
 using NubeEra.Infrastructure.Persistence.Configurations;
 using Microsoft.Extensions.Configuration;
+using Microsoft.EntityFrameworkCore;
 
 namespace NubeEra.Infrastructure.Persistence.Seed;
 
@@ -23,8 +24,8 @@ public static class AdminSeeder
 
         // 1b. Seed or Retrieve Default School
         var defaultSchoolId = Guid.Parse("9de4bdad-a497-4dbd-8874-98e6b191716a");
-        var defaultSchool = context.Schools.Find(defaultSchoolId)
-            ?? context.Schools.FirstOrDefault(s => s.SchoolCode == "VER-001");
+        var defaultSchool = context.Schools.IgnoreQueryFilters().FirstOrDefault(s => s.Id == defaultSchoolId)
+            ?? context.Schools.IgnoreQueryFilters().FirstOrDefault(s => s.SchoolCode == "VER-001");
         if (defaultSchool == null)
         {
             defaultSchool = new School
@@ -38,10 +39,22 @@ public static class AdminSeeder
             context.SaveChanges();
             Console.WriteLine($"✅ Default School created: {defaultSchool.Name}");
         }
-        else if (defaultSchool.Id != defaultSchoolId)
+        else
         {
-            // If school exists but with a different ID (e.g. from dynamic seed), align it if safe/referenced
-            Console.WriteLine($"ℹ️ Default School found with ID: {defaultSchool.Id}");
+            if (defaultSchool.IsDeleted)
+            {
+                defaultSchool.IsDeleted = false;
+                defaultSchool.DeletedDate = null;
+                defaultSchool.DeletedBy = null;
+                context.Schools.Update(defaultSchool);
+                context.SaveChanges();
+                Console.WriteLine($"✅ Default School restored: {defaultSchool.Name}");
+            }
+            if (defaultSchool.Id != defaultSchoolId)
+            {
+                // If school exists but with a different ID (e.g. from dynamic seed), align it if safe/referenced
+                Console.WriteLine($"ℹ️ Default School found with ID: {defaultSchool.Id}");
+            }
         }
 
         // --- Global Grade Standardization ---
@@ -60,15 +73,15 @@ public static class AdminSeeder
             Console.WriteLine($"✅ Default School grade range configured: Boot Camp to Grade X");
         }
 
-        // Seed default B2C School "NubeEra School"
-        var b2cSchool = context.Schools.FirstOrDefault(s => s.SchoolCode == "NUBEERA-SCHOOL");
+        // Seed default B2C School "VeriTon School"
+        var b2cSchool = context.Schools.IgnoreQueryFilters().FirstOrDefault(s => s.SchoolCode == "VERITON-SCHOOL");
         if (b2cSchool == null)
         {
             b2cSchool = new School
             {
                 Id = Guid.NewGuid(),
-                SchoolCode = "NUBEERA-SCHOOL",
-                Name = "NubeEra School",
+                SchoolCode = "VERITON-SCHOOL",
+                Name = "VeriTon School",
                 IsActive = true,
                 FromGradeId = firstGradeLevelId,
                 ToGradeId = lastGradeLevelId
@@ -77,16 +90,28 @@ public static class AdminSeeder
             context.SaveChanges();
             Console.WriteLine($"✅ Default B2C School created: {b2cSchool.Name}");
         }
-        else if (b2cSchool.FromGradeId == null || b2cSchool.ToGradeId == null)
+        else
         {
-            b2cSchool.FromGradeId = firstGradeLevelId;
-            b2cSchool.ToGradeId = lastGradeLevelId;
-            context.Schools.Update(b2cSchool);
-            context.SaveChanges();
-            Console.WriteLine($"✅ B2C School grade range configured: Boot Camp to Grade X");
+            if (b2cSchool.IsDeleted)
+            {
+                b2cSchool.IsDeleted = false;
+                b2cSchool.DeletedDate = null;
+                b2cSchool.DeletedBy = null;
+                context.Schools.Update(b2cSchool);
+                context.SaveChanges();
+                Console.WriteLine($"✅ Default B2C School restored: {b2cSchool.Name}");
+            }
+            if (b2cSchool.FromGradeId == null || b2cSchool.ToGradeId == null)
+            {
+                b2cSchool.FromGradeId = firstGradeLevelId;
+                b2cSchool.ToGradeId = lastGradeLevelId;
+                context.Schools.Update(b2cSchool);
+                context.SaveChanges();
+                Console.WriteLine($"✅ B2C School grade range configured: Boot Camp to Grade X");
+            }
         }
 
-        // Also seed some grades (class/sections) for NubeEra School, restricted to the
+        // Also seed some grades (class/sections) for VeriTon School, restricted to the
         // standardized -1 to 10 range only.
         if (!context.Grades.Any(g => g.SchoolId == b2cSchool.Id))
         {
@@ -199,7 +224,7 @@ public static class AdminSeeder
         var roleObj = context.Roles.FirstOrDefault(r => r.RoleName == role)
             ?? throw new Exception($"Role {role} not found in database.");
 
-        var user = context.Users.FirstOrDefault(u => u.Email == email);
+        var user = context.Users.IgnoreQueryFilters().FirstOrDefault(u => u.Email == email);
         if (user == null)
         {
             user = new User(
@@ -216,6 +241,14 @@ public static class AdminSeeder
         else
         {
             bool updated = false;
+            if (user.IsDeleted)
+            {
+                user.IsDeleted = false;
+                user.DeletedDate = null;
+                user.DeletedBy = null;
+                updated = true;
+                Console.WriteLine($"✅ User Restored: {email}");
+            }
             // Update password if it doesn't match the standard Admin@123 or provided password
             if (!SafeVerify(password, user.PasswordHash))
             {
@@ -251,7 +284,7 @@ public static class AdminSeeder
         var roleObj = context.Roles.FirstOrDefault(r => r.RoleName == AppRoles.Teacher)
             ?? throw new Exception($"Role {AppRoles.Teacher} not found in database.");
 
-        var user = context.Users.FirstOrDefault(u => u.Email == email);
+        var user = context.Users.IgnoreQueryFilters().FirstOrDefault(u => u.Email == email);
         if (user == null)
         {
             user = new User(
@@ -267,6 +300,14 @@ public static class AdminSeeder
         else
         {
             bool userUpdated = false;
+            if (user.IsDeleted)
+            {
+                user.IsDeleted = false;
+                user.DeletedDate = null;
+                user.DeletedBy = null;
+                userUpdated = true;
+                Console.WriteLine($"✅ Teacher User Restored: {email}");
+            }
             if (!SafeVerify(password, user.PasswordHash))
             {
                 user.UpdatePassword(BCrypt.Net.BCrypt.HashPassword(password));
@@ -284,7 +325,7 @@ public static class AdminSeeder
             }
         }
 
-        var teacher = context.Teachers.FirstOrDefault(t => t.UserId == user.Id || t.Email == email);
+        var teacher = context.Teachers.IgnoreQueryFilters().FirstOrDefault(t => t.UserId == user.Id || t.Email == email);
         if (teacher == null)
         {
             teacher = new Teacher
@@ -303,13 +344,29 @@ public static class AdminSeeder
         }
         else
         {
-            teacher.UserId = user.Id;
-            teacher.SchoolId = schoolId;
-            teacher.EmployeeId = employeeId;
-            teacher.FirstName = firstName;
-            teacher.LastName = lastName;
-            teacher.Email = email;
-            context.Teachers.Update(teacher);
+            bool teacherUpdated = false;
+            if (teacher.IsDeleted)
+            {
+                teacher.IsDeleted = false;
+                teacher.DeletedDate = null;
+                teacher.DeletedBy = null;
+                teacherUpdated = true;
+                Console.WriteLine($"✅ Teacher Profile Restored: {email}");
+            }
+            if (teacher.UserId != user.Id || teacher.SchoolId != schoolId || teacher.EmployeeId != employeeId || teacher.FirstName != firstName || teacher.LastName != lastName || teacher.Email != email)
+            {
+                teacher.UserId = user.Id;
+                teacher.SchoolId = schoolId;
+                teacher.EmployeeId = employeeId;
+                teacher.FirstName = firstName;
+                teacher.LastName = lastName;
+                teacher.Email = email;
+                teacherUpdated = true;
+            }
+            if (teacherUpdated)
+            {
+                context.Teachers.Update(teacher);
+            }
         }
     }
  
@@ -318,7 +375,7 @@ public static class AdminSeeder
         var roleObj = context.Roles.FirstOrDefault(r => r.RoleName == AppRoles.Student)
             ?? throw new Exception($"Role {AppRoles.Student} not found in database.");
 
-        var user = context.Users.FirstOrDefault(u => u.Email == email);
+        var user = context.Users.IgnoreQueryFilters().FirstOrDefault(u => u.Email == email);
         if (user == null)
         {
             user = new User(
@@ -334,6 +391,14 @@ public static class AdminSeeder
         else
         {
             bool userUpdated = false;
+            if (user.IsDeleted)
+            {
+                user.IsDeleted = false;
+                user.DeletedDate = null;
+                user.DeletedBy = null;
+                userUpdated = true;
+                Console.WriteLine($"✅ Student User Restored: {email}");
+            }
             if (!SafeVerify(password, user.PasswordHash))
             {
                 user.UpdatePassword(BCrypt.Net.BCrypt.HashPassword(password));
@@ -351,7 +416,7 @@ public static class AdminSeeder
             }
         }
 
-        var student = context.Students.FirstOrDefault(s => s.UserId == user.Id || s.Email == email);
+        var student = context.Students.IgnoreQueryFilters().FirstOrDefault(s => s.UserId == user.Id || s.Email == email);
         if (student == null)
         {
             student = new Student
@@ -372,18 +437,31 @@ public static class AdminSeeder
         }
         else
         {
-            student.UserId = user.Id;
-            student.SchoolId = schoolId;
-            student.GradeId = gradeId;
-            student.StudentId = studentId;
-            student.FirstName = firstName;
-            student.LastName = lastName;
-            student.Email = email;
-            if (student.ParentGuardianPhone != "+1234567890")
+            bool studentUpdated = false;
+            if (student.IsDeleted)
             {
-                student.ParentGuardianPhone = "+1234567890";
+                student.IsDeleted = false;
+                student.DeletedDate = null;
+                student.DeletedBy = null;
+                studentUpdated = true;
+                Console.WriteLine($"✅ Student Profile Restored: {email}");
             }
-            context.Students.Update(student);
+            if (student.UserId != user.Id || student.SchoolId != schoolId || student.GradeId != gradeId || student.StudentId != studentId || student.FirstName != firstName || student.LastName != lastName || student.Email != email || student.ParentGuardianPhone != "+1234567890")
+            {
+                student.UserId = user.Id;
+                student.SchoolId = schoolId;
+                student.GradeId = gradeId;
+                student.StudentId = studentId;
+                student.FirstName = firstName;
+                student.LastName = lastName;
+                student.Email = email;
+                student.ParentGuardianPhone = "+1234567890";
+                studentUpdated = true;
+            }
+            if (studentUpdated)
+            {
+                context.Students.Update(student);
+            }
         }
     }
  
@@ -392,7 +470,7 @@ public static class AdminSeeder
         var roleObj = context.Roles.FirstOrDefault(r => r.RoleName == AppRoles.Parent)
             ?? throw new Exception($"Role {AppRoles.Parent} not found in database.");
 
-        var user = context.Users.FirstOrDefault(u => u.Email == email);
+        var user = context.Users.IgnoreQueryFilters().FirstOrDefault(u => u.Email == email);
         if (user == null)
         {
             user = new User(
@@ -404,12 +482,26 @@ public static class AdminSeeder
             user.FirstName = firstName;
             user.LastName = lastName;
             user.Phone = phone;
+            user.IsParent = true;
             context.Users.Add(user);
             Console.WriteLine($"✅ Parent Seeded: {email}");
         }
         else
         {
             bool updated = false;
+            if (!user.IsParent)
+            {
+                user.IsParent = true;
+                updated = true;
+            }
+            if (user.IsDeleted)
+            {
+                user.IsDeleted = false;
+                user.DeletedDate = null;
+                user.DeletedBy = null;
+                updated = true;
+                Console.WriteLine($"✅ Parent User Restored: {email}");
+            }
             if (!SafeVerify(password, user.PasswordHash))
             {
                 user.UpdatePassword(BCrypt.Net.BCrypt.HashPassword(password));

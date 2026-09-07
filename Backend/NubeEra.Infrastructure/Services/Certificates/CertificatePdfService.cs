@@ -74,7 +74,7 @@ public class CertificatePdfService : ICertificatePdfService
     {
         var scheme = GetScheme(cert.GradeLevel);
         byte[]? logoBytes = File.Exists(logoPath) ? await File.ReadAllBytesAsync(logoPath) : null;
-        byte[] qrBytes = GenerateQrCodeBytes(cert.QrCodeData ?? $"https://nubeera.tech/verify/{cert.CertificateNumber}");
+        byte[] qrBytes = GenerateQrCodeBytes(cert.QrCodeData ?? $"https://veriton.tech/verify/{cert.CertificateNumber}");
 
         var primaryColor = Color.FromHex(scheme.Primary);
         var accentColor  = Color.FromHex(scheme.Accent);
@@ -116,7 +116,7 @@ public class CertificatePdfService : ICertificatePdfService
                                     // Company name + tagline
                                     row.RelativeItem().AlignMiddle().Padding(10).Column(c =>
                                     {
-                                        c.Item().Text("NubeEra Tech STEM Marketplace")
+                                        c.Item().Text("VeriTon Tech STEM Marketplace")
                                             .FontSize(22).Bold().FontColor(Colors.White);
                                         c.Item().Text("Empowering Young Innovators — STEM · Robotics · AI · Coding")
                                             .FontSize(10).FontColor(Colors.White).Italic();
@@ -127,7 +127,7 @@ public class CertificatePdfService : ICertificatePdfService
                                     {
                                         c.Item().Background(accentColor).Padding(10).AlignCenter().Column(inner2 =>
                                         {
-                                            inner2.Item().Text("NUBEERA").FontSize(9).Bold()
+                                            inner2.Item().Text("VERITON").FontSize(9).Bold()
                                                 .FontColor(Colors.White).LetterSpacing(3);
                                             inner2.Item().Text("CERTIFIED").FontSize(9).Bold()
                                                 .FontColor(Colors.White).LetterSpacing(2);
@@ -264,7 +264,7 @@ public class CertificatePdfService : ICertificatePdfService
                                         .FontSize(9).FontColor(Colors.White);
 
                                     footer.ConstantItem(200).AlignMiddle().AlignRight()
-                                        .Text($"Verify at: nubeera.tech/verify/{cert.CertificateNumber}")
+                                        .Text($"Verify at: veriton.tech/verify/{cert.CertificateNumber}")
                                         .FontSize(9).FontColor(Colors.White).Italic();
                                 });
                         });

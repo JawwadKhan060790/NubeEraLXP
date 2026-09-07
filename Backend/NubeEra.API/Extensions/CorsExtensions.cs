@@ -19,7 +19,7 @@ public static class CorsExtensions
                 "http://localhost:5176",
                 "http://192.168.1.12:5173",
                 "http://192.168.1.12:5174",
-                "https://lxp.nubeera.tech"
+                "https://lxp.veriton.tech"
             };
 
         services.AddCors(options =>

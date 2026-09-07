@@ -4,6 +4,7 @@ using NubeEra.Application.Interfaces.Repositories;
 using NubeEra.Application.Interfaces.Services;
 using NubeEra.Domain.Entities;
 using NubeEra.Application.Interfaces.Security;
+using NubeEra.Domain.Common;
 
 namespace NubeEra.Application.Services;
 
@@ -36,6 +37,7 @@ public class TeacherService : IGenericService<TeacherCreateDto, TeacherUpdateDto
     {
         var teachers = await _repository.GetAllAsync(q => q
             .Include(t => t.School)
+            .Include(t => t.User)
             .Include(t => t.TeacherSchools).ThenInclude(ts => ts.School));
 
         return teachers.Select(MapToDto).ToList();
@@ -45,6 +47,7 @@ public class TeacherService : IGenericService<TeacherCreateDto, TeacherUpdateDto
     {
         var t = await _repository.GetByIdAsync(id, q => q
             .Include(t => t.School)
+            .Include(t => t.User)
             .Include(t => t.TeacherSchools).ThenInclude(ts => ts.School));
         if (t == null) return null;
 
@@ -62,6 +65,7 @@ public class TeacherService : IGenericService<TeacherCreateDto, TeacherUpdateDto
         LastName = t.LastName,
         FullName = $"{t.FirstName} {t.LastName}",
         Email = t.Email,
+        Username = t.User?.Username,
         Phone = t.Phone,
         Gender = t.Gender,
         Address = t.Address,
@@ -94,16 +98,36 @@ public class TeacherService : IGenericService<TeacherCreateDto, TeacherUpdateDto
         // Check for duplicate email
         var existing = await _userRepository.GetByEmailAsync(dto.Email.ToLower().Trim());
         if (existing != null)
-            throw new InvalidOperationException($"A user with email '{dto.Email}' already exists.");
+            throw new AppException($"A user with email '{dto.Email}' already exists.");
+
+        var username = dto.Username?.Trim();
+        if (!string.IsNullOrWhiteSpace(username))
+        {
+            var existingByUsername = await _userRepository.Query()
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(u => u.Username != null && u.Username.ToLower() == username.ToLower() && !u.IsDeleted);
+            if (existingByUsername != null)
+                throw new AppException($"A user with username '{username}' already exists.");
+
+            var deletedUser = await _userRepository.Query()
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(u => u.Username != null && u.Username.ToLower() == username.ToLower() && u.IsDeleted);
+            if (deletedUser != null)
+            {
+                deletedUser.Username = MakeUniqueAfterDelete(deletedUser.Username!, deletedUser.Id, 100);
+                await _userRepository.UpdateAsync(deletedUser);
+            }
+        }
 
         var teacherRole = (await _roleRepository.GetAllAsync(q => q.Where(r => r.RoleName == "Teacher"))).FirstOrDefault()
-            ?? throw new InvalidOperationException("Teacher role not found in database.");
+            ?? throw new AppException("Teacher role not found in database.");
 
         var user = new User(
             email: dto.Email.ToLower().Trim(),
             passwordHash: BCrypt.Net.BCrypt.HashPassword(dto.Password),
             roleId: teacherRole.Id,
-            schoolId: schoolId
+            schoolId: schoolId,
+            username: username
         );
         user.FirstName = dto.FirstName;
         user.LastName = dto.LastName;
@@ -182,13 +206,20 @@ public class TeacherService : IGenericService<TeacherCreateDto, TeacherUpdateDto
         var user = await _userRepository.GetByIdAsync(teacher.UserId);
         if (user != null)
         {
+            var username = dto.Username?.Trim();
+            if (!string.IsNullOrWhiteSpace(username) && !string.Equals(user.Username, username, StringComparison.OrdinalIgnoreCase))
+            {
+                var existingByUsername = await _userRepository.Query()
+                    .IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(u => u.Id != user.Id && u.Username != null && u.Username.ToLower() == username.ToLower() && !u.IsDeleted);
+                if (existingByUsername != null)
+                    throw new AppException($"A user with username '{username}' already exists.");
+            }
+            user.Username = username;
             user.FirstName = dto.FirstName;
             user.LastName = dto.LastName;
             user.Phone = dto.Phone;
             user.SchoolId = teacher.SchoolId;
-            // Note: Email in User is private set, so we might need a method or check if it should be updated.
-            // In User.cs: public string Email { get; private set; } = string.Empty;
-            // For now, let's just update the name and phone which are public.
             await _userRepository.UpdateAsync(user);
         }
 
@@ -236,7 +267,20 @@ public class TeacherService : IGenericService<TeacherCreateDto, TeacherUpdateDto
         var user = await _userRepository.GetByIdAsync(userId);
         if (user != null)
         {
+            if (!string.IsNullOrWhiteSpace(user.Username))
+            {
+                user.Username = MakeUniqueAfterDelete(user.Username, user.Id, 100);
+                await _userRepository.UpdateAsync(user);
+            }
             await _userRepository.DeleteAsync(user);
         }
+    }
+
+    private static string MakeUniqueAfterDelete(string original, Guid id, int maxLength)
+    {
+        var suffix = $"~del~{id:N}";
+        var keep = Math.Max(0, maxLength - suffix.Length);
+        var trimmedOriginal = original.Length > keep ? original[..keep] : original;
+        return trimmedOriginal + suffix;
     }
 }

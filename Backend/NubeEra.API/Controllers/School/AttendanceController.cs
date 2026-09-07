@@ -20,14 +20,17 @@ public class AttendanceController : ControllerBase
     private static readonly IReadOnlyList<ExportColumnDefinition> StudentAttendanceExportColumns = new List<ExportColumnDefinition>
     {
         ExportColumnDefinition.Text("student_name", "Student Name", 25),
+        ExportColumnDefinition.Text("gender", "Gender", 15),
         ExportColumnDefinition.Text("date", "Date", 15),
         ExportColumnDefinition.Text("status", "Status", 15),
         ExportColumnDefinition.Text("remarks", "Remarks", 30),
+        
     };
 
     private static readonly IReadOnlyList<ExportColumnDefinition> TeacherAttendanceExportColumns = new List<ExportColumnDefinition>
     {
         ExportColumnDefinition.Text("teacher_name", "Teacher Name", 25),
+        ExportColumnDefinition.Text("gender", "Gender", 15),
         ExportColumnDefinition.Text("date", "Date", 15),
         ExportColumnDefinition.Text("status", "Status", 15),
         ExportColumnDefinition.Text("remarks", "Remarks", 30),
@@ -113,6 +116,7 @@ public class AttendanceController : ControllerBase
         var rows = attendances.Select(a => (IReadOnlyDictionary<string, object?>)new Dictionary<string, object?>
         {
             ["student_name"] = a.StudentName,
+            ["gender"] = a.Gender,
             ["date"] = a.Date.ToString("yyyy-MM-dd"),
             ["status"] = a.Status,
             ["remarks"] = a.Remarks,
@@ -136,6 +140,7 @@ public class AttendanceController : ControllerBase
         var rows = attendances.Select(a => (IReadOnlyDictionary<string, object?>)new Dictionary<string, object?>
         {
             ["teacher_name"] = a.TeacherName,
+            ["gender"] = a.Gender,
             ["date"] = a.Date.ToString("yyyy-MM-dd"),
             ["status"] = a.Status,
             ["remarks"] = a.Remarks,

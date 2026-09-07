@@ -17,6 +17,7 @@ public class TeacherBaseDto
     public string FirstName { get; set; } = null!;
     public string LastName { get; set; } = null!;
     public string Email { get; set; } = null!;
+    public string? Username { get; set; }
     public string? Phone { get; set; }
     public string? Address { get; set; }
     public DateTime? DateOfBirth { get; set; }
@@ -48,6 +49,7 @@ public class TeacherDto
     public string LastName { get; set; } = null!;
     public string FullName { get; set; } = null!;
     public string Email { get; set; } = null!;
+    public string? Username { get; set; }
     public string? Phone { get; set; }
     public string? Gender { get; set; }
     public string? Qualification { get; set; }

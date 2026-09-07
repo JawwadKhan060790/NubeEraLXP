@@ -17,19 +17,22 @@ public class LessonService : ILessonService
     private readonly ICurrentUserService _currentUserService;
     private readonly ITenantService       _tenantService;
     private readonly IGenericRepository<SchoolUnitAssignment> _unitAssignmentRepository;
+    private readonly IGenericRepository<Grade> _gradeRepository;
 
     public LessonService(
         IGenericRepository<Lesson> repository, 
         IGenericRepository<LessonCompletion> completionRepository,
         ICurrentUserService currentUserService, 
         ITenantService tenantService,
-        IGenericRepository<SchoolUnitAssignment> unitAssignmentRepository)
+        IGenericRepository<SchoolUnitAssignment> unitAssignmentRepository,
+        IGenericRepository<Grade> gradeRepository)
     {
         _repository = repository;
         _completionRepository = completionRepository;
         _currentUserService = currentUserService;
         _tenantService       = tenantService;
         _unitAssignmentRepository = unitAssignmentRepository;
+        _gradeRepository = gradeRepository;
     }
 
     /// <summary>
@@ -100,6 +103,7 @@ public class LessonService : ILessonService
             SerialNumber = l.SerialNumber,
             TotalHours = l.TotalHours,
             ExpectedPeriods = l.ExpectedPeriods,
+            DisplayOrder = l.DisplayOrder,
             IsActive = l.IsActive,
             IsActivity = l.IsActivity,
             IsRoboticsActivity = l.IsRoboticsActivity,
@@ -128,13 +132,45 @@ public class LessonService : ILessonService
         else
             query = query.Where(l => l.IsActive); // default: active only
 
-        // Module filter
-        if (request.Filters != null && request.Filters.TryGetValue("ModuleId", out var midStr) && Guid.TryParse(midStr, out var mid))
-            query = query.Where(l => l.ModuleId == mid);
+        // Unit / Module filter
+        Guid? filterUnitId = request.UnitId ?? request.ModuleId;
+        if (!filterUnitId.HasValue && request.Filters != null)
+        {
+            if (request.Filters.TryGetValue("UnitId", out var uidStr) && Guid.TryParse(uidStr, out var uid))
+                filterUnitId = uid;
+            else if (request.Filters.TryGetValue("ModuleId", out var midStr) && Guid.TryParse(midStr, out var mid))
+                filterUnitId = mid;
+        }
+        if (filterUnitId.HasValue && filterUnitId.Value != Guid.Empty)
+        {
+            query = query.Where(l => l.ModuleId == filterUnitId.Value);
+        }
 
-        // Grade level filter — join through Module (request.GradeId reused for GradeLevelId)
-        if (request.GradeId.HasValue)
-            query = query.Where(l => l.Module != null && l.Module.GradeLevelId == request.GradeId.Value);
+        // Grade level filter — join through Module (resolves GradeLevelId from Grade entity if a per-school Grade ID is passed)
+        if (request.GradeId.HasValue && request.GradeId.Value != Guid.Empty)
+        {
+            var gId = request.GradeId.Value;
+            var perSchoolGrade = await _gradeRepository.GetByIdAsync(gId);
+            var targetGradeLevelId = perSchoolGrade != null ? perSchoolGrade.GradeLevelId : gId;
+
+            query = query.Where(l => l.Module != null && l.Module.GradeLevelId == targetGradeLevelId);
+        }
+
+        // School filter — join through SchoolUnitAssignment
+        Guid? filterSchoolId = request.SchoolId;
+        if (!filterSchoolId.HasValue && request.Filters != null && request.Filters.TryGetValue("SchoolId", out var sidStr) && Guid.TryParse(sidStr, out var sid))
+            filterSchoolId = sid;
+
+        if (filterSchoolId.HasValue && filterSchoolId.Value != Guid.Empty)
+        {
+            var assignedUnitIds = await _unitAssignmentRepository
+                .Query()
+                .Where(a => a.SchoolId == filterSchoolId.Value)
+                .Select(a => a.UnitId)
+                .ToListAsync();
+
+            query = query.Where(l => assignedUnitIds.Contains(l.ModuleId));
+        }
 
         // Search: SubTopic or Module name
         if (!string.IsNullOrWhiteSpace(request.Search))
@@ -155,10 +191,12 @@ public class LessonService : ILessonService
             {
                 "subtopic" => desc ? query.OrderByDescending(l => l.SubTopic) : query.OrderBy(l => l.SubTopic),
                 "serialnumber" => desc ? query.OrderByDescending(l => l.SerialNumber) : query.OrderBy(l => l.SerialNumber),
-                "displayorder" => desc ? query.OrderByDescending(l => l.DisplayOrder) : query.OrderBy(l => l.DisplayOrder),
+                "displayorder" => desc
+                    ? query.OrderByDescending(l => l.DisplayOrder).ThenByDescending(l => l.SerialNumber)
+                    : query.OrderBy(l => l.DisplayOrder).ThenBy(l => l.SerialNumber).ThenBy(l => l.CreatedAt),
                 "totalhours" => desc ? query.OrderByDescending(l => l.TotalHours) : query.OrderBy(l => l.TotalHours),
                 "createdat" => desc ? query.OrderByDescending(l => l.CreatedAt) : query.OrderBy(l => l.CreatedAt),
-                _ => query.OrderByDescending(l => l.DisplayOrder).ThenBy(l => l.SerialNumber)
+                _ => query.OrderBy(l => l.DisplayOrder).ThenBy(l => l.SerialNumber).ThenBy(l => l.CreatedAt)
             };
         }
         else

@@ -71,7 +71,7 @@ public class StudentWeakTopicService : IStudentWeakTopicService
 
     // ── Grade weakness analysis ──────────────────────────────────────────────
 
-    public async Task<GradeWeaknessAnalysisDto> GetGradeWeaknessAsync(Guid gradeId)
+    public async Task<GradeWeaknessAnalysisDto> GetGradeWeaknessAsync(Guid gradeId, Guid? sectionId = null)
     {
         var grade = await _gradeRepo.GetByIdAsync(gradeId)
             ?? throw new KeyNotFoundException("Grade not found.");
@@ -83,7 +83,7 @@ public class StudentWeakTopicService : IStudentWeakTopicService
         catch (Exception) { /* never block the read on a sync failure */ }
 
         var students = await _studentRepo.GetAllAsync(q =>
-            q.Where(s => s.GradeId == gradeId && s.IsActive));
+            q.Where(s => s.GradeId == gradeId && s.IsActive && (!sectionId.HasValue || s.SectionId == sectionId.Value)));
 
         var studentIds = students.Select(s => s.Id).ToHashSet();
 

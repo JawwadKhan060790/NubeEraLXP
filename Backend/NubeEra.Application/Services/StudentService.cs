@@ -7,6 +7,7 @@ using NubeEra.Application.Interfaces.Services;
 using NubeEra.Application.Interfaces.Security;
 using NubeEra.Domain.Entities;
 using NubeEra.Domain.Common;
+using NubeEra.Application.Common.Helpers;
 
 namespace NubeEra.Application.Services;
 
@@ -20,6 +21,7 @@ public class StudentService : IStudentService
     private readonly IGenericRepository<Lesson> _lessonRepository;
     private readonly IGenericRepository<Role> _roleRepository;
     private readonly IGradeAccessService _gradeAccessService;
+    private readonly IGenericRepository<School> _schoolRepository;
 
     public StudentService(
         IGenericRepository<Student> repository,
@@ -29,7 +31,8 @@ public class StudentService : IStudentService
         IGenericRepository<LessonCompletion> completionRepository,
         IGenericRepository<Lesson> lessonRepository,
         IGenericRepository<Role> roleRepository,
-        IGradeAccessService gradeAccessService)
+        IGradeAccessService gradeAccessService,
+        IGenericRepository<School> schoolRepository)
     {
         _repository = repository;
         _userRepository = userRepository;
@@ -39,6 +42,7 @@ public class StudentService : IStudentService
         _lessonRepository = lessonRepository;
         _roleRepository = roleRepository;
         _gradeAccessService = gradeAccessService;
+        _schoolRepository = schoolRepository;
     }
 
     /// <summary>
@@ -59,6 +63,7 @@ public class StudentService : IStudentService
             .Include(s => s.School)
             .Include(s => s.Grade)
             .Include(s => s.Section)
+            .Include(s => s.User)
             .OrderBy(s => s.FirstName).ThenBy(s => s.LastName)
             .ToListAsync();
 
@@ -103,11 +108,27 @@ public class StudentService : IStudentService
             .Select(g => new { GradeLevelId = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.GradeLevelId, x => x.Count);
 
+        var parentPhones = students.Where(s => !string.IsNullOrWhiteSpace(s.ParentGuardianPhone)).Select(s => s.ParentGuardianPhone!.Trim()).Distinct().ToList();
+        var parentEmails = students.Where(s => !string.IsNullOrWhiteSpace(s.ParentGuardianEmail)).Select(s => s.ParentGuardianEmail!.Trim().ToLower()).Distinct().ToList();
+        var parentUsers = await _userRepository.Query().AsNoTracking().Where(u => u.IsParent && !u.IsDeleted && u.Username != null && (
+            (!string.IsNullOrEmpty(u.Phone) && parentPhones.Contains(u.Phone)) ||
+            (!string.IsNullOrEmpty(u.Email) && parentEmails.Contains(u.Email.ToLower()))
+        )).Select(u => new { u.Phone, u.Email, u.Username }).ToListAsync();
+
+        string? ResolveParentUsername(Student s)
+        {
+            var p = parentUsers.FirstOrDefault(pu =>
+                (!string.IsNullOrEmpty(s.ParentGuardianPhone) && pu.Phone == s.ParentGuardianPhone.Trim()) ||
+                (!string.IsNullOrEmpty(s.ParentGuardianEmail) && pu.Email.Equals(s.ParentGuardianEmail.Trim(), StringComparison.OrdinalIgnoreCase)));
+            return p?.Username;
+        }
+
         return students.Select(s => MapToDto(s,
             gradeLevelByGradeId.TryGetValue(s.GradeId, out var glId) && glId.HasValue
                 ? lessonCountsByGradeLevel.GetValueOrDefault(glId.Value, 0)
                 : 0,
-            completionCountsByStudent.GetValueOrDefault(s.Id, 0))).ToList();
+            completionCountsByStudent.GetValueOrDefault(s.Id, 0),
+            ResolveParentUsername(s))).ToList();
     }
 
     /// <summary>
@@ -132,21 +153,12 @@ public class StudentService : IStudentService
         // ── Base query (read-only) ──────────────────────────────────────────────
         var query = _repository.Query().AsNoTracking();
 
-        // Active-status filter: default to active-only; caller can opt-in to inactive.
-        if (!request.IsActive.HasValue || request.IsActive.Value)
-            query = query.Where(s => s.IsActive);
-        else
-            query = query.Where(s => !s.IsActive);
-
         // School scoping — effective school honours body param → X-School-Id header → JWT claim.
         var effSchool = _tenantService.GetEffectiveSchoolId(request.SchoolId);
         if (effSchool.HasValue)
             query = query.Where(s => s.SchoolId == effSchool.Value);
 
         // ── Search ─────────────────────────────────────────────────────────────
-        // IMPORTANT: Do NOT reference s.FullName here — it is [NotMapped] and EF
-        // Core will throw InvalidOperationException trying to translate it to SQL.
-        // Search first+last separately; the DB index on (FirstName, LastName) covers both.
         if (!string.IsNullOrWhiteSpace(request.Search))
         {
             var term = request.Search.Trim().ToLower();
@@ -154,11 +166,11 @@ public class StudentService : IStudentService
                 s.FirstName.ToLower().Contains(term) ||
                 s.LastName.ToLower().Contains(term)  ||
                 (s.Email != null && s.Email.ToLower().Contains(term))     ||
-                (s.StudentId != null && s.StudentId.ToLower().Contains(term)));
+                (s.StudentId != null && s.StudentId.ToLower().Contains(term)) ||
+                (s.User != null && s.User.Username != null && s.User.Username.ToLower().Contains(term)));
         }
 
         // ── Grade filter ────────────────────────────────────────────────────────
-        // Accept from the typed property first, then fall back to the Filters dictionary.
         var gradeId = request.GradeId;
         if (!gradeId.HasValue
             && request.Filters != null
@@ -170,38 +182,77 @@ public class StudentService : IStudentService
         if (gradeId.HasValue)
             query = query.Where(s => s.GradeId == gradeId.Value);
 
-        // ── Count (before paging) ────────────────────────────────────────────────
-        var total = await query.CountAsync();
+        // ── Section filter ──────────────────────────────────────────────────────
+        if (request.Filters != null
+            && request.Filters.TryGetValue("SectionId", out var sectionIdStr)
+            && Guid.TryParse(sectionIdStr, out var parsedSectionId))
+        {
+            query = query.Where(s => s.SectionId == parsedSectionId);
+        }
+
+        // ── Base filtered query for accurate stats calculation ──────────────────
+        var baseFilteredQuery = query.Where(s => !s.School.IsDeleted);
+
+        var totalCount    = await baseFilteredQuery.CountAsync();
+        var activeCount   = await baseFilteredQuery.CountAsync(s => s.IsActive);
+        var inactiveCount = await baseFilteredQuery.CountAsync(s => !s.IsActive);
+        var boysCount     = await baseFilteredQuery.CountAsync(s => s.Gender != null && s.Gender.ToLower() == "male");
+        var girlsCount    = await baseFilteredQuery.CountAsync(s => s.Gender != null && s.Gender.ToLower() == "female");
+
+        // ── Status filtering ────────────────────────────────────────────────────
+        var filterByActive = true;
+        if (request.Filters != null && request.Filters.TryGetValue("isActive", out var isActiveStr))
+        {
+            if (isActiveStr.Equals("all", StringComparison.OrdinalIgnoreCase))
+            {
+                filterByActive = false;
+            }
+            else if (bool.TryParse(isActiveStr, out var parsedIsActive))
+            {
+                query = query.Where(s => s.IsActive == parsedIsActive);
+                filterByActive = false;
+            }
+        }
+        if (filterByActive)
+        {
+            query = query.Where(s => s.IsActive == request.IsActive);
+        }
+
+        var pagedCount = await query.CountAsync();
 
         // ── Sorting ─────────────────────────────────────────────────────────────
         query = ApplySorting(query, request.SortBy, request.SortDirection);
 
-        // ── Pagination ───────────────────────────────────────────────────────────
-        var skip = (request.PageNumber - 1) * request.PageSize;
+        // ── Pagination ──────────────────────────────────────────────────────────
         var pagedStudents = await query
+            .Skip((request.PageNumber - 1) * request.PageSize)
+            .Take(request.PageSize)
             .Include(s => s.School)
             .Include(s => s.Grade)
             .Include(s => s.Section)
-            .Skip(skip)
-            .Take(request.PageSize)
+            .Include(s => s.User)
             .ToListAsync();
 
         if (pagedStudents.Count == 0)
+        {
             return new PagedResponse<StudentDto>
             {
-                Items    = Array.Empty<StudentDto>(),
-                TotalCount = total,
-                Page     = request.PageNumber,
-                PageSize = request.PageSize
+                Items         = new List<StudentDto>(),
+                TotalCount    = pagedCount,
+                ActiveCount   = activeCount,
+                InactiveCount = inactiveCount,
+                BoysCount     = boysCount,
+                GirlsCount    = girlsCount,
+                Page          = request.PageNumber,
+                PageSize      = request.PageSize
             };
+        }
 
-        // ── Progress calculation — SCOPED to this page only ───────────────────────
-        // FIX: Previously this loaded EVERY completion and EVERY lesson (full table scans).
-        // Now we only query for the students and grades visible on the current page.
-        var studentIds = pagedStudents.Select(s => s.Id).ToList();
+        // ── Scoped auxiliary queries (THIS PAGE ONLY) ───────────────────────────
+        var pageSchoolIds  = pagedStudents.Select(s => s.SchoolId).Distinct().ToList();
+        var pageStudentIds = pagedStudents.Select(s => s.Id).ToList();
 
-        // Topics are now keyed by the master GradeLevelId rather than a student's
-        // per-school Grade.Id — build the mapping from the already-Included Grade nav.
+        // Topics are keyed by GradeLevelId — build mapping from already-Included Grade nav.
         var pageGradeLevelByGradeId = pagedStudents
             .Where(s => s.Grade != null)
             .Select(s => new { s.GradeId, s.Grade.GradeLevelId })
@@ -210,10 +261,10 @@ public class StudentService : IStudentService
         var pageGradeLevelIds = pageGradeLevelByGradeId.Values
             .Where(v => v.HasValue).Select(v => v!.Value).Distinct().ToList();
 
-        // Completion counts per student — WHERE StudentId IN (this page's IDs)
+        // Lesson completions — WHERE SchoolId IN (this page) AND StudentId IN (this page)
         var completions = await _completionRepository.Query()
             .AsNoTracking()
-            .Where(c => studentIds.Contains(c.StudentId) && c.Lesson.IsActive)
+            .Where(c => pageSchoolIds.Contains(c.SchoolId) && pageStudentIds.Contains(c.StudentId) && c.Lesson.IsActive)
             .Select(c => new { c.StudentId, c.LessonId, GradeLevelId = (Guid?)c.Lesson.Module.GradeLevelId })
             .ToListAsync();
 
@@ -236,20 +287,40 @@ public class StudentService : IStudentService
             .Select(g => new { GradeLevelId = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.GradeLevelId, x => x.Count);
 
+        var pageParentPhones = pagedStudents.Where(s => !string.IsNullOrWhiteSpace(s.ParentGuardianPhone)).Select(s => s.ParentGuardianPhone!.Trim()).Distinct().ToList();
+        var pageParentEmails = pagedStudents.Where(s => !string.IsNullOrWhiteSpace(s.ParentGuardianEmail)).Select(s => s.ParentGuardianEmail!.Trim().ToLower()).Distinct().ToList();
+        var pageParentUsers = await _userRepository.Query().AsNoTracking().Where(u => u.IsParent && !u.IsDeleted && u.Username != null && (
+            (!string.IsNullOrEmpty(u.Phone) && pageParentPhones.Contains(u.Phone)) ||
+            (!string.IsNullOrEmpty(u.Email) && pageParentEmails.Contains(u.Email.ToLower()))
+        )).Select(u => new { u.Phone, u.Email, u.Username }).ToListAsync();
+
+        string? ResolvePageParentUsername(Student s)
+        {
+            var p = pageParentUsers.FirstOrDefault(pu =>
+                (!string.IsNullOrEmpty(s.ParentGuardianPhone) && pu.Phone == s.ParentGuardianPhone.Trim()) ||
+                (!string.IsNullOrEmpty(s.ParentGuardianEmail) && pu.Email.Equals(s.ParentGuardianEmail.Trim(), StringComparison.OrdinalIgnoreCase)));
+            return p?.Username;
+        }
+
         var items = pagedStudents.Select(s => MapToDto(
             s,
             pageGradeLevelByGradeId.TryGetValue(s.GradeId, out var glId) && glId.HasValue
                 ? lessonCountsByGradeLevel.GetValueOrDefault(glId.Value, 0)
                 : 0,
-            completionCountsByStudent.GetValueOrDefault(s.Id, 0)
+            completionCountsByStudent.GetValueOrDefault(s.Id, 0),
+            ResolvePageParentUsername(s)
         )).ToList();
 
         return new PagedResponse<StudentDto>
         {
-            Items    = items,
-            TotalCount = total,
-            Page     = request.PageNumber,
-            PageSize = request.PageSize
+            Items         = items,
+            TotalCount    = pagedCount,
+            ActiveCount   = activeCount,
+            InactiveCount = inactiveCount,
+            BoysCount     = boysCount,
+            GirlsCount    = girlsCount,
+            Page          = request.PageNumber,
+            PageSize      = request.PageSize
         };
     }
 
@@ -285,11 +356,13 @@ public class StudentService : IStudentService
         };
     }
 
-    private static StudentDto MapToDto(Student s, int totalLessons, int completedCount) =>
+    private static StudentDto MapToDto(Student s, int totalLessons, int completedCount, string? parentUsername = null) =>
         new()
         {
             Id                  = s.Id,
             UserId              = s.UserId,
+            Username            = s.User?.Username,
+            ParentUsername      = parentUsername,
             SchoolId            = s.SchoolId,
             SchoolName          = s.School?.Name ?? "",
             GradeId             = s.GradeId,
@@ -324,7 +397,7 @@ public class StudentService : IStudentService
     {
         var s = await _repository.GetByIdAsync(id, q =>
         {
-            IQueryable<Student> query = q.Include(s => s.School).Include(s => s.Grade).Include(s => s.Section);
+            IQueryable<Student> query = q.Include(s => s.School).Include(s => s.Grade).Include(s => s.Section).Include(s => s.User);
             var effSchoolLookup = _tenantService.GetEffectiveSchoolId();
             if (effSchoolLookup.HasValue)
             {
@@ -335,10 +408,25 @@ public class StudentService : IStudentService
 
         if (s == null || !s.IsActive) return null;
 
+        string? parentUsername = null;
+        if (!string.IsNullOrWhiteSpace(s.ParentGuardianPhone) || !string.IsNullOrWhiteSpace(s.ParentGuardianEmail))
+        {
+            var pPhone = s.ParentGuardianPhone?.Trim();
+            var pEmail = s.ParentGuardianEmail?.Trim().ToLower();
+            var parentUser = await _userRepository.Query().AsNoTracking()
+                .FirstOrDefaultAsync(u => u.IsParent && !u.IsDeleted && (
+                    (!string.IsNullOrEmpty(pPhone) && (u.Phone == pPhone || u.Email.ToLower() == pPhone.ToLower())) ||
+                    (!string.IsNullOrEmpty(pEmail) && (u.Email.ToLower() == pEmail || u.Phone == pEmail))
+                ));
+            parentUsername = parentUser?.Username;
+        }
+
         return new StudentDto
         {
             Id = s.Id,
             UserId = s.UserId,
+            Username = s.User?.Username,
+            ParentUsername = parentUsername,
             SchoolId = s.SchoolId,
             SchoolName = s.School?.Name ?? "",
             GradeId             = s.GradeId,
@@ -376,15 +464,57 @@ public class StudentService : IStudentService
 
         if (!string.IsNullOrWhiteSpace(dto.Email))
         {
-            var existingUser = await _userRepository.GetByEmailAsync(dto.Email.ToLower().Trim());
+            var emailLower = dto.Email.ToLower().Trim();
+            var existingUser = await _userRepository.GetByEmailAsync(emailLower);
             if (existingUser != null)
                 throw new AppException($"A user with email '{dto.Email}' already exists.");
+
+            // Check if there is a soft-deleted user with this email to free it up
+            var deletedUser = await _userRepository.Query()
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(u => u.Email.ToLower() == emailLower && u.IsDeleted);
+
+            if (deletedUser != null)
+            {
+                deletedUser.UpdateEmail(MakeUniqueAfterDelete(deletedUser.Email, deletedUser.Id, 150));
+                await _userRepository.UpdateAsync(deletedUser);
+
+                // Also rename their soft-deleted student profile email if they have one
+                var deletedStudent = await _repository.Query()
+                    .IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(s => s.UserId == deletedUser.Id);
+                if (deletedStudent != null && deletedStudent.IsDeleted && !string.IsNullOrEmpty(deletedStudent.Email))
+                {
+                    deletedStudent.Email = MakeUniqueAfterDelete(deletedStudent.Email, deletedStudent.Id, 150);
+                    await _repository.UpdateAsync(deletedStudent);
+                }
+            }
         }
 
-        // Auto-generate a unique StudentId when the caller leaves it blank.
+        var studentUsername = (dto.Username ?? dto.StudentUsername)?.Trim();
+        if (!string.IsNullOrWhiteSpace(studentUsername))
+        {
+            var existingUserByUsername = await _userRepository.Query()
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(u => u.Username != null && u.Username.ToLower() == studentUsername.ToLower() && !u.IsDeleted);
+
+            if (existingUserByUsername != null)
+                throw new AppException($"A user with username '{studentUsername}' already exists.");
+
+            var deletedUser = await _userRepository.Query()
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(u => u.Username != null && u.Username.ToLower() == studentUsername.ToLower() && u.IsDeleted);
+            if (deletedUser != null)
+            {
+                deletedUser.Username = MakeUniqueAfterDelete(deletedUser.Username!, deletedUser.Id, 100);
+                await _userRepository.UpdateAsync(deletedUser);
+            }
+        }
+
+        // Auto-generate a unique StudentId when the caller leaves it blank (e.g. DP-260001).
         if (string.IsNullOrWhiteSpace(dto.StudentId))
         {
-            dto.StudentId = $"STU-{Guid.NewGuid().ToString("N")[..8].ToUpper()}";
+            dto.StudentId = await StudentIdGenerator.GenerateNextStudentIdAsync(schoolId, _schoolRepository, _repository);
         }
         else
         {
@@ -401,17 +531,22 @@ public class StudentService : IStudentService
 
         User? user = null;
 
-        if (!string.IsNullOrEmpty(dto.Email))
+        if (!string.IsNullOrEmpty(dto.Email) || !string.IsNullOrEmpty(studentUsername))
         {
             var studentRole = (await _roleRepository.GetAllAsync(q =>
                 q.Where(r => r.RoleName == "Student"))).FirstOrDefault()
                 ?? throw new AppException("Student role not found in database.");
 
+            var emailToUse = !string.IsNullOrEmpty(dto.Email)
+                ? dto.Email.ToLower().Trim()
+                : $"{studentUsername}@veriton.student";
+
             user = new User(
-                email: dto.Email.ToLower().Trim(),
+                email: emailToUse,
                 passwordHash: BCrypt.Net.BCrypt.HashPassword(dto.Password),
                 roleId: studentRole.Id,
-                schoolId: schoolId
+                schoolId: schoolId,
+                username: studentUsername
             );
 
             user.FirstName = dto.FirstName;
@@ -447,7 +582,7 @@ public class StudentService : IStudentService
         };
 
         await _repository.AddAsync(student);
-        await SyncParentUserAsync(dto, schoolId);
+        await SyncParentUserAsync(dto, schoolId, student.UserId);
 
         return student.Id;
     }
@@ -465,6 +600,8 @@ public class StudentService : IStudentService
             student.SchoolId = dto.SchoolId.Value;
 
         await _gradeAccessService.EnsureGradeAccessibleToCurrentUserAsync(dto.GradeId);
+
+        var studentUsername = (dto.Username ?? dto.StudentUsername)?.Trim();
 
         student.GradeId   = dto.GradeId;
         student.SectionId = dto.SectionId;
@@ -484,25 +621,104 @@ public class StudentService : IStudentService
         student.ParentGuardianEmail = dto.ParentGuardianEmail;
         student.EmergencyContact = dto.EmergencyContact;
         student.PersonalNote = dto.PersonalNote;
-        student.IsActive = dto.IsActive;
 
-        await _repository.UpdateAsync(student);
-        await SyncParentUserAsync(dto, student.SchoolId);
+        var callerRole = _currentUserService.Role ?? "";
+        bool isAdmin = callerRole.Equals("SuperAdmin", StringComparison.OrdinalIgnoreCase) || callerRole.Equals("Admin", StringComparison.OrdinalIgnoreCase);
 
+        // Only Admin accounts can toggle student active/inactive status
+        if (isAdmin)
+        {
+            student.IsActive = dto.IsActive;
+        }
+
+        var studentRole = (await _roleRepository.GetAllAsync(q =>
+            q.Where(r => r.RoleName == "Student"))).FirstOrDefault();
+
+        // 1. Maintain the Student's OWN user account (ALWAYS Role='Student', IsParent=false)
         if (student.UserId.HasValue)
         {
             var user = await _userRepository.GetByIdAsync(student.UserId.Value);
 
             if (user != null)
             {
+                if (!string.IsNullOrWhiteSpace(studentUsername) && !string.Equals(user.Username, studentUsername, StringComparison.OrdinalIgnoreCase))
+                {
+                    var duplicateUser = await _userRepository.Query()
+                        .IgnoreQueryFilters()
+                        .FirstOrDefaultAsync(u => u.Id != user.Id && u.Username != null && u.Username.ToLower() == studentUsername.ToLower() && !u.IsDeleted);
+                    if (duplicateUser != null)
+                        throw new AppException($"A user with username '{studentUsername}' already exists.");
+                }
+
+                user.Username = studentUsername;
+
+                if (studentRole != null && user.RoleId != studentRole.Id)
+                {
+                    user.SetRole(studentRole.Id);
+                }
+                user.IsParent = false;
                 user.FirstName = dto.FirstName;
                 user.LastName = dto.LastName;
                 user.Phone = dto.Phone;
                 user.SchoolId = student.SchoolId;
-                if (dto.IsActive) user.Activate();
-                else user.Deactivate();
+                if (isAdmin)
+                {
+                    if (dto.IsActive) user.Activate();
+                    else user.Deactivate();
+                }
                 await _userRepository.UpdateAsync(user);
             }
+        }
+        else if ((!string.IsNullOrEmpty(dto.Email) || !string.IsNullOrEmpty(studentUsername)) && studentRole != null)
+        {
+            var searchEmail = !string.IsNullOrEmpty(dto.Email) ? dto.Email.Trim().ToLower() : $"{studentUsername}@veriton.student";
+            var existingStudentUser = await _userRepository.GetByEmailAsync(searchEmail, null);
+            if (existingStudentUser == null)
+            {
+                if (!string.IsNullOrWhiteSpace(studentUsername))
+                {
+                    var duplicateUser = await _userRepository.Query()
+                        .IgnoreQueryFilters()
+                        .FirstOrDefaultAsync(u => u.Username != null && u.Username.ToLower() == studentUsername.ToLower() && !u.IsDeleted);
+                    if (duplicateUser != null)
+                        throw new AppException($"A user with username '{studentUsername}' already exists.");
+                }
+
+                var studentPassword = !string.IsNullOrEmpty(dto.Password) ? dto.Password : "123456";
+                var user = new User(
+                    email: searchEmail,
+                    passwordHash: BCrypt.Net.BCrypt.HashPassword(studentPassword),
+                    roleId: studentRole.Id,
+                    schoolId: student.SchoolId,
+                    username: studentUsername
+                )
+                {
+                    FirstName = dto.FirstName,
+                    LastName = dto.LastName,
+                    Phone = dto.Phone,
+                    IsParent = false
+                };
+                await _userRepository.AddAsync(user);
+                student.UserId = user.Id;
+            }
+            else
+            {
+                existingStudentUser.Username = studentUsername;
+                existingStudentUser.SetRole(studentRole.Id);
+                existingStudentUser.IsParent = false;
+                await _userRepository.UpdateAsync(existingStudentUser);
+                student.UserId = existingStudentUser.Id;
+            }
+        }
+
+        await _repository.UpdateAsync(student);
+
+        // 2. Sync / Create the SEPARATE Parent User Account
+        await SyncParentUserAsync(dto, student.SchoolId, student.UserId);
+
+        if (isAdmin)
+        {
+            await SyncParentActiveStatusAsync(dto.ParentGuardianPhone, dto.ParentGuardianEmail, student.Id, dto.IsActive);
         }
     }
 
@@ -515,7 +731,13 @@ public class StudentService : IStudentService
         if (effDelete.HasValue && student.SchoolId != effDelete.Value)
             throw new UnauthorizedAccessException("You are not authorized to delete students from another school.");
 
+        student.IsDeleted = true;
+        student.DeletedDate = DateTime.UtcNow;
         student.IsActive = false;
+        if (!string.IsNullOrWhiteSpace(student.Email))
+        {
+            student.Email = MakeUniqueAfterDelete(student.Email, student.Id, 150);
+        }
 
         await _repository.UpdateAsync(student);
 
@@ -525,8 +747,77 @@ public class StudentService : IStudentService
 
             if (user != null)
             {
+                user.IsDeleted = true;
+                user.DeletedDate = DateTime.UtcNow;
                 user.Deactivate();
+                if (!string.IsNullOrWhiteSpace(user.Email))
+                {
+                    user.UpdateEmail(MakeUniqueAfterDelete(user.Email, user.Id, 150));
+                }
+                if (!string.IsNullOrWhiteSpace(user.Username))
+                {
+                    user.Username = MakeUniqueAfterDelete(user.Username, user.Id, 100);
+                }
                 await _userRepository.UpdateAsync(user);
+            }
+        }
+
+        await SyncParentActiveStatusAsync(student.ParentGuardianPhone, student.ParentGuardianEmail, student.Id, false, isDelete: true);
+    }
+
+    private async Task SyncParentActiveStatusAsync(string? parentPhone, string? parentEmail, Guid studentId, bool activate, bool isDelete = false)
+    {
+        if (string.IsNullOrWhiteSpace(parentPhone) && string.IsNullOrWhiteSpace(parentEmail))
+            return;
+
+        var phone = parentPhone?.Trim();
+        var email = parentEmail?.Trim().ToLower();
+
+        var parentUser = await _userRepository.Query()
+            .IgnoreQueryFilters()
+            .Include(u => u.Role)
+            .FirstOrDefaultAsync(u => u.Role != null && u.Role.RoleName == "Parent" && (
+                (!string.IsNullOrEmpty(phone) && (u.Phone == phone || u.Email.ToLower() == phone.ToLower())) ||
+                (!string.IsNullOrEmpty(email) && (u.Email.ToLower() == email || u.Phone == email))));
+
+        if (parentUser == null) return;
+
+        if (activate)
+        {
+            parentUser.IsDeleted = false;
+            parentUser.Activate();
+            await _userRepository.UpdateAsync(parentUser);
+        }
+        else
+        {
+            // Deactivate parent account only if no other non-deleted active students are linked to this parent
+            var otherActiveStudents = await _repository.Query()
+                .IgnoreQueryFilters()
+                .Where(s =>
+                    s.Id != studentId &&
+                    !s.IsDeleted &&
+                    s.IsActive &&
+                    ((!string.IsNullOrEmpty(phone) && (s.ParentGuardianPhone == phone || (s.ParentGuardianEmail != null && s.ParentGuardianEmail.ToLower() == phone))) ||
+                     (!string.IsNullOrEmpty(email) && ((s.ParentGuardianEmail != null && s.ParentGuardianEmail.ToLower() == email) || s.ParentGuardianPhone == email))))
+                .ToListAsync();
+
+            if (!otherActiveStudents.Any())
+            {
+                if (isDelete)
+                {
+                    parentUser.IsDeleted = true;
+                    parentUser.DeletedDate = DateTime.UtcNow;
+                    if (!string.IsNullOrWhiteSpace(parentUser.Email))
+                    {
+                        parentUser.UpdateEmail(MakeUniqueAfterDelete(parentUser.Email, parentUser.Id, 150));
+                    }
+                    if (!string.IsNullOrWhiteSpace(parentUser.Username))
+                    {
+                        parentUser.Username = MakeUniqueAfterDelete(parentUser.Username, parentUser.Id, 100);
+                    }
+                }
+                parentUser.Deactivate();
+                await _userRepository.UpdateAsync(parentUser);
             }
         }
     }
@@ -688,64 +979,171 @@ public class StudentService : IStudentService
         };
     }
 
-    private async Task SyncParentUserAsync(StudentCreateDto dto, Guid schoolId)
+    private async Task SyncParentUserAsync(StudentCreateDto dto, Guid schoolId, Guid? currentStudentUserId = null)
     {
-        if (string.IsNullOrWhiteSpace(dto.ParentGuardianPhone)) return;
+        if (string.IsNullOrWhiteSpace(dto.ParentGuardianPhone) && string.IsNullOrWhiteSpace(dto.ParentGuardianEmail)) return;
 
-        var parentPhone = dto.ParentGuardianPhone.Trim();
-        var parentName = dto.ParentGuardianName?.Trim() ?? "Parent";
+        var parentPhone = dto.ParentGuardianPhone?.Trim();
+        var parentName = !string.IsNullOrWhiteSpace(dto.ParentGuardianName) ? dto.ParentGuardianName.Trim() : "Parent";
         var parentEmail = dto.ParentGuardianEmail?.Trim().ToLower();
 
-        var parentUser = await _userRepository.GetByEmailOrPhoneAsync(parentPhone);
+        var parentRole = (await _roleRepository.GetAllAsync(q =>
+            q.Where(r => r.RoleName == "Parent"))).FirstOrDefault()
+            ?? throw new AppException("Parent role not found in database.");
+
+        var studentRole = (await _roleRepository.GetAllAsync(q =>
+            q.Where(r => r.RoleName == "Student"))).FirstOrDefault();
+
+        User? parentUser = null;
+
+        // Search ONLY for users who are already a PARENT and NOT any student user account
+        if (!string.IsNullOrWhiteSpace(parentPhone))
+        {
+            var query = _userRepository.Query()
+                .IgnoreQueryFilters()
+                .Where(u => u.RoleId == parentRole.Id || (u.IsParent && (studentRole == null || u.RoleId != studentRole.Id)));
+            if (currentStudentUserId.HasValue)
+            {
+                query = query.Where(u => u.Id != currentStudentUserId.Value);
+            }
+            parentUser = await query.FirstOrDefaultAsync(u => u.Phone == parentPhone || u.Email.ToLower() == parentPhone.ToLower());
+        }
 
         if (parentUser == null && !string.IsNullOrEmpty(parentEmail))
-            parentUser = await _userRepository.GetByEmailOrPhoneAsync(parentEmail);
+        {
+            var query = _userRepository.Query()
+                .IgnoreQueryFilters()
+                .Where(u => u.RoleId == parentRole.Id || (u.IsParent && (studentRole == null || u.RoleId != studentRole.Id)));
+            if (currentStudentUserId.HasValue)
+            {
+                query = query.Where(u => u.Id != currentStudentUserId.Value);
+            }
+            parentUser = await query.FirstOrDefaultAsync(u => u.Email.ToLower() == parentEmail.ToLower() || u.Phone == parentEmail);
+        }
+
+        var parentUsername = dto.ParentUsername?.Trim();
+        if (!string.IsNullOrWhiteSpace(parentUsername))
+        {
+            var existingParentUsername = await _userRepository.Query()
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(u => (parentUser == null || u.Id != parentUser.Id) && u.Username != null && u.Username.ToLower() == parentUsername.ToLower() && !u.IsDeleted);
+            if (existingParentUsername != null)
+                throw new AppException($"A user with username '{parentUsername}' already exists.");
+
+            var deletedParentUser = await _userRepository.Query()
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(u => (parentUser == null || u.Id != parentUser.Id) && u.Username != null && u.Username.ToLower() == parentUsername.ToLower() && u.IsDeleted);
+            if (deletedParentUser != null)
+            {
+                deletedParentUser.Username = MakeUniqueAfterDelete(deletedParentUser.Username!, deletedParentUser.Id, 100);
+                await _userRepository.UpdateAsync(deletedParentUser);
+            }
+        }
 
         if (parentUser == null)
         {
+            // Create a brand NEW SEPARATE parent user account
             var emailToUse = parentEmail;
 
             if (string.IsNullOrEmpty(emailToUse))
             {
-                emailToUse = $"{parentPhone}@nubeera.parent";
-            }
-            else
-            {
-                var existingByEmail = await _userRepository.GetByEmailOrPhoneAsync(emailToUse);
-
-                if (existingByEmail != null)
-                    emailToUse = $"{parentPhone}@nubeera.parent";
+                emailToUse = !string.IsNullOrWhiteSpace(parentPhone)
+                    ? $"{parentPhone}@veriton.parent"
+                    : (!string.IsNullOrWhiteSpace(parentUsername) ? $"{parentUsername}@veriton.parent" : $"parent_{Guid.NewGuid().ToString("N")[..6]}@veriton.parent");
             }
 
-            var passwordToUse = !string.IsNullOrEmpty(dto.ParentPassword)
-                ? dto.ParentPassword
-                : parentPhone;
+            // Verify if emailToUse is already in use by another user (e.g. student or staff)
+            var existingByEmail = await _userRepository.Query()
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(u => u.Email.ToLower() == emailToUse.ToLower());
 
-            var passwordHash = BCrypt.Net.BCrypt.HashPassword(passwordToUse);
-
-            var parentRole = (await _roleRepository.GetAllAsync(q =>
-                q.Where(r => r.RoleName == "Parent"))).FirstOrDefault()
-                ?? throw new AppException("Parent role not found in database.");
-
-            var newParent = new User(
-                email: emailToUse,
-                passwordHash: passwordHash,
-                roleId: parentRole.Id,
-                schoolId: schoolId
-            )
+            if (existingByEmail != null)
             {
-                FirstName = parentName,
-                LastName = "",
-                Phone = parentPhone
-            };
+                if (existingByEmail.RoleId == parentRole.Id || existingByEmail.IsParent)
+                {
+                    parentUser = existingByEmail;
+                }
+                else
+                {
+                    // Email is used by student/staff — generate unique parent email address
+                    emailToUse = !string.IsNullOrWhiteSpace(parentPhone)
+                        ? $"parent_{parentPhone}@veriton.parent"
+                        : (!string.IsNullOrWhiteSpace(parentUsername) ? $"parent_{parentUsername}@veriton.parent" : $"parent_{Guid.NewGuid().ToString("N")[..6]}@veriton.parent");
 
-            await _userRepository.AddAsync(newParent);
+                    var conflictCheck = await _userRepository.Query()
+                        .IgnoreQueryFilters()
+                        .AnyAsync(u => u.Email.ToLower() == emailToUse.ToLower());
+                    if (conflictCheck)
+                    {
+                        emailToUse = $"parent_{Guid.NewGuid().ToString("N")[..8]}@veriton.parent";
+                    }
+                }
+            }
+
+            if (parentUser == null)
+            {
+                var passwordToUse = !string.IsNullOrEmpty(dto.ParentPassword)
+                    ? dto.ParentPassword
+                    : "123456";
+
+                var passwordHash = BCrypt.Net.BCrypt.HashPassword(passwordToUse);
+
+                var newParent = new User(
+                    email: emailToUse,
+                    passwordHash: passwordHash,
+                    roleId: parentRole.Id,
+                    schoolId: schoolId,
+                    username: parentUsername
+                )
+                {
+                    FirstName = parentName,
+                    LastName = "",
+                    Phone = parentPhone,
+                    IsParent = true
+                };
+
+                await _userRepository.AddAsync(newParent);
+                return;
+            }
         }
-        else
+
+        if (parentUser != null)
         {
             bool updated = false;
 
-            if (parentUser.FirstName != parentName)
+            if (!parentUser.IsParent)
+            {
+                parentUser.IsParent = true;
+                updated = true;
+            }
+
+            if (!string.IsNullOrWhiteSpace(parentUsername) && parentUser.Username != parentUsername)
+            {
+                parentUser.Username = parentUsername;
+                updated = true;
+            }
+
+            if (parentUser.RoleId != parentRole.Id)
+            {
+                parentUser.SetRole(parentRole.Id);
+                updated = true;
+            }
+
+            if (parentUser.IsDeleted)
+            {
+                parentUser.IsDeleted = false;
+                parentUser.DeletedDate = null;
+                parentUser.DeletedBy = null;
+                updated = true;
+            }
+
+            if (!parentUser.IsActive)
+            {
+                parentUser.Activate();
+                updated = true;
+            }
+
+            if (parentUser.FirstName != parentName && !string.IsNullOrWhiteSpace(parentName))
             {
                 parentUser.FirstName = parentName;
                 updated = true;
@@ -756,25 +1154,97 @@ public class StudentService : IStudentService
                 parentUser.UpdatePassword(BCrypt.Net.BCrypt.HashPassword(dto.ParentPassword));
                 updated = true;
             }
-
-            var parentRole = (await _roleRepository.GetAllAsync(q =>
-                q.Where(r => r.RoleName == "Parent"))).FirstOrDefault()
-                ?? throw new AppException("Parent role not found in database.");
-
-            if (parentUser.RoleId != parentRole.Id)
+            else if (string.IsNullOrEmpty(parentUser.PasswordHash))
             {
-                parentUser.SetRole(parentRole.Id);
+                parentUser.UpdatePassword(BCrypt.Net.BCrypt.HashPassword("123456"));
                 updated = true;
             }
 
-            if (parentUser.Phone != parentPhone)
+            if (parentUser.SchoolId != schoolId)
+            {
+                parentUser.SchoolId = schoolId;
+                updated = true;
+            }
+
+            if (!string.IsNullOrWhiteSpace(parentPhone) && parentUser.Phone != parentPhone)
             {
                 parentUser.Phone = parentPhone;
                 updated = true;
             }
 
             if (updated)
+            {
                 await _userRepository.UpdateAsync(parentUser);
+            }
         }
+    }
+
+    public async Task ResetParentPasswordAsync(Guid studentId, string newPassword)
+    {
+        var student = await _repository.GetByIdAsync(studentId)
+            ?? throw new AppException("Student not found");
+
+        var effSchool = _tenantService.GetEffectiveSchoolId();
+        if (effSchool.HasValue && student.SchoolId != effSchool.Value)
+            throw new UnauthorizedAccessException("You are not authorized to modify students from another school.");
+
+        if (string.IsNullOrWhiteSpace(newPassword))
+            throw new AppException("Password cannot be empty.");
+
+        User? parentUser = null;
+        if (!string.IsNullOrWhiteSpace(student.ParentGuardianEmail))
+            parentUser = await _userRepository.GetByEmailOrPhoneAsync(student.ParentGuardianEmail.Trim());
+
+        if (parentUser == null && !string.IsNullOrWhiteSpace(student.ParentGuardianPhone))
+            parentUser = await _userRepository.GetByEmailOrPhoneAsync(student.ParentGuardianPhone.Trim());
+
+        if (parentUser == null && !string.IsNullOrWhiteSpace(student.ParentGuardianPhone))
+            parentUser = await _userRepository.GetByEmailOrPhoneAsync($"{student.ParentGuardianPhone.Trim()}@veriton.parent");
+
+        if (parentUser == null)
+        {
+            var parentEmail = !string.IsNullOrWhiteSpace(student.ParentGuardianEmail)
+                ? student.ParentGuardianEmail.Trim()
+                : (!string.IsNullOrWhiteSpace(student.ParentGuardianPhone) ? $"{student.ParentGuardianPhone}@veriton.parent" : null);
+
+            if (string.IsNullOrEmpty(parentEmail))
+                throw new AppException("Cannot reset parent password: student has no guardian email or phone registered.");
+
+            var parentRole = (await _roleRepository.GetAllAsync(q => q.Where(r => r.RoleName == "Parent"))).FirstOrDefault()
+                ?? throw new AppException("Parent role not found in database.");
+
+            parentUser = new User(
+                email: parentEmail,
+                passwordHash: BCrypt.Net.BCrypt.HashPassword(newPassword),
+                roleId: parentRole.Id,
+                schoolId: student.SchoolId
+            )
+            {
+                FirstName = !string.IsNullOrWhiteSpace(student.ParentGuardianName) ? student.ParentGuardianName : "Parent",
+                LastName = "",
+                Phone = student.ParentGuardianPhone,
+                IsParent = true
+            };
+
+            await _userRepository.AddAsync(parentUser);
+        }
+        else
+        {
+            parentUser.UpdatePassword(BCrypt.Net.BCrypt.HashPassword(newPassword));
+            await _userRepository.UpdateAsync(parentUser);
+        }
+    }
+
+    public async Task<string> GetNextStudentIdAsync(Guid schoolId)
+    {
+        return await StudentIdGenerator.GenerateNextStudentIdAsync(schoolId, _schoolRepository, _repository);
+    }
+
+    private static string MakeUniqueAfterDelete(string original, Guid id, int maxLength)
+    {
+        var suffix = $"~del~{id:N}";
+        var keep = Math.Max(0, maxLength - suffix.Length);
+        var trimmedOriginal = original.Length > keep ? original[..keep] : original;
+        return trimmedOriginal + suffix;
     }
 }

@@ -1,6 +1,6 @@
 -- MySQL dump 10.13  Distrib 8.0.44, for Win64 (x86_64)
 --
--- Host: localhost    Database: nubeera_db
+-- Host: localhost    Database: veriton_db
 -- ------------------------------------------------------
 -- Server version	8.3.0
 
@@ -35,7 +35,6 @@ CREATE TABLE `__efmigrationshistory` (
 
 LOCK TABLES `__efmigrationshistory` WRITE;
 /*!40000 ALTER TABLE `__efmigrationshistory` DISABLE KEYS */;
-INSERT INTO `__efmigrationshistory` VALUES ('20260222063523_SchoolOperationalLMS','9.0.0'),('20260223042538_FixMissingLMSColumns','9.0.0'),('20260223054059_UpdateModuleFields','9.0.0'),('20260224070322_AddLessonFieldsV2','9.0.0'),('20260224074432_MakeLessonTeacherIdNullable','9.0.0'),('20260225055901_MakeExamIdNullable','9.0.0'),('20260226061601_AddUploadedMediaBypass','9.0.0'),('20260226092451_AddLessonEnhancedFields','9.0.0'),('20260307074243_AddResetOtpToUser','9.0.0'),('20260307123755_AddModuleIdToQuestion','9.0.0'),('20260309053948_MakeModuleOptional','9.0.0'),('20260413074417_RemoveSectionFromGrade','9.0.0'),('20260413094151_UpdateLessonActivityColumn','9.0.0'),('20260415071045_UpdateLessonColumnSize','9.0.0'),('20260428112221_AddPdfAndPageNumbers','9.0.0'),('20260507095754_Profile image field is added to user table','9.0.0'),('20260513141131_principal is added to school','9.0.0'),('20260514074032_add student notes table','9.0.0'),('20260517070158_AddStudentPersonalNote','9.0.0'),('20260517073840_MigrateToRoleEntity','9.0.0'),('20260517113138_AddExamModuleEntities','9.0.0'),('20260526141126_AddEcommerceModule','9.0.0'),('20260527082512_AddLessonAndActivityTracking','9.0.0'),('20260527084730_UpdateDiagramUrlTypeToLongText','9.0.0'),('20260529065416_AddSupportSystemAndEcommerce','9.0.0'),('20260601091003_AddWebsiteRegistrations','9.0.0'),('20260604114153_AddStudentPythonCodeTable','9.0.0'),('20260604120000_AddActivityTypeFieldsToLesson','9.0.0'),('20260608092119_AddSystemSettingsTable','9.0.0'),('20260608140000_AddBackupRestoreModule','9.0.0'),('20260608150000_AddGradeLevelsAndSchoolGradeRange','9.0.0'),('20260609070945_school update','9.0.0'),('20260609120000_AddCertificateModule','9.0.0'),('20260610102023_AddStudentPerformanceIndexes','9.0.0'),('20260611140816_Update-database','9.0.0'),('20260611144229_RemoveClassRankMapping','9.0.0'),('20260612000001_AddSoftDeleteColumns','9.0.0'),('20260614100757_CompleteModelChanges','9.0.0'),('20260614101000_AddMissingLessonActivityColumns','9.0.0'),('20260614101200_AddPdfFileUrlToLesson','9.0.0'),('20260614115556_UpdateMigrationSystem','9.0.0'),('20260614134643_AddGradeSections','9.0.0'),('20260615190658_AddSectionToTeacherLessonProgress','9.0.0'),('20260616073817_AddGradeLevelIdColumn','9.0.0'),('20260616074219_AddGradeLevelIdColumn','9.0.0'),('20260616074337_GradeLevelId added to grade table','9.0.0'),('20260616074624_GradeLevelId added to table','9.0.0'),('20260616120000_AddAuditColumns','9.0.0'),('20260616130000_AddSchoolLatitudeLongitude','9.0.0'),('20260617122128_AddSchoolCoordinatesAndTicketHistoryFilter','9.0.0'),('20260617130000_AddSchoolCurriculumAssignmentAndTeacherSchools','9.0.0'),('20260620115331_ConsolidateCurriculumAssignment','9.0.0'),('20260621050122_CreatedBy added ','9.0.0'),('20260621113604_RemoveSchoolIdAndLegacyGradeIdFromModuleLesson','9.0.0'),('20260622103116_AddPendingChanges','9.0.0'),('20260628042852_Update','9.0.0'),('20260701091216_ExpectedPerdios added ','9.0.0'),('20260704175524_CompleteStudentDoubtAndLessons','9.0.0'),('20260715110149_MakeSchoolIdNullableOnGrade','9.0.0'),('20260715115839_AddGradeLevels11And12','9.0.0'),('20260715123016_UpdateGradeCheckConstraintTo12','9.0.0'),('20260715125808_MakeEventSchoolIdNullable','9.0.0'),('20260722082207_UpdateGradeLevelsToRomanNumerals','9.0.0'),('20260722122108_MakeStudentEmailOptional','9.0.0'),('20260722173354_AddSubjectHierarchy','9.0.0'),('20260724110627_AddLessonDisplayOrder','9.0.0');
 /*!40000 ALTER TABLE `__efmigrationshistory` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -2540,11 +2539,13 @@ CREATE TABLE `users` (
   `Id` char(36) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
   `SchoolId` char(36) CHARACTER SET ascii COLLATE ascii_general_ci DEFAULT NULL,
   `Email` varchar(150) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+  `Username` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL,
   `PasswordHash` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
   `FirstName` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL,
   `LastName` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL,
   `Phone` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL,
   `IsActive` tinyint(1) NOT NULL DEFAULT '1',
+  `IsParent` tinyint(1) NOT NULL DEFAULT '0',
   `CreatedAt` datetime(6) NOT NULL,
   `LastLoginAt` datetime(6) DEFAULT NULL,
   `ProfileImageUrl` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
@@ -2557,6 +2558,7 @@ CREATE TABLE `users` (
   `CreatedBy` char(36) CHARACTER SET ascii COLLATE ascii_general_ci DEFAULT NULL,
   PRIMARY KEY (`Id`),
   UNIQUE KEY `IX_users_Email` (`Email`),
+  KEY `IX_users_Username` (`Username`),
   KEY `IX_users_SchoolId` (`SchoolId`),
   KEY `IX_users_RoleId` (`RoleId`),
   KEY `IX_users_IsDeleted` (`IsDeleted`),
@@ -2662,3 +2664,191 @@ UNLOCK TABLES;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
 -- Dump completed on 2026-07-27 15:20:42
+
+-- =========================================================================
+-- Ensure IsParent column exists on users table
+-- =========================================================================
+SET @dbname = DATABASE();
+SET @tablename = 'users';
+SET @columnname = 'IsParent';
+SET @preparedStatement = (SELECT IF(
+  (
+    SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE
+      TABLE_SCHEMA = @dbname
+      AND TABLE_NAME = @tablename
+      AND COLUMN_NAME = @columnname
+  ) > 0,
+  'SELECT 1',
+  'ALTER TABLE users ADD COLUMN IsParent tinyint(1) NOT NULL DEFAULT 0;'
+));
+PREPARE alterIfNotExists FROM @preparedStatement;
+EXECUTE alterIfNotExists;
+DEALLOCATE PREPARE alterIfNotExists;
+
+-- =========================================================================
+-- 1. Restore all student user accounts to Role='Student' and IsParent=0
+-- =========================================================================
+UPDATE users u
+INNER JOIN students s ON (s.UserId = u.Id OR (s.Email IS NOT NULL AND s.Email != '' AND LOWER(u.Email) = LOWER(s.Email)))
+SET u.RoleId = (SELECT Id FROM roles WHERE RoleName = 'Student' LIMIT 1),
+    u.IsParent = 0
+WHERE u.RoleId != (SELECT Id FROM roles WHERE RoleName = 'Student' LIMIT 1)
+   OR u.IsParent != 0;
+
+-- =========================================================================
+-- 2. Ensure all users with Role='Parent' are marked with IsParent=1 and have Phone populated
+-- =========================================================================
+UPDATE users
+SET IsParent = 1
+WHERE RoleId = (SELECT Id FROM roles WHERE RoleName = 'Parent' LIMIT 1)
+  AND IsParent = 0;
+
+-- Populate Phone from Email if Phone is missing for parent accounts with @veriton.parent
+UPDATE users
+SET Phone = REPLACE(REPLACE(SUBSTRING_INDEX(Email, '@', 1), 'parent_', ''), '@veriton.parent', '')
+WHERE RoleId = (SELECT Id FROM roles WHERE RoleName = 'Parent' LIMIT 1)
+  AND (Phone IS NULL OR TRIM(Phone) = '')
+  AND Email LIKE '%@veriton.parent';
+
+-- =========================================================================
+-- 3. Automatically create Parent User accounts for all students with ParentGuardianPhone
+--    - Username / Phone: Parent Phone (allows direct mobile number login)
+--    - Default Email: {ParentPhone}@veriton.parent
+--    - Default Password: '123456' ($2a$11$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy)
+-- =========================================================================
+INSERT INTO users (
+    Id,
+    SchoolId,
+    Email,
+    PasswordHash,
+    FirstName,
+    LastName,
+    Phone,
+    IsActive,
+    CreatedAt,
+    RoleId,
+    IsDeleted,
+    IsParent
+)
+SELECT
+    UUID(),
+    p.SchoolId,
+    p.ParentEmail,
+    '$2a$11$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy',
+    p.ParentFirstName,
+    p.ParentLastName,
+    p.ParentPhone,
+    1,
+    NOW(6),
+    (SELECT Id FROM roles WHERE RoleName = 'Parent' LIMIT 1),
+    0,
+    1
+FROM (
+    SELECT
+        s.SchoolId,
+        TRIM(s.ParentGuardianPhone) AS ParentPhone,
+        MAX(CASE
+            WHEN s.ParentGuardianName IS NOT NULL AND TRIM(s.ParentGuardianName) != ''
+            THEN TRIM(SUBSTRING_INDEX(TRIM(s.ParentGuardianName), ' ', 1))
+            ELSE 'Parent'
+        END) AS ParentFirstName,
+        MAX(CASE
+            WHEN s.ParentGuardianName IS NOT NULL AND TRIM(s.ParentGuardianName) != '' AND INSTR(TRIM(s.ParentGuardianName), ' ') > 0
+            THEN TRIM(SUBSTRING(TRIM(s.ParentGuardianName), INSTR(TRIM(s.ParentGuardianName), ' ') + 1))
+            ELSE ''
+        END) AS ParentLastName,
+        CONCAT(TRIM(s.ParentGuardianPhone), '@veriton.parent') AS ParentEmail
+    FROM students s
+    WHERE s.ParentGuardianPhone IS NOT NULL
+      AND TRIM(s.ParentGuardianPhone) != ''
+      AND s.IsDeleted = 0
+    GROUP BY s.SchoolId, TRIM(s.ParentGuardianPhone)
+) p
+WHERE NOT EXISTS (
+    SELECT 1 FROM users u
+    WHERE (u.Phone = p.ParentPhone OR u.Email = p.ParentEmail)
+      AND (u.RoleId = (SELECT Id FROM roles WHERE RoleName = 'Parent' LIMIT 1) OR u.IsParent = 1)
+);
+
+-- =========================================================================
+-- 4. Create Parent User accounts for any students who only have ParentGuardianEmail (without Phone)
+-- =========================================================================
+INSERT INTO users (
+    Id,
+    SchoolId,
+    Email,
+    PasswordHash,
+    FirstName,
+    LastName,
+    Phone,
+    IsActive,
+    CreatedAt,
+    RoleId,
+    IsDeleted,
+    IsParent
+)
+SELECT
+    UUID(),
+    p.SchoolId,
+    p.ParentEmail,
+    '$2a$11$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy',
+    p.ParentFirstName,
+    p.ParentLastName,
+    '',
+    1,
+    NOW(6),
+    (SELECT Id FROM roles WHERE RoleName = 'Parent' LIMIT 1),
+    0,
+    1
+FROM (
+    SELECT
+        s.SchoolId,
+        LOWER(TRIM(s.ParentGuardianEmail)) AS ParentEmail,
+        MAX(CASE
+            WHEN s.ParentGuardianName IS NOT NULL AND TRIM(s.ParentGuardianName) != ''
+            THEN TRIM(SUBSTRING_INDEX(TRIM(s.ParentGuardianName), ' ', 1))
+            ELSE 'Parent'
+        END) AS ParentFirstName,
+        MAX(CASE
+            WHEN s.ParentGuardianName IS NOT NULL AND TRIM(s.ParentGuardianName) != '' AND INSTR(TRIM(s.ParentGuardianName), ' ') > 0
+            THEN TRIM(SUBSTRING(TRIM(s.ParentGuardianName), INSTR(TRIM(s.ParentGuardianName), ' ') + 1))
+            ELSE ''
+        END) AS ParentLastName
+    FROM students s
+    WHERE (s.ParentGuardianPhone IS NULL OR TRIM(s.ParentGuardianPhone) = '')
+      AND s.ParentGuardianEmail IS NOT NULL
+      AND TRIM(s.ParentGuardianEmail) != ''
+      AND s.IsDeleted = 0
+    GROUP BY s.SchoolId, LOWER(TRIM(s.ParentGuardianEmail))
+) p
+WHERE NOT EXISTS (
+    SELECT 1 FROM users u
+    WHERE u.Email = p.ParentEmail
+);
+
+-- =========================================================================
+-- 5. Ensure all Parent user accounts have password '123456' and are active
+-- =========================================================================
+UPDATE users
+SET PasswordHash = '$2a$11$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy',
+    IsActive = 1
+WHERE RoleId = (SELECT Id FROM roles WHERE RoleName = 'Parent' LIMIT 1)
+  AND (PasswordHash IS NULL OR PasswordHash = '');
+
+-- =========================================================================
+-- 6. Ensure Username column exists and backfill all user accounts:
+--    - For all standard accounts: set Username = Email
+--    - For all Parent accounts (IsParent = 1): set Username = Phone number
+-- =========================================================================
+ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `Username` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
+CREATE INDEX IF NOT EXISTS `IX_users_Username` ON `users` (`Username`);
+
+UPDATE `users`
+SET `Username` = CASE
+    WHEN `IsParent` = 1 AND `Phone` IS NOT NULL AND TRIM(`Phone`) != '' THEN TRIM(`Phone`)
+    WHEN `IsParent` = 1 AND (`Phone` IS NULL OR TRIM(`Phone`) = '') THEN `Email`
+    ELSE `Email`
+END
+WHERE `Username` IS NULL OR `Username` = '';
+

@@ -153,8 +153,8 @@ public class ReportCardPdfService : IReportCardPdfService
                                     if (!string.IsNullOrWhiteSpace(rc.RollNo))
                                         InfoRow(rows, "Roll No.",    rc.RollNo!);
                                     InfoRow(rows, "Grade / Class",   rc.GradeName + (rc.Section != null ? $" - {rc.Section}" : ""));
-                                    if (rc.DateOfBirth.HasValue)
-                                        InfoRow(rows, "Date of Birth", rc.DateOfBirth.Value.ToString("dd MMM yyyy"));
+                                     if (rc.DateOfBirth.HasValue)
+                                         InfoRow(rows, "Date of Birth", rc.DateOfBirth.Value.ToString("dd/MM/yyyy"));
                                     if (!string.IsNullOrWhiteSpace(rc.ParentName))
                                         InfoRow(rows, "Parent / Guardian", rc.ParentName!);
                                     if (!string.IsNullOrWhiteSpace(rc.ParentContact))

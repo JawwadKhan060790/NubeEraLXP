@@ -850,7 +850,7 @@ public class StudentService : IStudentService
                 Email     = values[2].Trim(),
                 StudentId = values[3].Trim(),
                 GradeId   = Guid.TryParse(values[4].Trim(), out var gid) ? gid : Guid.Empty,
-                Password  = "Student@123"
+                Password  = "123456"
             };
 
             try

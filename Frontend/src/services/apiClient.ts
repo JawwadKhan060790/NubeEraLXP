@@ -83,17 +83,19 @@ apiClient.interceptors.response.use(
     }
 
     /**
-     * On 401 (token expired / missing), clear credentials and redirect to
-     * login — unless the user is already on the login page.
+     * On 401 (token expired / missing / unauthorized), clear credentials and redirect to
+     * login — unless this was an explicit login attempt (/auth/login).
      */
     if (error.response?.status === 401) {
       const currentPath = window.location.pathname;
-      const token = localStorage.getItem(APP_CONFIG.TOKEN_KEY);
       const reqUrl = error.config?.url || '';
+      const isLoginRequest = reqUrl.includes('/auth/login');
 
-      if (currentPath !== '/login' && (!token || reqUrl.includes('/auth/me') || reqUrl.includes('/auth/refresh') || reqUrl.includes('/auth/validate'))) {
+      if (!isLoginRequest && currentPath !== '/login') {
         localStorage.removeItem(APP_CONFIG.TOKEN_KEY);
         localStorage.removeItem(APP_CONFIG.USER_KEY);
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
         localStorage.removeItem('nubeera_selected_school_id');
         window.location.href = '/login';
       }

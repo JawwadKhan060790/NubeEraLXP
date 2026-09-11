@@ -193,19 +193,22 @@ namespace NubeEra.Infrastructure.Services
                             dob = d;
                         }
 
-                        // Student user account
-                        var emailToUse = email;
-                        if (string.IsNullOrEmpty(emailToUse))
-                        {
-                            var cleanFirst = firstName.ToLower().Replace(" ", "");
-                            var cleanLast = lastName.ToLower().Replace(" ", "");
-                            var cleanRoll = string.IsNullOrEmpty(rollNo) ? Guid.NewGuid().ToString("N")[..4] : rollNo.Replace(" ", "");
-                            emailToUse = $"{cleanFirst}.{cleanLast}.{cleanRoll}@veriton.student";
-                        }
+                        // Resolve Parent contact details (using single email and mobile if parent-specific ones are omitted)
+                        var pPhone = !string.IsNullOrEmpty(parentPhone) ? parentPhone.Trim() : (phone?.Trim() ?? "");
+                        var pEmail = !string.IsNullOrEmpty(parentEmail) ? parentEmail.Trim().ToLower() : (email?.Trim().ToLower() ?? "");
+
+                        // Resolve Student user email
+                        var emailToUse = (!string.IsNullOrEmpty(email) && email.Trim().ToLower() != pEmail)
+                            ? email.Trim().ToLower()
+                            : (!string.IsNullOrEmpty(studentId) 
+                                ? $"{studentId.ToLower().Trim()}@veriton.student" 
+                                : $"{firstName.ToLower().Replace(" ", "")}.{lastName.ToLower().Replace(" ", "")}.{(string.IsNullOrEmpty(rollNo) ? Guid.NewGuid().ToString("N")[..4] : rollNo.Replace(" ", ""))}@veriton.student");
 
                         var existingUser = await _userRepository.Query()
                             .IgnoreQueryFilters()
                             .FirstOrDefaultAsync(u => u.Email.ToLower() == emailToUse.Trim().ToLower());
+
+                        var studentUsername = !string.IsNullOrWhiteSpace(studentId) ? studentId.Trim() : (!string.IsNullOrWhiteSpace(rollNo) ? rollNo.Trim() : null);
 
                         if (existingUser != null)
                         {
@@ -225,6 +228,7 @@ namespace NubeEra.Infrastructure.Services
                             existingUser.FirstName = firstName;
                             existingUser.LastName = lastName;
                             existingUser.Phone = phone;
+                            existingUser.Username = studentUsername;
                             existingUser.SchoolId = schoolId;
                             existingUser.RoleId = studentRole.Id;
                             await _userRepository.UpdateAsync(existingUser);
@@ -236,7 +240,8 @@ namespace NubeEra.Infrastructure.Services
                                 email: emailToUse.Trim().ToLower(),
                                 passwordHash: studentPasswordHash,
                                 roleId: studentRole.Id,
-                                schoolId: schoolId
+                                schoolId: schoolId,
+                                username: studentUsername
                             )
                             {
                                 FirstName = firstName,
@@ -246,12 +251,9 @@ namespace NubeEra.Infrastructure.Services
                             await _userRepository.AddAsync(studentUser);
                         }
 
-                        // Parent user account
-                        if (!string.IsNullOrEmpty(parentPhone) || !string.IsNullOrEmpty(parentEmail))
+                        // Parent user account (uses single email and mobile from row)
+                        if (!string.IsNullOrEmpty(pPhone) || !string.IsNullOrEmpty(pEmail))
                         {
-                            var pPhone = parentPhone?.Trim() ?? "";
-                            var pEmail = parentEmail?.Trim().ToLower() ?? "";
-
                             if (!string.IsNullOrEmpty(pPhone))
                             {
                                 parentUser = await _userRepository.Query()
@@ -278,7 +280,7 @@ namespace NubeEra.Infrastructure.Services
                                 }
                                 parentUser.Activate();
                                 parentUser.FirstName = parentName ?? parentUser.FirstName;
-                                parentUser.Phone = pPhone;
+                                if (!string.IsNullOrEmpty(pPhone)) parentUser.Phone = pPhone;
                                 parentUser.SchoolId = schoolId;
                                 await _userRepository.UpdateAsync(parentUser);
                             }
@@ -297,12 +299,9 @@ namespace NubeEra.Infrastructure.Services
                                     pEmailToUse = $"{pPhone}_{Guid.NewGuid().ToString("N")[..4]}@veriton.parent";
                                 }
 
-                                var pPasswordToUse = "123456";
-                                var pPasswordHash = BCrypt.Net.BCrypt.HashPassword(pPasswordToUse);
-
                                 parentUser = new User(
                                     email: pEmailToUse,
-                                    passwordHash: pPasswordHash,
+                                    passwordHash: parentPasswordHash,
                                     roleId: parentRole.Id,
                                     schoolId: schoolId
                                 )
@@ -320,6 +319,9 @@ namespace NubeEra.Infrastructure.Services
                         student = await _studentRepository.Query()
                             .IgnoreQueryFilters()
                             .FirstOrDefaultAsync(s => s.UserId == studentUser.Id);
+
+                        var effectiveParentEmail = !string.IsNullOrEmpty(parentEmail) ? parentEmail : (parentUser?.Email ?? email);
+                        var effectiveParentPhone = !string.IsNullOrEmpty(parentPhone) ? parentPhone : (parentUser?.Phone ?? phone);
 
                         if (student != null)
                         {
@@ -342,8 +344,8 @@ namespace NubeEra.Infrastructure.Services
                             student.Gender = gender;
                             student.Address = address;
                             student.ParentGuardianName = parentName ?? parentUser?.FirstName ?? student.ParentGuardianName ?? "Parent";
-                            student.ParentGuardianPhone = parentPhone ?? parentUser?.Phone ?? student.ParentGuardianPhone;
-                            student.ParentGuardianEmail = parentEmail ?? parentUser?.Email ?? student.ParentGuardianEmail;
+                            student.ParentGuardianPhone = effectiveParentPhone ?? student.ParentGuardianPhone;
+                            student.ParentGuardianEmail = effectiveParentEmail ?? student.ParentGuardianEmail;
 
                             await _studentRepository.UpdateAsync(student);
                         }
@@ -370,8 +372,8 @@ namespace NubeEra.Infrastructure.Services
                                 Address = address,
                                 AdmissionDate = DateTime.UtcNow,
                                 ParentGuardianName = parentName ?? parentUser?.FirstName ?? "Parent",
-                                ParentGuardianPhone = parentPhone ?? parentUser?.Phone,
-                                ParentGuardianEmail = parentEmail ?? parentUser?.Email,
+                                ParentGuardianPhone = effectiveParentPhone,
+                                ParentGuardianEmail = effectiveParentEmail,
                                 IsActive = true
                             };
                             await _studentRepository.AddAsync(student);

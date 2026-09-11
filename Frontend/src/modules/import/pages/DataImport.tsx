@@ -65,15 +65,15 @@ export default function DataImport() {
   const templates: Record<ImportType, { title: string; headers: string[]; desc: string; sample: string[][] }> = {
     students: {
       title: 'Students & Parents Template',
-      desc: 'Creates both student and parent user logins (default passwords: Student@123 for Student, Parent@123 for Parent). Will automatically map to matching Grade names and create Sections dynamically if they don\'t exist.',
+      desc: 'Creates both student and parent user logins (default password: 123456 for both Student and Parent). Will automatically map to matching Grade names and create Sections dynamically if they don\'t exist.',
       headers: [
         'First Name', 'Last Name', 'Email', 'Student ID', 'Roll No', 'Phone',
         'Grade Name', 'Section Code', 'Parent Guardian Name', 'Parent Guardian Phone',
-        'Parent Guardian Email', 'Gender', 'Address', 'Date Of Birth'
+        'Gender', 'Address', 'Date Of Birth'
       ],
       sample: [
-        ['John', 'Doe', 'john.doe@school.edu', 'STU-001', '10', '1234567890', 'Grade 1', 'A', 'Richard Doe', '0987654321', 'richard@doe.com', 'Male', '123 Main St', '2015-05-12'],
-        ['Jane', 'Smith', '', 'STU-002', '12', '', 'Grade 2', 'B', 'Mary Smith', '5551234567', '', 'Female', '456 Oak Rd', '2014-08-20']
+        ['John', 'Doe', 'richard.doe@gmail.com', 'STU-001', '10', '1234567890', 'Grade 1', 'A', 'Richard Doe', '0987654321', 'Male', '123 Main St', '2015-05-12'],
+        ['Jane', 'Smith', 'mary.smith@gmail.com', 'STU-002', '12', '5551234567', 'Grade 2', 'B', 'Mary Smith', '5551234567', 'Female', '456 Oak Rd', '2014-08-20']
       ]
     },
     attendance: {
@@ -418,7 +418,7 @@ export default function DataImport() {
           <div className="border-t border-slate-200 dark:border-slate-800 pt-4 text-xs text-slate-400 dark:text-slate-500 flex flex-col gap-2">
             <span>• Supported formats: <b>.xlsx, .xls, .csv</b></span>
             <span>• Date format: <b>YYYY-MM-DD</b></span>
-            <span>• Password for new accounts defaults to: <b>Student@123</b> (Student) & <b>Parent@123</b> (Parent)</span>
+            <span>• Password for new accounts defaults to: <b>123456</b> (Student & Parent)</span>
           </div>
         </div>
       </div>

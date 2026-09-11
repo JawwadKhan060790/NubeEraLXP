@@ -71,14 +71,15 @@ api.interceptors.response.use(
 
     if (error.response?.status === 401) {
       const currentPath = window.location.pathname;
-      const token = localStorage.getItem('token');
       const reqUrl = error.config?.url || '';
+      const isLoginRequest = reqUrl.includes('/auth/login');
 
-      // Only redirect to login if there is no token or if the 401 comes from explicit auth validation
-      if (currentPath !== '/login' && (!token || reqUrl.includes('/auth/me') || reqUrl.includes('/auth/refresh') || reqUrl.includes('/auth/validate'))) {
+      if (!isLoginRequest && currentPath !== '/login') {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         localStorage.removeItem('nubeera_selected_school_id');
+        localStorage.removeItem('nubeera_token');
+        localStorage.removeItem('nubeera_user');
         window.location.href = '/login';
       }
     }

@@ -573,7 +573,8 @@ public class UsersController : ControllerBase
         {
             passwordToSet = user.Role.RoleName switch
             {
-                "Student" => "Student@123",
+                "Student" => "123456",
+                "Parent" => "123456",
                 "Teacher" => "Teacher@123",
                 "Principal" => "Principal@123",
                 "Staff" => "Staff@123",

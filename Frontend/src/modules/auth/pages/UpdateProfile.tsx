@@ -426,7 +426,13 @@ const UpdateProfile: React.FC = () => {
                         className="w-full px-5 py-3.5 bg-white border border-gray-200 rounded-md focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all outline-none font-medium text-gray-900 text-sm shadow-sm"
                       />
                     ) : (
-                      <p className="text-sm font-bold text-gray-700 bg-gray-50 p-4 rounded-md border border-gray-100">{formData.date_of_birth || 'Not set'}</p>
+                      <p className="text-sm font-bold text-gray-700 bg-gray-50 p-4 rounded-md border border-gray-100">
+                        {formData.date_of_birth ? (() => {
+                          const d = typeof formData.date_of_birth === 'string' && !formData.date_of_birth.includes('T') ? new Date(`${formData.date_of_birth}T00:00:00`) : new Date(formData.date_of_birth);
+                          if (isNaN(d.getTime())) return formData.date_of_birth;
+                          return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+                        })() : 'Not set'}
+                      </p>
                     )}
                   </div>
                   <div className="space-y-2">

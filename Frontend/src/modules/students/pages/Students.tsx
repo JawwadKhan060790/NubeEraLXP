@@ -1077,7 +1077,11 @@ const Students: React.FC = () => {
                             ? `${selectedStudent.grade_name} - ${selectedStudent.section_code}`
                             : selectedStudent.grade_name)
                         } />
-                        <InfoRow icon={<Calendar className="w-4 h-4" />} label="Admission Date" value={selectedStudent.admission_date ? new Date(selectedStudent.admission_date).toLocaleDateString() : null} />
+                        <InfoRow icon={<Calendar className="w-4 h-4" />} label="Admission Date" value={selectedStudent.admission_date ? (() => {
+                          const d = typeof selectedStudent.admission_date === 'string' && !selectedStudent.admission_date.includes('T') ? new Date(`${selectedStudent.admission_date}T00:00:00`) : new Date(selectedStudent.admission_date);
+                          if (isNaN(d.getTime())) return null;
+                          return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+                        })() : null} />
                       </div>
                     </div>
 
@@ -1089,7 +1093,11 @@ const Students: React.FC = () => {
                           <InfoRow icon={<Phone className="w-4 h-4" />} label="Phone" value={selectedStudent.phone} />
                           <InfoRow icon={<User className="w-4 h-4" />} label="Gender" value={selectedStudent.gender} />
                           <InfoRow icon={<Droplets className="w-4 h-4" />} label="Blood Group" value={selectedStudent.blood_group} />
-                          <InfoRow icon={<Calendar className="w-4 h-4" />} label="Date of Birth" value={selectedStudent.date_of_birth ? new Date(selectedStudent.date_of_birth).toLocaleDateString() : null} />
+                          <InfoRow icon={<Calendar className="w-4 h-4" />} label="Date of Birth" value={selectedStudent.date_of_birth ? (() => {
+                            const d = typeof selectedStudent.date_of_birth === 'string' && !selectedStudent.date_of_birth.includes('T') ? new Date(`${selectedStudent.date_of_birth}T00:00:00`) : new Date(selectedStudent.date_of_birth);
+                            if (isNaN(d.getTime())) return null;
+                            return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+                          })() : null} />
                           <InfoRow icon={<MapPin className="w-4 h-4" />} label="Home Address" value={selectedStudent.address} className="col-span-2" />
                         </div>
                       </div>

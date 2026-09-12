@@ -231,8 +231,10 @@ public class ParentAnalyticsDto
 public class StaffAnalyticsDto
 {
     // KPI Cards
+    public int TotalSchools          { get; set; }
     public int TotalStudents         { get; set; }
     public int TotalTeachers         { get; set; }
+    public int TotalTickets          { get; set; }
     public int TotalOpenTickets      { get; set; }
     public int TotalCertificates     { get; set; }
     public int TotalReportCards      { get; set; }

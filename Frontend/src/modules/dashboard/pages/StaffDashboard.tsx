@@ -62,7 +62,7 @@ const StaffDashboard: React.FC = () => {
           { title: 'Total Units',  value: analytics?.total_units             ?? 0, icon: <BookText      className="w-5 h-5" />, color: 'sky'    , subtitle: 'Active curriculum units' },
           { title: 'Events',       value: analytics?.total_events            ?? 0, icon: <Calendar      className="w-5 h-5" />, color: 'teal'   , subtitle: 'Scheduled or held' },
           { title: 'Resolved',     value: analytics?.resolved_tickets        ?? 0, icon: <Check         className="w-5 h-5" />, color: 'emerald', subtitle: 'Tickets closed' },
-          { title: 'New Students', value: analytics?.new_students_this_month ?? 0, icon: <TrendingUp    className="w-5 h-5" />, color: 'purple' , subtitle: 'last 30 days' },
+          { title: 'Schools',      value: analytics?.total_schools           ?? 0, icon: <School        className="w-5 h-5" />, color: 'purple' , subtitle: 'Registered campuses' },
         ]} />
       </StatGrid>
 

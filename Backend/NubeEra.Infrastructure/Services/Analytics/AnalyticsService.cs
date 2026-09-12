@@ -1110,29 +1110,28 @@ public class AnalyticsService : IAnalyticsService
         var cut6      = MonthsAgo(6);
         bool noFilter = !schoolId.HasValue;
 
-        var totalStudents = await _db.Students.CountAsync(s =>
-            s.IsActive && (noFilter || s.SchoolId == schoolId));
-        var totalTeachers = await _db.Teachers.CountAsync(t =>
-            t.IsActive && (noFilter || t.SchoolId == schoolId));
+        var totalSchools  = await _db.Schools.CountAsync(s => !s.IsDeleted && (noFilter || s.Id == schoolId));
+        var totalStudents = await _db.Students.CountAsync(s => !s.IsDeleted && (noFilter || s.SchoolId == schoolId));
+        var totalTeachers = await _db.Teachers.CountAsync(t => !t.IsDeleted && (noFilter || t.SchoolId == schoolId || t.TeacherSchools.Any(ts => !ts.IsDeleted && ts.SchoolId == schoolId)));
 
         var allTickets = await _db.Tickets
-            .Where(t => noFilter || t.SchoolId == schoolId)
+            .Where(t => !t.IsDeleted && (noFilter || t.SchoolId == schoolId))
             .Select(t => new { t.Status, t.CreatedAt })
             .ToListAsync();
 
+        var totalTickets = allTickets.Count;
         var openTickets = allTickets.Count(t =>
             t.Status == TicketStatus.Open || t.Status == TicketStatus.InProgress
             || t.Status == TicketStatus.Reopened || t.Status == TicketStatus.Pending);
         var resolvedTickets = allTickets.Count(t =>
             t.Status == TicketStatus.Resolved || t.Status == TicketStatus.Closed);
 
-        var totalCerts    = await _db.Certificates.CountAsync(c => noFilter || c.SchoolId == schoolId);
-        var totalRCs      = await _db.ReportCards.CountAsync(rc => noFilter || rc.SchoolId == schoolId);
-        var totalEvents   = await _db.Events.CountAsync(e => noFilter || e.SchoolId == schoolId);
-        var newStudents30d = await _db.Students.CountAsync(s =>
-            s.CreatedAt >= DateTime.UtcNow.AddDays(-30) && (noFilter || s.SchoolId == schoolId));
-        var totalDoubts   = await _db.StudentDoubts.CountAsync(d => noFilter || d.SchoolId == schoolId);
-        var totalUnits    = await _db.Modules.CountAsync(m => m.IsActive && (noFilter || m.SchoolAssignments.Any(a => !a.IsDeleted && a.SchoolId == schoolId)));
+        var totalCerts    = await _db.Certificates.CountAsync(c => !c.IsDeleted && (noFilter || c.SchoolId == schoolId));
+        var totalRCs      = await _db.ReportCards.CountAsync(rc => !rc.IsDeleted && (noFilter || rc.SchoolId == schoolId));
+        var totalEvents   = await _db.Events.CountAsync(e => !e.IsDeleted && (noFilter || e.SchoolId == schoolId || e.SchoolId == null));
+        var newStudents30d = await _db.Students.CountAsync(s => !s.IsDeleted && s.CreatedAt >= DateTime.UtcNow.AddDays(-30) && (noFilter || s.SchoolId == schoolId));
+        var totalDoubts   = await _db.StudentDoubts.CountAsync(d => !d.IsDeleted && (noFilter || d.SchoolId == schoolId));
+        var totalUnits    = await _db.Modules.CountAsync(m => !m.IsDeleted && m.IsActive && (noFilter || m.SchoolAssignments.Any(a => !a.IsDeleted && a.SchoolId == schoolId)));
 
         // Ticket trend (6 months)
         var ticketTrendDict = allTickets
@@ -1235,8 +1234,10 @@ public class AnalyticsService : IAnalyticsService
 
         return new StaffAnalyticsDto
         {
+            TotalSchools         = totalSchools,
             TotalStudents        = totalStudents,
             TotalTeachers        = totalTeachers,
+            TotalTickets         = totalTickets,
             TotalOpenTickets     = openTickets,
             TotalCertificates    = totalCerts,
             TotalReportCards     = totalRCs,

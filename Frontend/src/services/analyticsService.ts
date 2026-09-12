@@ -162,8 +162,10 @@ export interface ParentAnalytics {
 // ── Staff ─────────────────────────────────────────────────────────────────────
 
 export interface StaffAnalytics {
+  total_schools?:          number;
   total_students:          number;
   total_teachers:          number;
+  total_tickets?:          number;
   total_open_tickets:      number;
   total_certificates:      number;
   total_report_cards:      number;

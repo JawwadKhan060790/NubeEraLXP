@@ -703,14 +703,14 @@ sys.stderr = io.StringIO()
                            <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap flex-shrink-0">
                               <button
                                  onClick={() => handleEdit(selectedLesson)}
-                                 className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-extrabold text-xs transition-all flex items-center gap-1.5 shadow-xs active:scale-95 cursor-pointer"
+                                 className="px-3.5 py-2 bg-indigo-50/90 hover:bg-indigo-100/90 text-indigo-700 dark:bg-indigo-500/10 dark:hover:bg-indigo-500/20 dark:text-indigo-300 border border-indigo-200/70 dark:border-indigo-500/30 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shadow-2xs hover:shadow-xs active:scale-95 cursor-pointer"
                                  title="Edit Topic"
                               >
                                  <Edit className="w-3.5 h-3.5" /> Edit
                               </button>
                               <button
                                  onClick={() => handleDelete(selectedLesson.id, selectedLesson.sub_topic)}
-                                 className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-extrabold text-xs transition-all flex items-center gap-1.5 shadow-xs active:scale-95 cursor-pointer"
+                                 className="px-3.5 py-2 bg-rose-50/90 hover:bg-rose-100/90 text-rose-700 dark:bg-rose-500/10 dark:hover:bg-rose-500/20 dark:text-rose-400 border border-rose-200/70 dark:border-rose-500/30 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shadow-2xs hover:shadow-xs active:scale-95 cursor-pointer"
                                  title="Delete Topic"
                               >
                                  <Trash2 className="w-3.5 h-3.5" /> Delete

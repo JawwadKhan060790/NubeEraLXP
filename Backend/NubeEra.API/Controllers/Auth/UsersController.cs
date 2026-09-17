@@ -265,15 +265,21 @@ public class UsersController : ControllerBase
     {
         try
         {
-            var users = await _userRepository.GetAllAsync(q => q.Include(u => u.Role).Include(u => u.School));
+            var users = await _userRepository.Query()
+                .IgnoreQueryFilters()
+                .Where(u => !u.IsDeleted)
+                .Include(u => u.Role)
+                .Include(u => u.School)
+                .AsNoTracking()
+                .ToListAsync();
             
             IEnumerable<User> filtered = users;
             
             // Tenant scoping: restricted roles always see their school; non-restricted
             // use the school selected via the UI (X-School-Id header → JWT fallback).
             var effSchool = _tenantService.GetEffectiveSchoolId(schoolId);
-            if (effSchool.HasValue)
-                filtered = filtered.Where(u => u.SchoolId == effSchool);
+            if (effSchool.HasValue && effSchool.Value != Guid.Empty)
+                filtered = filtered.Where(u => u.SchoolId == effSchool.Value);
             
             if (!string.IsNullOrEmpty(role))
                 filtered = filtered.Where(u => string.Equals(u.Role?.RoleName, role, StringComparison.OrdinalIgnoreCase));
@@ -293,15 +299,15 @@ public class UsersController : ControllerBase
                     id = u.Id,
                     email = u.Email,
                     username = u.Username,
-                    first_name = u.FirstName,
-                    last_name = u.LastName,
+                    first_name = u.FirstName ?? "",
+                    last_name = u.LastName ?? "",
                     full_name = $"{u.FirstName} {u.LastName}".Trim(),
                     role = roleName,
                     utype = utype,
                     school_id = u.SchoolId,
-                    school_name = u.School?.Name,
+                    school_name = u.School?.Name ?? "",
                     is_active = u.IsActive,
-                    phone = u.Phone,
+                    phone = u.Phone ?? "",
                     created_at = u.CreatedAt
                 };
             });

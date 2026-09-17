@@ -126,16 +126,19 @@ const Users: React.FC = () => {
   useEffect(() => {
     const savedUser = localStorage.getItem('user');
     if (savedUser) {
-      setCurrentUser(JSON.parse(savedUser));
+      try {
+        setCurrentUser(JSON.parse(savedUser));
+      } catch (e) {
+        console.error('Failed to parse user from localStorage', e);
+      }
     }
+    fetchUsers();
+    fetchSchools();
   }, []);
 
   useEffect(() => {
-    if (currentUser) {
-      fetchUsers();
-      if (currentUser?.utype === 'admin' || currentUser?.utype === 'staff' || currentUser?.utype === 'superadmin') {
-        fetchSchools();
-      }
+    if (currentUser?.utype === 'admin' || currentUser?.utype === 'staff' || currentUser?.utype === 'superadmin') {
+      fetchSchools();
     }
   }, [currentUser]);
 
@@ -301,12 +304,15 @@ const Users: React.FC = () => {
   };
 
   const filteredUsers = users.filter(u => {
-    const isSelf = u.id === currentUser?.id || u.email?.toLowerCase() === currentUser?.email?.toLowerCase();
+    const isSelf = currentUser?.id ? (u.id === currentUser.id || (u.email && currentUser.email && u.email.toLowerCase() === currentUser.email.toLowerCase())) : false;
     const matchesSchool = !filterSchoolId || (u.school_id && String(u.school_id).toLowerCase() === String(filterSchoolId).toLowerCase());
-    const matchesRole = !filterRole || u.role.toLowerCase() === filterRole.toLowerCase() || u.utype?.toLowerCase() === filterRole.toLowerCase();
-    const matchesSearch = u.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         u.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         u.username?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesRole = !filterRole || 
+      (u.role && u.role.toLowerCase() === filterRole.toLowerCase()) || 
+      (u.utype && u.utype.toLowerCase() === filterRole.toLowerCase());
+    const matchesSearch = !searchTerm || 
+      (u.full_name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+      (u.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (u.username || '').toLowerCase().includes(searchTerm.toLowerCase());
     return matchesSchool && matchesRole && matchesSearch && !isSelf;
   });
 

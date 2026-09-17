@@ -433,4 +433,44 @@ public class AppDbContext : Microsoft.EntityFrameworkCore.DbContext
             }
         }
     }
+
+    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        ApplySoftDeleteAudit();
+        return base.SaveChangesAsync(cancellationToken);
+    }
+
+    public override int SaveChanges()
+    {
+        ApplySoftDeleteAudit();
+        return base.SaveChanges();
+    }
+
+    private void ApplySoftDeleteAudit()
+    {
+        Guid? currentUserId = null;
+        if (_currentUserService?.UserId != null && Guid.TryParse(_currentUserService.UserId, out var uid))
+        {
+            currentUserId = uid;
+        }
+
+        foreach (var entry in ChangeTracker.Entries<NubeEra.Domain.Common.ISoftDelete>())
+        {
+            if (entry.State == EntityState.Modified || entry.State == EntityState.Added)
+            {
+                if (entry.Entity.IsDeleted)
+                {
+                    if (!entry.Entity.DeletedDate.HasValue)
+                    {
+                        entry.Entity.DeletedDate = DateTime.UtcNow;
+                    }
+                    if (!entry.Entity.DeletedBy.HasValue && currentUserId.HasValue)
+                    {
+                        entry.Entity.DeletedBy = currentUserId;
+                    }
+                }
+            }
+        }
+    }
 }
+

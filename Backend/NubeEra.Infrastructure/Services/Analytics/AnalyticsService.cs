@@ -77,18 +77,18 @@ public class AnalyticsService : IAnalyticsService
         var cut12 = MonthsAgo(12);
         var today = DateTime.UtcNow.Date;
 
-        var totalSchools  = await _db.Schools.CountAsync(s => s.IsActive);
-        var totalStudents = await _db.Students.CountAsync(s => s.IsActive);
-        var totalTeachers = await _db.Teachers.CountAsync(t => t.IsActive);
-        var totalExams    = await _db.Exams.CountAsync(e => e.IsActive);
+        var totalSchools  = await _db.Schools.CountAsync(s => !s.IsDeleted && s.IsActive);
+        var totalStudents = await _db.Students.CountAsync(s => !s.IsDeleted && s.IsActive);
+        var totalTeachers = await _db.Teachers.CountAsync(t => !t.IsDeleted && t.IsActive);
+        var totalExams    = await _db.Exams.CountAsync(e => !e.IsDeleted && e.IsActive);
         var activeToday   = await _db.Users.CountAsync(u =>
-            u.IsActive && u.LastLoginAt.HasValue && u.LastLoginAt.Value >= today);
+            !u.IsDeleted && u.IsActive && u.LastLoginAt.HasValue && u.LastLoginAt.Value >= today);
         var newReg30d = await _db.Users.CountAsync(u =>
-            u.CreatedAt >= DateTime.UtcNow.AddDays(-30));
+            !u.IsDeleted && u.IsActive && u.CreatedAt >= DateTime.UtcNow.AddDays(-30));
 
         // Role distribution via explicit Join (avoids Include+GroupBy EF translation issue)
         var roleGroups = await _db.Users
-            .Where(u => u.IsActive)
+            .Where(u => !u.IsDeleted && u.IsActive)
             .Join(_db.Roles, u => u.RoleId, r => r.Id, (u, r) => r.RoleName)
             .GroupBy(roleName => roleName)
             .Select(g => new { Role = g.Key, Count = g.Count() })
@@ -97,22 +97,22 @@ public class AnalyticsService : IAnalyticsService
 
         // School growth trend
         var schoolRaw = await _db.Schools
-            .Where(s => s.CreatedAt >= cut12)
+            .Where(s => !s.IsDeleted && s.IsActive && s.CreatedAt >= cut12)
             .GroupBy(s => new { s.CreatedAt.Year, s.CreatedAt.Month })
             .Select(g => new { g.Key.Year, g.Key.Month, Count = (double)g.Count() })
             .ToListAsync();
 
         // Student growth trend
         var studentRaw = await _db.Students
-            .Where(s => s.CreatedAt >= cut12)
+            .Where(s => !s.IsDeleted && s.IsActive && s.CreatedAt >= cut12)
             .GroupBy(s => new { s.CreatedAt.Year, s.CreatedAt.Month })
             .Select(g => new { g.Key.Year, g.Key.Month, Count = (double)g.Count() })
             .ToListAsync();
 
         // Top 10 schools by enrollment
         var topSchools = await _db.Students
-            .Where(s => s.IsActive)
-            .Join(_db.Schools, s => s.SchoolId, sc => sc.Id, (s, sc) => sc.Name)
+            .Where(s => !s.IsDeleted && s.IsActive)
+            .Join(_db.Schools.Where(sc => !sc.IsDeleted && sc.IsActive), s => s.SchoolId, sc => sc.Id, (s, sc) => sc.Name)
             .GroupBy(name => name)
             .Select(g => new { School = g.Key, Count = (double)g.Count() })
             .OrderByDescending(x => x.Count)
@@ -121,21 +121,21 @@ public class AnalyticsService : IAnalyticsService
 
         // Platform activity: attendance records vs exams per month
         var attendRaw = await _db.Attendances
-            .Where(a => a.CreatedAt >= cut12)
+            .Where(a => !a.IsDeleted && a.CreatedAt >= cut12)
             .GroupBy(a => new { a.CreatedAt.Year, a.CreatedAt.Month })
             .Select(g => new { g.Key.Year, g.Key.Month, Count = (double)g.Count() })
             .ToListAsync();
 
         var examsRaw = await _db.Exams
-            .Where(e => e.CreatedAt >= cut12)
+            .Where(e => !e.IsDeleted && e.IsActive && e.CreatedAt >= cut12)
             .GroupBy(e => new { e.CreatedAt.Year, e.CreatedAt.Month })
             .Select(g => new { g.Key.Year, g.Key.Month, Count = (double)g.Count() })
             .ToListAsync();
 
         // Exam performance trend — avg % per month (in-memory division)
         var examScoresRaw = await _db.Results
-            .Where(r => r.CreatedAt >= cut12)
-            .Join(_db.Exams, r => r.ExamId, e => e.Id,
+            .Where(r => !r.IsDeleted && r.CreatedAt >= cut12)
+            .Join(_db.Exams.Where(e => !e.IsDeleted && e.IsActive), r => r.ExamId, e => e.Id,
                 (r, e) => new { r.CreatedAt, r.ObtainedMarks, TotalMarks = e.TotalMarks ?? 100 })
             .Where(x => x.TotalMarks > 0)
             .ToListAsync();
@@ -177,29 +177,29 @@ public class AnalyticsService : IAnalyticsService
         bool noFilter = !schoolId.HasValue;
 
         var totalStudents = await _db.Students.CountAsync(s =>
-            s.IsActive && (noFilter || s.SchoolId == schoolId));
+            !s.IsDeleted && s.IsActive && (noFilter || s.SchoolId == schoolId));
         var totalTeachers = await _db.Teachers.CountAsync(t =>
-            t.IsActive && (noFilter || t.SchoolId == schoolId));
+            !t.IsDeleted && t.IsActive && (noFilter || t.SchoolId == schoolId || t.TeacherSchools.Any(ts => !ts.IsDeleted && ts.SchoolId == schoolId)));
         var totalGrades   = await _db.Grades.CountAsync(g =>
-            g.IsActive && (noFilter || g.SchoolId == schoolId));
+            !g.IsDeleted && g.IsActive && (noFilter || g.SchoolId == schoolId));
         var totalSchools  = schoolId.HasValue
-            ? 1
-            : await _db.Schools.CountAsync(s => s.IsActive);
+            ? await _db.Schools.CountAsync(s => !s.IsDeleted && s.IsActive && s.Id == schoolId.Value)
+            : await _db.Schools.CountAsync(s => !s.IsDeleted && s.IsActive);
         var totalExams    = await _db.Exams.CountAsync(e =>
-            e.IsActive && (noFilter || e.SchoolId == schoolId));
+            !e.IsDeleted && e.IsActive && (noFilter || e.SchoolId == schoolId));
         var totalEvents   = await _db.Events.CountAsync(e =>
-            noFilter || e.SchoolId == schoolId);
+            !e.IsDeleted && (noFilter || e.SchoolId == schoolId || e.SchoolId == null));
 
         // Student admissions trend
         var admRaw = await _db.Students
-            .Where(s => s.CreatedAt >= cut12 && (noFilter || s.SchoolId == schoolId))
+            .Where(s => !s.IsDeleted && s.IsActive && s.CreatedAt >= cut12 && (noFilter || s.SchoolId == schoolId))
             .GroupBy(s => new { s.CreatedAt.Year, s.CreatedAt.Month })
             .Select(g => new { g.Key.Year, g.Key.Month, Count = (double)g.Count() })
             .ToListAsync();
 
         // Teacher recruitment trend
         var teachRaw = await _db.Teachers
-            .Where(t => t.CreatedAt >= cut12 && (noFilter || t.SchoolId == schoolId))
+            .Where(t => !t.IsDeleted && t.IsActive && t.CreatedAt >= cut12 && (noFilter || t.SchoolId == schoolId))
             .GroupBy(t => new { t.CreatedAt.Year, t.CreatedAt.Month })
             .Select(g => new { g.Key.Year, g.Key.Month, Count = (double)g.Count() })
             .ToListAsync();
@@ -208,8 +208,8 @@ public class AnalyticsService : IAnalyticsService
         // schools, so a per-grade breakdown mixes the same grade number across unrelated schools;
         // per-grade detail is only meaningful on the Principal dashboard (single school in scope).
         var rawAttendForSchools = await _db.Attendances
-            .Where(a => a.StudentId.HasValue && (noFilter || a.SchoolId == schoolId))
-            .Join(_db.Schools, a => a.SchoolId, sc => sc.Id,
+            .Where(a => !a.IsDeleted && a.StudentId.HasValue && (noFilter || a.SchoolId == schoolId))
+            .Join(_db.Schools.Where(sc => !sc.IsDeleted && sc.IsActive), a => a.SchoolId, sc => sc.Id,
                 (a, sc) => new { a.Status, SchoolName = sc.Name })
             .ToListAsync();
 
@@ -222,7 +222,7 @@ public class AnalyticsService : IAnalyticsService
 
         // Academic performance distribution — grade letters
         var gradeLetters = await _db.Results
-            .Where(r => r.Grade != null && (noFilter || r.SchoolId == schoolId))
+            .Where(r => !r.IsDeleted && r.Grade != null && (noFilter || r.SchoolId == schoolId))
             .GroupBy(r => r.Grade!)
             .Select(g => new { Grade = g.Key, Count = (double)g.Count() })
             .OrderBy(x => x.Grade)
@@ -230,18 +230,18 @@ public class AnalyticsService : IAnalyticsService
 
         // Events participation trend
         var evtRaw = await _db.EventRegistrations
-            .Where(er => er.CreatedAt >= cut12 && (noFilter || er.Event.SchoolId == schoolId))
+            .Where(er => !er.IsDeleted && er.CreatedAt >= cut12 && (noFilter || er.Event.SchoolId == schoolId))
             .GroupBy(er => new { er.CreatedAt.Year, er.CreatedAt.Month })
             .Select(g => new { g.Key.Year, g.Key.Month, Count = (double)g.Count() })
             .ToListAsync();
 
         // School performance comparison — avg % per school
         var schoolPerfRaw = await _db.Results
-            .Where(r => noFilter || r.SchoolId == schoolId)
-            .Join(_db.Exams, r => r.ExamId, e => e.Id,
+            .Where(r => !r.IsDeleted && (noFilter || r.SchoolId == schoolId))
+            .Join(_db.Exams.Where(e => !e.IsDeleted && e.IsActive), r => r.ExamId, e => e.Id,
                 (r, e) => new { r.ObtainedMarks, TotalMarks = e.TotalMarks ?? 100, r.SchoolId })
             .Where(x => x.TotalMarks > 0)
-            .Join(_db.Schools, x => x.SchoolId, sc => sc.Id,
+            .Join(_db.Schools.Where(sc => !sc.IsDeleted && sc.IsActive), x => x.SchoolId, sc => sc.Id,
                 (x, sc) => new { x.ObtainedMarks, x.TotalMarks, SchoolName = sc.Name })
             .ToListAsync();
 
@@ -255,8 +255,8 @@ public class AnalyticsService : IAnalyticsService
 
         // Exam results trend — avg % per month
         var examTrendRaw = await _db.Results
-            .Where(r => r.CreatedAt >= cut12 && (noFilter || r.SchoolId == schoolId))
-            .Join(_db.Exams, r => r.ExamId, e => e.Id,
+            .Where(r => !r.IsDeleted && r.CreatedAt >= cut12 && (noFilter || r.SchoolId == schoolId))
+            .Join(_db.Exams.Where(e => !e.IsDeleted && e.IsActive), r => r.ExamId, e => e.Id,
                 (r, e) => new { r.CreatedAt, r.ObtainedMarks, TotalMarks = e.TotalMarks ?? 100 })
             .Where(x => x.TotalMarks > 0)
             .ToListAsync();
@@ -268,26 +268,26 @@ public class AnalyticsService : IAnalyticsService
 
         // Syllabus completion by grade level
         var activeModules = await _db.Modules.AsNoTracking()
-            .Where(m => m.IsActive && (noFilter || m.SchoolAssignments.Any(a => !a.IsDeleted && a.SchoolId == schoolId)))
+            .Where(m => !m.IsDeleted && m.IsActive && (noFilter || m.SchoolAssignments.Any(a => !a.IsDeleted && a.SchoolId == schoolId)))
             .Select(m => new { m.Id, m.GradeLevelId })
             .ToListAsync();
         
         var moduleIds = activeModules.Select(m => m.Id).ToList();
 
         var lessonsCountByGradeLevel = await _db.Lessons.AsNoTracking()
-            .Where(l => l.IsActive && moduleIds.Contains(l.ModuleId))
+            .Where(l => !l.IsDeleted && l.IsActive && moduleIds.Contains(l.ModuleId))
             .GroupBy(l => l.Module.GradeLevelId)
             .Select(g => new { GradeLevelId = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.GradeLevelId, x => x.Count);
 
         var completionsByGradeLevel = await _db.LessonCompletions.AsNoTracking()
-            .Where(lc => lc.Lesson.IsActive && (noFilter || lc.SchoolId == schoolId))
+            .Where(lc => !lc.IsDeleted && !lc.Lesson.IsDeleted && lc.Lesson.IsActive && (noFilter || lc.SchoolId == schoolId))
             .GroupBy(lc => lc.Lesson.Module.GradeLevelId)
             .Select(g => new { GradeLevelId = g.Key, Count = g.Select(lc => lc.LessonId).Distinct().Count() })
             .ToDictionaryAsync(x => x.GradeLevelId, x => x.Count);
 
         var gradeLevels = await _db.GradeLevels.AsNoTracking()
-            .Where(gl => gl.IsActive)
+            .Where(gl => !gl.IsDeleted && gl.IsActive)
             .Select(gl => new { gl.Id, gl.Name })
             .ToListAsync();
 
@@ -305,11 +305,11 @@ public class AnalyticsService : IAnalyticsService
 
         // Subjectwise performance (average exam score per module/subject)
         var subjectRaw = await _db.Results
-            .Where(r => noFilter || r.SchoolId == schoolId)
-            .Join(_db.Exams, r => r.ExamId, e => e.Id,
+            .Where(r => !r.IsDeleted && (noFilter || r.SchoolId == schoolId))
+            .Join(_db.Exams.Where(e => !e.IsDeleted && e.IsActive), r => r.ExamId, e => e.Id,
                 (r, e) => new { r.ObtainedMarks, TotalMarks = e.TotalMarks ?? 100, e.ModuleId })
             .Where(x => x.TotalMarks > 0)
-            .Join(_db.Modules, x => x.ModuleId, m => m.Id,
+            .Join(_db.Modules.Where(m => !m.IsDeleted && m.IsActive), x => x.ModuleId, m => m.Id,
                 (x, m) => new { x.ObtainedMarks, x.TotalMarks, ModuleName = m.Name })
             .ToListAsync();
 
@@ -351,19 +351,19 @@ public class AnalyticsService : IAnalyticsService
     {
         var cut12 = MonthsAgo(12);
 
-        var totalStudents = await _db.Students.CountAsync(s => s.IsActive && s.SchoolId == schoolId);
-        var totalTeachers = await _db.Teachers.CountAsync(t => t.IsActive && t.SchoolId == schoolId);
-        var totalGrades   = await _db.Grades.CountAsync(g => g.IsActive && g.SchoolId == schoolId);
-        var totalExams    = await _db.Exams.CountAsync(e => e.IsActive && e.SchoolId == schoolId);
+        var totalStudents = await _db.Students.CountAsync(s => !s.IsDeleted && s.IsActive && s.SchoolId == schoolId);
+        var totalTeachers = await _db.Teachers.CountAsync(t => !t.IsDeleted && t.IsActive && (t.SchoolId == schoolId || t.TeacherSchools.Any(ts => !ts.IsDeleted && ts.SchoolId == schoolId)));
+        var totalGrades   = await _db.Grades.CountAsync(g => !g.IsDeleted && g.IsActive && g.SchoolId == schoolId);
+        var totalExams    = await _db.Exams.CountAsync(e => !e.IsDeleted && e.IsActive && e.SchoolId == schoolId);
         // Units are school-agnostic master content now — count those assigned to this
         // school via SchoolUnitAssignment rather than a (removed) Module.SchoolId.
-        var totalModules  = await _db.Modules.CountAsync(m => m.IsActive &&
+        var totalModules  = await _db.Modules.CountAsync(m => !m.IsDeleted && m.IsActive &&
             m.SchoolAssignments.Any(a => !a.IsDeleted && a.SchoolId == schoolId));
-        var totalEvents   = await _db.Events.CountAsync(ev => ev.SchoolId == schoolId);
+        var totalEvents   = await _db.Events.CountAsync(ev => !ev.IsDeleted && ev.IsActive && (ev.SchoolId == schoolId || ev.SchoolId == null));
 
         // Avg attendance rate
         var attendStatuses = await _db.Attendances
-            .Where(a => a.SchoolId == schoolId)
+            .Where(a => !a.IsDeleted && a.SchoolId == schoolId)
             .Select(a => a.Status)
             .ToListAsync();
         var avgAttend = attendStatuses.Count > 0
@@ -372,8 +372,8 @@ public class AnalyticsService : IAnalyticsService
 
         // Avg exam score
         var scoreRaw = await _db.Results
-            .Where(r => r.SchoolId == schoolId)
-            .Join(_db.Exams, r => r.ExamId, e => e.Id,
+            .Where(r => !r.IsDeleted && r.SchoolId == schoolId)
+            .Join(_db.Exams.Where(e => !e.IsDeleted && e.IsActive), r => r.ExamId, e => e.Id,
                 (r, e) => new { r.ObtainedMarks, TotalMarks = e.TotalMarks ?? 100 })
             .Where(x => x.TotalMarks > 0)
             .ToListAsync();
@@ -383,17 +383,17 @@ public class AnalyticsService : IAnalyticsService
 
         // Enrollment trend
         var enrollRaw = await _db.Students
-            .Where(s => s.SchoolId == schoolId && s.CreatedAt >= cut12)
+            .Where(s => !s.IsDeleted && s.IsActive && s.SchoolId == schoolId && s.CreatedAt >= cut12)
             .GroupBy(s => new { s.CreatedAt.Year, s.CreatedAt.Month })
             .Select(g => new { g.Key.Year, g.Key.Month, Count = (double)g.Count() })
             .ToListAsync();
 
         // Class-wise attendance %
         var classAttendRaw = await _db.Attendances
-            .Where(a => a.SchoolId == schoolId && a.StudentId.HasValue)
-            .Join(_db.Students, a => a.StudentId!.Value, s => s.Id,
+            .Where(a => !a.IsDeleted && a.SchoolId == schoolId && a.StudentId.HasValue)
+            .Join(_db.Students.Where(s => !s.IsDeleted && s.IsActive), a => a.StudentId!.Value, s => s.Id,
                 (a, s) => new { a.Status, s.GradeId })
-            .Join(_db.Grades, x => x.GradeId, g => g.Id,
+            .Join(_db.Grades.Where(g => !g.IsDeleted && g.IsActive), x => x.GradeId, g => g.Id,
                 (x, g) => new { x.Status, g.GradeName })
             .ToListAsync();
 
@@ -515,44 +515,44 @@ public class AnalyticsService : IAnalyticsService
         var cut12 = MonthsAgo(12);
 
         var teacher = await _db.Teachers.AsNoTracking()
-            .FirstOrDefaultAsync(t => (t.UserId == teacherUserId || t.Id == teacherUserId) && t.SchoolId == schoolId)
-            ?? await _db.Teachers.AsNoTracking().FirstOrDefaultAsync(t => t.SchoolId == schoolId);
+            .FirstOrDefaultAsync(t => !t.IsDeleted && (t.UserId == teacherUserId || t.Id == teacherUserId) && t.SchoolId == schoolId)
+            ?? await _db.Teachers.AsNoTracking().FirstOrDefaultAsync(t => !t.IsDeleted && t.SchoolId == schoolId);
 
         var moduleIds = await _db.Modules
-            .Where(m => m.IsActive && m.SchoolAssignments.Any(a => !a.IsDeleted && a.SchoolId == schoolId))
+            .Where(m => !m.IsDeleted && m.IsActive && m.SchoolAssignments.Any(a => !a.IsDeleted && a.SchoolId == schoolId))
             .Select(m => m.Id)
             .ToListAsync();
 
         if (!moduleIds.Any())
         {
-            moduleIds = await _db.Modules.Where(m => m.IsActive).Select(m => m.Id).ToListAsync();
+            moduleIds = await _db.Modules.Where(m => !m.IsDeleted && m.IsActive).Select(m => m.Id).ToListAsync();
         }
 
-        var totalStudents = await _db.Students.CountAsync(s => s.IsActive && s.SchoolId == schoolId);
+        var totalStudents = await _db.Students.CountAsync(s => !s.IsDeleted && s.IsActive && s.SchoolId == schoolId);
         if (totalStudents == 0)
         {
-            totalStudents = await _db.Students.CountAsync(s => s.IsActive);
+            totalStudents = await _db.Students.CountAsync(s => !s.IsDeleted && s.IsActive);
         }
 
         var totalLessons = moduleIds.Any()
-            ? await _db.Lessons.CountAsync(l => l.IsActive && moduleIds.Contains(l.ModuleId))
-            : await _db.Lessons.CountAsync(l => l.IsActive);
+            ? await _db.Lessons.CountAsync(l => !l.IsDeleted && l.IsActive && moduleIds.Contains(l.ModuleId))
+            : await _db.Lessons.CountAsync(l => !l.IsDeleted && l.IsActive);
 
         var examIds = moduleIds.Any()
             ? await _db.Exams
-                .Where(e => e.IsActive && (e.SchoolId == schoolId || moduleIds.Contains(e.ModuleId)))
+                .Where(e => !e.IsDeleted && e.IsActive && (e.SchoolId == schoolId || moduleIds.Contains(e.ModuleId)))
                 .Select(e => e.Id)
                 .ToListAsync()
-            : await _db.Exams.Where(e => e.IsActive).Select(e => e.Id).ToListAsync();
+            : await _db.Exams.Where(e => !e.IsDeleted && e.IsActive).Select(e => e.Id).ToListAsync();
 
         // Attendance recorded
         var attendRaw = teacher != null
             ? await _db.Attendances
-                .Where(a => a.SchoolId == schoolId || a.TeacherId == teacher.Id)
+                .Where(a => !a.IsDeleted && (a.SchoolId == schoolId || a.TeacherId == teacher.Id))
                 .Select(a => new { a.Status, a.CreatedAt })
                 .ToListAsync()
             : await _db.Attendances
-                .Where(a => a.SchoolId == schoolId)
+                .Where(a => !a.IsDeleted && a.SchoolId == schoolId)
                 .Select(a => new { a.Status, a.CreatedAt })
                 .ToListAsync();
 
@@ -565,8 +565,8 @@ public class AnalyticsService : IAnalyticsService
         if (examIds.Any())
         {
             resultsRaw = await _db.Results
-                .Where(r => examIds.Contains(r.ExamId))
-                .Join(_db.Exams, r => r.ExamId, e => e.Id,
+                .Where(r => !r.IsDeleted && examIds.Contains(r.ExamId))
+                .Join(_db.Exams.Where(e => !e.IsDeleted && e.IsActive), r => r.ExamId, e => e.Id,
                     (r, e) => new ResultRow(
                         r.CreatedAt,
                         r.ObtainedMarks,
@@ -582,8 +582,9 @@ public class AnalyticsService : IAnalyticsService
         if (!resultsRaw.Any())
         {
             resultsRaw = await _db.Results
+                .Where(r => !r.IsDeleted)
                 .Take(50)
-                .Join(_db.Exams, r => r.ExamId, e => e.Id,
+                .Join(_db.Exams.Where(e => !e.IsDeleted && e.IsActive), r => r.ExamId, e => e.Id,
                     (r, e) => new ResultRow(
                         r.CreatedAt,
                         r.ObtainedMarks,
@@ -603,7 +604,7 @@ public class AnalyticsService : IAnalyticsService
         // Syllabus completion
         var completionsCount = moduleIds.Any() && totalStudents > 0
             ? await _db.LessonCompletions
-                .Where(lc => lc.SchoolId == schoolId && moduleIds.Contains(lc.Lesson.ModuleId) && lc.Lesson.IsActive)
+                .Where(lc => !lc.IsDeleted && lc.SchoolId == schoolId && moduleIds.Contains(lc.Lesson.ModuleId) && !lc.Lesson.IsDeleted && lc.Lesson.IsActive)
                 .Select(lc => new { lc.StudentId, lc.LessonId })
                 .Distinct()
                 .CountAsync()
@@ -826,11 +827,11 @@ public class AnalyticsService : IAnalyticsService
         Student? student = null;
         if (studentId.HasValue)
             student = await _db.Students.AsNoTracking()
-                .FirstOrDefaultAsync(s => s.Id == studentId.Value && s.SchoolId == schoolId);
+                .FirstOrDefaultAsync(s => !s.IsDeleted && s.IsActive && s.Id == studentId.Value && s.SchoolId == schoolId);
 
         if (student == null && studentUserId.HasValue)
             student = await _db.Students.AsNoTracking()
-                .FirstOrDefaultAsync(s => s.UserId == studentUserId.Value && s.SchoolId == schoolId);
+                .FirstOrDefaultAsync(s => !s.IsDeleted && s.IsActive && s.UserId == studentUserId.Value && s.SchoolId == schoolId);
 
         if (student == null) return new StudentAnalyticsDto();
 
@@ -839,14 +840,14 @@ public class AnalyticsService : IAnalyticsService
         // then additionally scope to this school via SchoolUnitAssignment (fail
         // closed to an empty module list if the grade level can't be resolved).
         var studentGradeLevelId = await _db.Grades
-            .Where(g => g.Id == student.GradeId)
+            .Where(g => !g.IsDeleted && g.IsActive && g.Id == student.GradeId)
             .Select(g => g.GradeLevelId)
             .FirstOrDefaultAsync();
 
         if (!studentGradeLevelId.HasValue && student.GradeId != null)
         {
             var gLevelStr = await _db.Grades
-                .Where(g => g.Id == student.GradeId)
+                .Where(g => !g.IsDeleted && g.IsActive && g.Id == student.GradeId)
                 .Select(g => g.GradeLevel)
                 .FirstOrDefaultAsync();
             if (!string.IsNullOrEmpty(gLevelStr))
@@ -855,7 +856,7 @@ public class AnalyticsService : IAnalyticsService
                 if (int.TryParse(cleanLevel, out var lvlNum))
                 {
                     studentGradeLevelId = await _db.GradeLevels
-                        .Where(gl => gl.LevelNumber == lvlNum)
+                        .Where(gl => !gl.IsDeleted && gl.IsActive && gl.LevelNumber == lvlNum)
                         .Select(gl => gl.Id)
                         .FirstOrDefaultAsync();
                 }
@@ -866,7 +867,7 @@ public class AnalyticsService : IAnalyticsService
         if (studentGradeLevelId.HasValue)
         {
             moduleIds = await _db.Modules
-                .Where(m => m.GradeLevelId == studentGradeLevelId.Value && m.IsActive &&
+                .Where(m => !m.IsDeleted && m.GradeLevelId == studentGradeLevelId.Value && m.IsActive &&
                     m.SchoolAssignments.Any(a => !a.IsDeleted && a.SchoolId == schoolId))
                 .Select(m => m.Id)
                 .ToListAsync();
@@ -874,7 +875,7 @@ public class AnalyticsService : IAnalyticsService
             if (!moduleIds.Any())
             {
                 moduleIds = await _db.Modules
-                    .Where(m => m.GradeLevelId == studentGradeLevelId.Value && m.IsActive)
+                    .Where(m => !m.IsDeleted && m.GradeLevelId == studentGradeLevelId.Value && m.IsActive)
                     .Select(m => m.Id)
                     .ToListAsync();
             }
@@ -883,7 +884,7 @@ public class AnalyticsService : IAnalyticsService
         var resultsRaw = await _db.Results
             .IgnoreQueryFilters()
             .Where(r => r.StudentId == student.Id && r.SchoolId == schoolId && !r.IsDeleted && r.IsPublished)
-            .Join(_db.Exams.IgnoreQueryFilters().Where(e => !e.IsDeleted), r => r.ExamId, e => e.Id,
+            .Join(_db.Exams.IgnoreQueryFilters().Where(e => !e.IsDeleted && e.IsActive), r => r.ExamId, e => e.Id,
                 (r, e) => new ResultRow(
                     r.CreatedAt,
                     r.ObtainedMarks,
@@ -900,22 +901,22 @@ public class AnalyticsService : IAnalyticsService
 
         var moduleNames = await _db.Modules
             .IgnoreQueryFilters()
-            .Where(m => !m.IsDeleted && allModuleIds.Contains(m.Id))
+            .Where(m => !m.IsDeleted && m.IsActive && allModuleIds.Contains(m.Id))
             .Select(m => new { m.Id, m.Name })
             .ToListAsync();
 
         var totalLessons = moduleIds.Any()
-            ? await _db.Lessons.CountAsync(l => l.IsActive && moduleIds.Contains(l.ModuleId))
+            ? await _db.Lessons.CountAsync(l => !l.IsDeleted && l.IsActive && moduleIds.Contains(l.ModuleId))
             : 0;
 
         if (totalLessons == 0 && studentGradeLevelId.HasValue)
         {
             totalLessons = await _db.Lessons
-                .CountAsync(l => l.IsActive && l.Module.GradeLevelId == studentGradeLevelId.Value);
+                .CountAsync(l => !l.IsDeleted && l.IsActive && l.Module.GradeLevelId == studentGradeLevelId.Value);
         }
 
         var completedLessons = await _db.LessonCompletions
-            .Where(lc => lc.StudentId == student.Id && lc.SchoolId == schoolId && lc.Lesson.IsActive)
+            .Where(lc => !lc.IsDeleted && lc.StudentId == student.Id && lc.SchoolId == schoolId && !lc.Lesson.IsDeleted && lc.Lesson.IsActive)
             .Select(lc => lc.LessonId)
             .Distinct()
             .CountAsync();
@@ -933,7 +934,7 @@ public class AnalyticsService : IAnalyticsService
 
         // Attendance
         var attendRaw = await _db.Attendances
-            .Where(a => a.StudentId == student.Id)
+            .Where(a => !a.IsDeleted && a.StudentId == student.Id)
             .Select(a => new { a.Status, a.CreatedAt })
             .ToListAsync();
         var attendRate = attendRaw.Count > 0
@@ -968,7 +969,7 @@ public class AnalyticsService : IAnalyticsService
         // Learning progress per module — batch queries, no N+1
         var lessonCountsPerModule = moduleIds.Any()
             ? await _db.Lessons
-                .Where(l => l.IsActive && moduleIds.Contains(l.ModuleId))
+                .Where(l => !l.IsDeleted && l.IsActive && moduleIds.Contains(l.ModuleId))
                 .GroupBy(l => l.ModuleId)
                 .Select(g => new { ModuleId = g.Key, Count = g.Count() })
                 .ToListAsync()
@@ -976,8 +977,8 @@ public class AnalyticsService : IAnalyticsService
 
         var completionsPerModule = moduleIds.Any()
             ? await _db.LessonCompletions
-                .Where(lc => lc.StudentId == student.Id && lc.SchoolId == schoolId
-                             && moduleIds.Contains(lc.Lesson.ModuleId) && lc.Lesson.IsActive)
+                .Where(lc => !lc.IsDeleted && lc.StudentId == student.Id && lc.SchoolId == schoolId
+                             && moduleIds.Contains(lc.Lesson.ModuleId) && !lc.Lesson.IsDeleted && lc.Lesson.IsActive)
                 .Select(lc => new { lc.Lesson.ModuleId, lc.LessonId })
                 .Distinct()
                 .GroupBy(lc => lc.ModuleId)
@@ -1002,7 +1003,7 @@ public class AnalyticsService : IAnalyticsService
 
         // Achievement growth — completions per month
         var achieveRaw = await _db.LessonCompletions
-            .Where(lc => lc.StudentId == student.Id && lc.CreatedAt >= cut6 && lc.Lesson.IsActive)
+            .Where(lc => !lc.IsDeleted && lc.StudentId == student.Id && lc.CreatedAt >= cut6 && !lc.Lesson.IsDeleted && lc.Lesson.IsActive)
             .Select(lc => new { lc.LessonId, lc.CreatedAt.Year, lc.CreatedAt.Month })
             .Distinct()
             .GroupBy(g => new { g.Year, g.Month })
@@ -1044,7 +1045,7 @@ public class AnalyticsService : IAnalyticsService
         else
         {
             var studentSchoolId = await _db.Students.AsNoTracking()
-                .Where(s => s.Id == studentId)
+                .Where(s => !s.IsDeleted && s.IsActive && s.Id == studentId)
                 .Select(s => (Guid?)s.SchoolId)
                 .FirstOrDefaultAsync();
             if (!studentSchoolId.HasValue) return new ParentAnalyticsDto();
@@ -1053,7 +1054,7 @@ public class AnalyticsService : IAnalyticsService
 
         var student = await _db.Students.AsNoTracking()
             .Include(s => s.Grade)
-            .FirstOrDefaultAsync(s => s.Id == studentId && s.SchoolId == targetSchoolId);
+            .FirstOrDefaultAsync(s => !s.IsDeleted && s.IsActive && s.Id == studentId && s.SchoolId == targetSchoolId);
         if (student == null) return new ParentAnalyticsDto();
 
         // Re-use student analytics — prefer Id (direct), fall back to UserId
@@ -1061,8 +1062,8 @@ public class AnalyticsService : IAnalyticsService
 
         // Exam comparison — obtained % vs passing % per exam
         var examCompRaw = await _db.Results
-            .Where(r => r.StudentId == student.Id)
-            .Join(_db.Exams, r => r.ExamId, e => e.Id,
+            .Where(r => !r.IsDeleted && r.StudentId == student.Id)
+            .Join(_db.Exams.Where(e => !e.IsDeleted && e.IsActive), r => r.ExamId, e => e.Id,
                 (r, e) => new
                 {
                     ExamTitle    = e.Title ?? "Exam",
@@ -1110,9 +1111,9 @@ public class AnalyticsService : IAnalyticsService
         var cut6      = MonthsAgo(6);
         bool noFilter = !schoolId.HasValue;
 
-        var totalSchools  = await _db.Schools.CountAsync(s => !s.IsDeleted && (noFilter || s.Id == schoolId));
-        var totalStudents = await _db.Students.CountAsync(s => !s.IsDeleted && (noFilter || s.SchoolId == schoolId));
-        var totalTeachers = await _db.Teachers.CountAsync(t => !t.IsDeleted && (noFilter || t.SchoolId == schoolId || t.TeacherSchools.Any(ts => !ts.IsDeleted && ts.SchoolId == schoolId)));
+        var totalSchools  = await _db.Schools.CountAsync(s => !s.IsDeleted && s.IsActive && (noFilter || s.Id == schoolId));
+        var totalStudents = await _db.Students.CountAsync(s => !s.IsDeleted && s.IsActive && (noFilter || s.SchoolId == schoolId));
+        var totalTeachers = await _db.Teachers.CountAsync(t => !t.IsDeleted && t.IsActive && (noFilter || t.SchoolId == schoolId || t.TeacherSchools.Any(ts => !ts.IsDeleted && ts.SchoolId == schoolId)));
 
         var allTickets = await _db.Tickets
             .Where(t => !t.IsDeleted && (noFilter || t.SchoolId == schoolId))
@@ -1128,8 +1129,8 @@ public class AnalyticsService : IAnalyticsService
 
         var totalCerts    = await _db.Certificates.CountAsync(c => !c.IsDeleted && (noFilter || c.SchoolId == schoolId));
         var totalRCs      = await _db.ReportCards.CountAsync(rc => !rc.IsDeleted && (noFilter || rc.SchoolId == schoolId));
-        var totalEvents   = await _db.Events.CountAsync(e => !e.IsDeleted && (noFilter || e.SchoolId == schoolId || e.SchoolId == null));
-        var newStudents30d = await _db.Students.CountAsync(s => !s.IsDeleted && s.CreatedAt >= DateTime.UtcNow.AddDays(-30) && (noFilter || s.SchoolId == schoolId));
+        var totalEvents   = await _db.Events.CountAsync(e => !e.IsDeleted && e.IsActive && (noFilter || e.SchoolId == schoolId || e.SchoolId == null));
+        var newStudents30d = await _db.Students.CountAsync(s => !s.IsDeleted && s.IsActive && s.CreatedAt >= DateTime.UtcNow.AddDays(-30) && (noFilter || s.SchoolId == schoolId));
         var totalDoubts   = await _db.StudentDoubts.CountAsync(d => !d.IsDeleted && (noFilter || d.SchoolId == schoolId));
         var totalUnits    = await _db.Modules.CountAsync(m => !m.IsDeleted && m.IsActive && (noFilter || m.SchoolAssignments.Any(a => !a.IsDeleted && a.SchoolId == schoolId)));
 
@@ -1141,21 +1142,21 @@ public class AnalyticsService : IAnalyticsService
 
         // Admissions trend
         var admRaw = await _db.Students
-            .Where(s => s.CreatedAt >= cut6 && (noFilter || s.SchoolId == schoolId))
+            .Where(s => !s.IsDeleted && s.IsActive && s.CreatedAt >= cut6 && (noFilter || s.SchoolId == schoolId))
             .GroupBy(s => new { s.CreatedAt.Year, s.CreatedAt.Month })
             .Select(g => new { g.Key.Year, g.Key.Month, Count = (double)g.Count() })
             .ToListAsync();
 
         // Certificates trend
         var certRaw = await _db.Certificates
-            .Where(c => c.CreatedAt >= cut6 && (noFilter || c.SchoolId == schoolId))
+            .Where(c => !c.IsDeleted && c.CreatedAt >= cut6 && (noFilter || c.SchoolId == schoolId))
             .GroupBy(c => new { c.CreatedAt.Year, c.CreatedAt.Month })
             .Select(g => new { g.Key.Year, g.Key.Month, Count = (double)g.Count() })
             .ToListAsync();
 
         // Report cards trend
         var rcRaw = await _db.ReportCards
-            .Where(rc => rc.CreatedAt >= cut6 && (noFilter || rc.SchoolId == schoolId))
+            .Where(rc => !rc.IsDeleted && rc.CreatedAt >= cut6 && (noFilter || rc.SchoolId == schoolId))
             .GroupBy(rc => new { rc.CreatedAt.Year, rc.CreatedAt.Month })
             .Select(g => new { g.Key.Year, g.Key.Month, Count = (double)g.Count() })
             .ToListAsync();
@@ -1168,7 +1169,7 @@ public class AnalyticsService : IAnalyticsService
 
         // Top 8 events by registration count
         var eventPartic = await _db.EventRegistrations
-            .Where(er => noFilter || er.Event.SchoolId == schoolId)
+            .Where(er => !er.IsDeleted && !er.Event.IsDeleted && er.Event.IsActive && (noFilter || er.Event.SchoolId == schoolId))
             .GroupBy(er => er.Event.Title)
             .Select(g => new { Event = g.Key, Count = (double)g.Count() })
             .OrderByDescending(x => x.Count)
@@ -1179,26 +1180,26 @@ public class AnalyticsService : IAnalyticsService
 
         // Syllabus completion by grade level
         var activeModules = await _db.Modules.AsNoTracking()
-            .Where(m => m.IsActive && (noFilter || m.SchoolAssignments.Any(a => !a.IsDeleted && a.SchoolId == schoolId)))
+            .Where(m => !m.IsDeleted && m.IsActive && (noFilter || m.SchoolAssignments.Any(a => !a.IsDeleted && a.SchoolId == schoolId)))
             .Select(m => new { m.Id, m.GradeLevelId })
             .ToListAsync();
         
         var moduleIds = activeModules.Select(m => m.Id).ToList();
 
         var lessonsCountByGradeLevel = await _db.Lessons.AsNoTracking()
-            .Where(l => l.IsActive && moduleIds.Contains(l.ModuleId))
+            .Where(l => !l.IsDeleted && l.IsActive && moduleIds.Contains(l.ModuleId))
             .GroupBy(l => l.Module.GradeLevelId)
             .Select(g => new { GradeLevelId = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.GradeLevelId, x => x.Count);
 
         var completionsByGradeLevel = await _db.LessonCompletions.AsNoTracking()
-            .Where(lc => lc.Lesson.IsActive && (noFilter || lc.SchoolId == schoolId))
+            .Where(lc => !lc.IsDeleted && !lc.Lesson.IsDeleted && lc.Lesson.IsActive && (noFilter || lc.SchoolId == schoolId))
             .GroupBy(lc => lc.Lesson.Module.GradeLevelId)
             .Select(g => new { GradeLevelId = g.Key, Count = g.Select(lc => lc.LessonId).Distinct().Count() })
             .ToDictionaryAsync(x => x.GradeLevelId, x => x.Count);
 
         var gradeLevels = await _db.GradeLevels.AsNoTracking()
-            .Where(gl => gl.IsActive)
+            .Where(gl => !gl.IsDeleted && gl.IsActive)
             .Select(gl => new { gl.Id, gl.Name })
             .ToListAsync();
 
@@ -1216,11 +1217,11 @@ public class AnalyticsService : IAnalyticsService
 
         // Subjectwise performance (average exam score per module/subject)
         var subjectRaw = await _db.Results
-            .Where(r => noFilter || r.SchoolId == schoolId)
-            .Join(_db.Exams, r => r.ExamId, e => e.Id,
+            .Where(r => !r.IsDeleted && (noFilter || r.SchoolId == schoolId))
+            .Join(_db.Exams.Where(e => !e.IsDeleted && e.IsActive), r => r.ExamId, e => e.Id,
                 (r, e) => new { r.ObtainedMarks, TotalMarks = e.TotalMarks ?? 100, e.ModuleId })
             .Where(x => x.TotalMarks > 0)
-            .Join(_db.Modules, x => x.ModuleId, m => m.Id,
+            .Join(_db.Modules.Where(m => !m.IsDeleted && m.IsActive), x => x.ModuleId, m => m.Id,
                 (x, m) => new { x.ObtainedMarks, x.TotalMarks, ModuleName = m.Name })
             .ToListAsync();
 

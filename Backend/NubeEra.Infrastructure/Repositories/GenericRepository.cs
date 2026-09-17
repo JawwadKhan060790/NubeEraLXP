@@ -130,7 +130,7 @@ namespace NubeEra.Infrastructure.Repositories
         {
             entity.IsDeleted   = true;
             entity.DeletedDate = DateTime.UtcNow;
-            entity.DeletedBy   = deletedByUserId;
+            entity.DeletedBy   = deletedByUserId ?? (Guid.TryParse(_currentUserService?.UserId, out var uid) ? uid : null);
             AttachForWrite(entity, EntityState.Modified);
             try
             {

@@ -22,6 +22,20 @@ public class StudentService : IStudentService
     private readonly IGenericRepository<Role> _roleRepository;
     private readonly IGradeAccessService _gradeAccessService;
     private readonly IGenericRepository<School> _schoolRepository;
+    private readonly IGenericRepository<StudentSubject> _studentSubjectRepo;
+    private readonly IGenericRepository<Attendance> _attendanceRepo;
+    private readonly IGenericRepository<Result> _resultRepo;
+    private readonly IGenericRepository<StudentNote> _studentNoteRepo;
+    private readonly IGenericRepository<StudentPythonCode> _studentPythonCodeRepo;
+    private readonly IGenericRepository<StudentDoubt> _studentDoubtRepo;
+    private readonly IGenericRepository<StudentWeakTopic> _studentWeakTopicRepo;
+    private readonly IGenericRepository<TeacherRating> _teacherRatingRepo;
+    private readonly IGenericRepository<EventRegistration> _eventRegistrationRepo;
+    private readonly IGenericRepository<Certificate> _certificateRepo;
+    private readonly IGenericRepository<ReportCard> _reportCardRepo;
+    private readonly IGenericRepository<ReportCardSubject> _reportCardSubjectRepo;
+    private readonly IGenericRepository<ReportCardActivity> _reportCardActivityRepo;
+    private readonly IGenericRepository<ReportCardSkill> _reportCardSkillRepo;
 
     public StudentService(
         IGenericRepository<Student> repository,
@@ -32,7 +46,21 @@ public class StudentService : IStudentService
         IGenericRepository<Lesson> lessonRepository,
         IGenericRepository<Role> roleRepository,
         IGradeAccessService gradeAccessService,
-        IGenericRepository<School> schoolRepository)
+        IGenericRepository<School> schoolRepository,
+        IGenericRepository<StudentSubject> studentSubjectRepo,
+        IGenericRepository<Attendance> attendanceRepo,
+        IGenericRepository<Result> resultRepo,
+        IGenericRepository<StudentNote> studentNoteRepo,
+        IGenericRepository<StudentPythonCode> studentPythonCodeRepo,
+        IGenericRepository<StudentDoubt> studentDoubtRepo,
+        IGenericRepository<StudentWeakTopic> studentWeakTopicRepo,
+        IGenericRepository<TeacherRating> teacherRatingRepo,
+        IGenericRepository<EventRegistration> eventRegistrationRepo,
+        IGenericRepository<Certificate> certificateRepo,
+        IGenericRepository<ReportCard> reportCardRepo,
+        IGenericRepository<ReportCardSubject> reportCardSubjectRepo,
+        IGenericRepository<ReportCardActivity> reportCardActivityRepo,
+        IGenericRepository<ReportCardSkill> reportCardSkillRepo)
     {
         _repository = repository;
         _userRepository = userRepository;
@@ -43,6 +71,20 @@ public class StudentService : IStudentService
         _roleRepository = roleRepository;
         _gradeAccessService = gradeAccessService;
         _schoolRepository = schoolRepository;
+        _studentSubjectRepo = studentSubjectRepo;
+        _attendanceRepo = attendanceRepo;
+        _resultRepo = resultRepo;
+        _studentNoteRepo = studentNoteRepo;
+        _studentPythonCodeRepo = studentPythonCodeRepo;
+        _studentDoubtRepo = studentDoubtRepo;
+        _studentWeakTopicRepo = studentWeakTopicRepo;
+        _teacherRatingRepo = teacherRatingRepo;
+        _eventRegistrationRepo = eventRegistrationRepo;
+        _certificateRepo = certificateRepo;
+        _reportCardRepo = reportCardRepo;
+        _reportCardSubjectRepo = reportCardSubjectRepo;
+        _reportCardActivityRepo = reportCardActivityRepo;
+        _reportCardSkillRepo = reportCardSkillRepo;
     }
 
     /// <summary>
@@ -731,8 +773,103 @@ public class StudentService : IStudentService
         if (effDelete.HasValue && student.SchoolId != effDelete.Value)
             throw new UnauthorizedAccessException("You are not authorized to delete students from another school.");
 
+        var currentUserId = _currentUserService?.UserId != null && Guid.TryParse(_currentUserService.UserId, out var uid) ? uid : (Guid?)null;
+
+        // 1. Soft-delete all dependent Student entities:
+        var studentSubjects = await _studentSubjectRepo.GetAllAsync(q => q.Where(ss => ss.StudentId == id));
+        foreach (var ss in studentSubjects)
+        {
+            await _studentSubjectRepo.DeleteAsync(ss, currentUserId);
+        }
+
+        var completions = await _completionRepository.GetAllAsync(q => q.Where(lc => lc.StudentId == id));
+        foreach (var lc in completions)
+        {
+            await _completionRepository.DeleteAsync(lc, currentUserId);
+        }
+
+        var attendances = await _attendanceRepo.GetAllAsync(q => q.Where(a => a.StudentId == id));
+        foreach (var a in attendances)
+        {
+            await _attendanceRepo.DeleteAsync(a, currentUserId);
+        }
+
+        var results = await _resultRepo.GetAllAsync(q => q.Where(r => r.StudentId == id));
+        foreach (var r in results)
+        {
+            await _resultRepo.DeleteAsync(r, currentUserId);
+        }
+
+        var notes = await _studentNoteRepo.GetAllAsync(q => q.Where(sn => sn.StudentId == id));
+        foreach (var sn in notes)
+        {
+            await _studentNoteRepo.DeleteAsync(sn, currentUserId);
+        }
+
+        var codes = await _studentPythonCodeRepo.GetAllAsync(q => q.Where(spc => spc.StudentId == id));
+        foreach (var spc in codes)
+        {
+            await _studentPythonCodeRepo.DeleteAsync(spc, currentUserId);
+        }
+
+        var doubts = await _studentDoubtRepo.GetAllAsync(q => q.Where(sd => sd.StudentId == id));
+        foreach (var sd in doubts)
+        {
+            await _studentDoubtRepo.DeleteAsync(sd, currentUserId);
+        }
+
+        var weakTopics = await _studentWeakTopicRepo.GetAllAsync(q => q.Where(swt => swt.StudentId == id));
+        foreach (var swt in weakTopics)
+        {
+            await _studentWeakTopicRepo.DeleteAsync(swt, currentUserId);
+        }
+
+        var ratings = await _teacherRatingRepo.GetAllAsync(q => q.Where(tr => tr.StudentId == id));
+        foreach (var tr in ratings)
+        {
+            await _teacherRatingRepo.DeleteAsync(tr, currentUserId);
+        }
+
+        var eventRegs = await _eventRegistrationRepo.GetAllAsync(q => q.Where(er => er.StudentId == id));
+        foreach (var er in eventRegs)
+        {
+            await _eventRegistrationRepo.DeleteAsync(er, currentUserId);
+        }
+
+        var certs = await _certificateRepo.GetAllAsync(q => q.Where(c => c.StudentId == id));
+        foreach (var c in certs)
+        {
+            await _certificateRepo.DeleteAsync(c, currentUserId);
+        }
+
+        var reportCards = await _reportCardRepo.GetAllAsync(q => q.Where(rc => rc.StudentId == id));
+        foreach (var rc in reportCards)
+        {
+            var rcSubjects = await _reportCardSubjectRepo.GetAllAsync(q => q.Where(rcs => rcs.ReportCardId == rc.Id));
+            foreach (var rcs in rcSubjects)
+            {
+                await _reportCardSubjectRepo.DeleteAsync(rcs, currentUserId);
+            }
+
+            var rcActivities = await _reportCardActivityRepo.GetAllAsync(q => q.Where(rca => rca.ReportCardId == rc.Id));
+            foreach (var rca in rcActivities)
+            {
+                await _reportCardActivityRepo.DeleteAsync(rca, currentUserId);
+            }
+
+            var rcSkills = await _reportCardSkillRepo.GetAllAsync(q => q.Where(rsk => rsk.ReportCardId == rc.Id));
+            foreach (var rsk in rcSkills)
+            {
+                await _reportCardSkillRepo.DeleteAsync(rsk, currentUserId);
+            }
+
+            await _reportCardRepo.DeleteAsync(rc, currentUserId);
+        }
+
+        // 2. Soft-delete the student record
         student.IsDeleted = true;
         student.DeletedDate = DateTime.UtcNow;
+        student.DeletedBy = currentUserId;
         student.IsActive = false;
         if (!string.IsNullOrWhiteSpace(student.Email))
         {
@@ -741,6 +878,7 @@ public class StudentService : IStudentService
 
         await _repository.UpdateAsync(student);
 
+        // 3. Soft-delete the associated User record
         if (student.UserId.HasValue)
         {
             var user = await _userRepository.GetByIdAsync(student.UserId.Value);
@@ -749,6 +887,7 @@ public class StudentService : IStudentService
             {
                 user.IsDeleted = true;
                 user.DeletedDate = DateTime.UtcNow;
+                user.DeletedBy = currentUserId;
                 user.Deactivate();
                 if (!string.IsNullOrWhiteSpace(user.Email))
                 {
@@ -762,10 +901,11 @@ public class StudentService : IStudentService
             }
         }
 
-        await SyncParentActiveStatusAsync(student.ParentGuardianPhone, student.ParentGuardianEmail, student.Id, false, isDelete: true);
+        // 4. Sync parent user account
+        await SyncParentActiveStatusAsync(student.ParentGuardianPhone, student.ParentGuardianEmail, student.Id, false, isDelete: true, currentUserId);
     }
 
-    private async Task SyncParentActiveStatusAsync(string? parentPhone, string? parentEmail, Guid studentId, bool activate, bool isDelete = false)
+    private async Task SyncParentActiveStatusAsync(string? parentPhone, string? parentEmail, Guid studentId, bool activate, bool isDelete = false, Guid? currentUserId = null)
     {
         if (string.IsNullOrWhiteSpace(parentPhone) && string.IsNullOrWhiteSpace(parentEmail))
             return;
@@ -807,6 +947,7 @@ public class StudentService : IStudentService
                 {
                     parentUser.IsDeleted = true;
                     parentUser.DeletedDate = DateTime.UtcNow;
+                    parentUser.DeletedBy = currentUserId;
                     if (!string.IsNullOrWhiteSpace(parentUser.Email))
                     {
                         parentUser.UpdateEmail(MakeUniqueAfterDelete(parentUser.Email, parentUser.Id, 150));

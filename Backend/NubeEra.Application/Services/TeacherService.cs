@@ -16,6 +16,12 @@ public class TeacherService : IGenericService<TeacherCreateDto, TeacherUpdateDto
     private readonly ITenantService       _tenantService;
     private readonly IGenericRepository<Role> _roleRepository;
     private readonly ITeacherSchoolService _teacherSchoolService;
+    private readonly IGenericRepository<TeacherSubject> _teacherSubjectRepo;
+    private readonly IGenericRepository<TeacherLessonProgress> _teacherLessonProgressRepo;
+    private readonly IGenericRepository<TeacherSchedulePeriod> _teacherSchedulePeriodRepo;
+    private readonly IGenericRepository<TeacherRating> _teacherRatingRepo;
+    private readonly IGenericRepository<Scheduler> _schedulerRepo;
+    private readonly IGenericRepository<Grade> _gradeRepo;
 
     public TeacherService(
         IGenericRepository<Teacher> repository,
@@ -23,7 +29,13 @@ public class TeacherService : IGenericService<TeacherCreateDto, TeacherUpdateDto
         ICurrentUserService currentUserService,
         ITenantService tenantService,
         IGenericRepository<Role> roleRepository,
-        ITeacherSchoolService teacherSchoolService)
+        ITeacherSchoolService teacherSchoolService,
+        IGenericRepository<TeacherSubject> teacherSubjectRepo,
+        IGenericRepository<TeacherLessonProgress> teacherLessonProgressRepo,
+        IGenericRepository<TeacherSchedulePeriod> teacherSchedulePeriodRepo,
+        IGenericRepository<TeacherRating> teacherRatingRepo,
+        IGenericRepository<Scheduler> schedulerRepo,
+        IGenericRepository<Grade> gradeRepo)
     {
         _repository = repository;
         _userRepository = userRepository;
@@ -31,6 +43,12 @@ public class TeacherService : IGenericService<TeacherCreateDto, TeacherUpdateDto
         _tenantService       = tenantService;
         _roleRepository = roleRepository;
         _teacherSchoolService = teacherSchoolService;
+        _teacherSubjectRepo = teacherSubjectRepo;
+        _teacherLessonProgressRepo = teacherLessonProgressRepo;
+        _teacherSchedulePeriodRepo = teacherSchedulePeriodRepo;
+        _teacherRatingRepo = teacherRatingRepo;
+        _schedulerRepo = schedulerRepo;
+        _gradeRepo = gradeRepo;
     }
 
     public async Task<List<TeacherDto>> GetAllAsync()
@@ -253,26 +271,69 @@ public class TeacherService : IGenericService<TeacherCreateDto, TeacherUpdateDto
         var teacher = await _repository.GetByIdAsync(id)
             ?? throw new Exception("Teacher not found");
 
+        var currentUserId = _currentUserService?.UserId != null && Guid.TryParse(_currentUserService.UserId, out var uid) ? uid : (Guid?)null;
         var userId = teacher.UserId;
 
-        // Requirement 2: retract every multi-school membership so no "active"
-        // assignment outlives the Teacher record it belongs to. Must run before the
-        // Teacher row itself is soft-deleted (this call still loads it normally).
+        // 1. Retract every multi-school membership
         await _teacherSchoolService.RemoveAllForTeacherAsync(id, "Teacher record deleted.");
 
-        // Delete the teacher record first to satisfy foreign key constraints
-        await _repository.DeleteAsync(teacher);
+        // 2. Soft-delete all dependent Teacher entities
+        var subjects = await _teacherSubjectRepo.GetAllAsync(q => q.Where(ts => ts.TeacherId == id));
+        foreach (var ts in subjects)
+        {
+            await _teacherSubjectRepo.DeleteAsync(ts, currentUserId);
+        }
 
-        // Then delete the associated User record
+        var lessonProgresses = await _teacherLessonProgressRepo.GetAllAsync(q => q.Where(tlp => tlp.TeacherId == id));
+        foreach (var tlp in lessonProgresses)
+        {
+            await _teacherLessonProgressRepo.DeleteAsync(tlp, currentUserId);
+        }
+
+        var schedulePeriods = await _teacherSchedulePeriodRepo.GetAllAsync(q => q.Where(tsp => tsp.TeacherId == id));
+        foreach (var tsp in schedulePeriods)
+        {
+            await _teacherSchedulePeriodRepo.DeleteAsync(tsp, currentUserId);
+        }
+
+        var ratings = await _teacherRatingRepo.GetAllAsync(q => q.Where(tr => tr.TeacherId == id));
+        foreach (var tr in ratings)
+        {
+            await _teacherRatingRepo.DeleteAsync(tr, currentUserId);
+        }
+
+        var schedulers = await _schedulerRepo.GetAllAsync(q => q.Where(sc => sc.TeacherId == id));
+        foreach (var sc in schedulers)
+        {
+            await _schedulerRepo.DeleteAsync(sc, currentUserId);
+        }
+
+        // 3. Clear ClassTeacherId if assigned to any grade
+        var grades = await _gradeRepo.GetAllAsync(q => q.Where(g => g.ClassTeacherId == id));
+        foreach (var g in grades)
+        {
+            g.ClassTeacherId = null;
+            await _gradeRepo.UpdateAsync(g);
+        }
+
+        // 4. Soft-delete the teacher record
+        teacher.IsActive = false;
+        await _repository.DeleteAsync(teacher, currentUserId);
+
+        // 5. Soft-delete the associated User record
         var user = await _userRepository.GetByIdAsync(userId);
         if (user != null)
         {
             if (!string.IsNullOrWhiteSpace(user.Username))
             {
                 user.Username = MakeUniqueAfterDelete(user.Username, user.Id, 100);
-                await _userRepository.UpdateAsync(user);
             }
-            await _userRepository.DeleteAsync(user);
+            if (!string.IsNullOrWhiteSpace(user.Email))
+            {
+                user.UpdateEmail(MakeUniqueAfterDelete(user.Email, user.Id, 150));
+            }
+            user.Deactivate();
+            await _userRepository.DeleteAsync(user, currentUserId);
         }
     }
 

@@ -22,15 +22,19 @@ public class UsersController : ControllerBase
     private readonly ITenantService      _tenantService;
     private readonly IGenericRepository<Student> _studentRepository;
     private readonly IGenericRepository<Teacher> _teacherRepository;
-
     private readonly IGenericRepository<Role> _roleRepository;
+    private readonly IStudentService _studentService;
+    private readonly ITeacherService _teacherService;
 
     public UsersController(
         IUserRepository userRepository, 
         ICurrentUserService currentUserService,
         IGenericRepository<Student> studentRepository,
         IGenericRepository<Teacher> teacherRepository,
-        IGenericRepository<Role> roleRepository, ITenantService tenantService)
+        IGenericRepository<Role> roleRepository, 
+        ITenantService tenantService,
+        IStudentService studentService,
+        ITeacherService teacherService)
     {
         _userRepository = userRepository;
         _currentUserService = currentUserService;
@@ -38,6 +42,8 @@ public class UsersController : ControllerBase
         _studentRepository = studentRepository;
         _teacherRepository = teacherRepository;
         _roleRepository = roleRepository;
+        _studentService = studentService;
+        _teacherService = teacherService;
     }
 
     /// <summary>
@@ -615,32 +621,35 @@ public class UsersController : ControllerBase
         var user = await _userRepository.GetByIdAsync(id);
         if (user == null) return NotFound();
 
+        var currentUserId = _currentUserService?.UserId != null && Guid.TryParse(_currentUserService.UserId, out var uid) ? uid : (Guid?)null;
+
+        // Cascade delete associated Teacher profile(s) if any
+        var teachers = await _teacherRepository.GetAllAsync(q => q.Where(t => t.UserId == user.Id));
+        foreach (var t in teachers)
+        {
+            await _teacherService.DeleteAsync(t.Id);
+        }
+
+        // Cascade delete associated Student profile(s) if any
+        var students = await _studentRepository.GetAllAsync(q => q.Where(s => s.UserId == user.Id));
+        foreach (var s in students)
+        {
+            await _studentService.DeleteAsync(s.Id);
+        }
+
         user.Deactivate();
         if (!string.IsNullOrWhiteSpace(user.Username))
         {
             user.Username = MakeUniqueAfterDelete(user.Username, user.Id, 100);
         }
+        if (!string.IsNullOrWhiteSpace(user.Email))
+        {
+            user.UpdateEmail(MakeUniqueAfterDelete(user.Email, user.Id, 150));
+        }
+        user.IsDeleted = true;
+        user.DeletedDate = DateTime.UtcNow;
+        user.DeletedBy = currentUserId;
         await _userRepository.UpdateAsync(user);
-
-        // Deactivate associated Teacher profile(s) if any (soft delete, preserves history)
-        var teachers = await _teacherRepository.GetAllAsync(q => q.Where(t => t.UserId == user.Id));
-        foreach (var t in teachers)
-        {
-            t.IsActive = false;
-            await _teacherRepository.UpdateAsync(t);
-        }
-
-        // Deactivate & soft-delete associated Student profile(s) if any and sync parent status
-        var students = await _studentRepository.GetAllAsync(q => q.Where(s => s.UserId == user.Id));
-        foreach (var s in students)
-        {
-            s.IsActive = false;
-            s.IsDeleted = true;
-            s.DeletedDate = DateTime.UtcNow;
-            await _studentRepository.UpdateAsync(s);
-
-            await SyncParentOnUserDeleteAsync(s);
-        }
 
         return NoContent();
     }

@@ -26,6 +26,7 @@ public class UsersController : ControllerBase
     private readonly IGenericRepository<Role> _roleRepository;
     private readonly IStudentService _studentService;
     private readonly ITeacherService _teacherService;
+    private readonly Microsoft.Extensions.Logging.ILogger<UsersController> _logger;
 
     public UsersController(
         IUserRepository userRepository, 
@@ -35,7 +36,8 @@ public class UsersController : ControllerBase
         IGenericRepository<Role> roleRepository, 
         ITenantService tenantService,
         IStudentService studentService,
-        ITeacherService teacherService)
+        ITeacherService teacherService,
+        Microsoft.Extensions.Logging.ILogger<UsersController> logger)
     {
         _userRepository = userRepository;
         _currentUserService = currentUserService;
@@ -45,6 +47,7 @@ public class UsersController : ControllerBase
         _roleRepository = roleRepository;
         _studentService = studentService;
         _teacherService = teacherService;
+        _logger = logger;
     }
 
     /// <summary>
@@ -118,12 +121,12 @@ public class UsersController : ControllerBase
             first_name = user.FirstName,
             last_name = user.LastName,
             full_name = $"{user.FirstName} {user.LastName}",
-            role = user.Role.RoleName,
-            utype = user.Role.RoleName switch
+            role = user.Role?.RoleName ?? "User",
+            utype = (user.Role?.RoleName ?? "") switch
             {
                 "SuperAdmin" => "admin",
                 "Principal" => "principal",
-                _ => user.Role.RoleName.ToLower()
+                _ => (user.Role?.RoleName ?? "user").ToLower()
             },
             school_id = user.SchoolId,
             school_name = user.School?.Name,
@@ -257,43 +260,56 @@ public class UsersController : ControllerBase
     [Authorize(Policy = "StaffOnly")]
     public async Task<IActionResult> GetAll([FromQuery] string? role, [FromQuery] Guid? schoolId)
     {
-        var users = await _userRepository.GetAllAsync(q => q.Include(u => u.Role).Include(u => u.School));
-        
-        IEnumerable<User> filtered = users;
-        
-        // Tenant scoping: restricted roles always see their school; non-restricted
-        // use the school selected via the UI (X-School-Id header → JWT fallback).
-        var effSchool = _tenantService.GetEffectiveSchoolId(schoolId);
-        if (effSchool.HasValue)
-            filtered = filtered.Where(u => u.SchoolId == effSchool);
-        
-        if (!string.IsNullOrEmpty(role))
-            filtered = filtered.Where(u => u.Role.RoleName == role);
-            
-
-        var response = filtered.Select(u => new
+        try
         {
-            id = u.Id,
-            email = u.Email,
-            username = u.Username,
-            first_name = u.FirstName,
-            last_name = u.LastName,
-            full_name = $"{u.FirstName} {u.LastName}",
-            role = u.Role.RoleName,
-            utype = u.Role.RoleName switch
+            var users = await _userRepository.GetAllAsync(q => q.Include(u => u.Role).Include(u => u.School));
+            
+            IEnumerable<User> filtered = users;
+            
+            // Tenant scoping: restricted roles always see their school; non-restricted
+            // use the school selected via the UI (X-School-Id header → JWT fallback).
+            var effSchool = _tenantService.GetEffectiveSchoolId(schoolId);
+            if (effSchool.HasValue)
+                filtered = filtered.Where(u => u.SchoolId == effSchool);
+            
+            if (!string.IsNullOrEmpty(role))
+                filtered = filtered.Where(u => string.Equals(u.Role?.RoleName, role, StringComparison.OrdinalIgnoreCase));
+                
+            var response = filtered.Select(u =>
             {
-                "SuperAdmin" => "admin",
-                "Principal" => "principal",
-                _ => u.Role.RoleName.ToLower()
-            },
-            school_id = u.SchoolId,
-            school_name = u.School?.Name,
-            is_active = u.IsActive,
-            phone = u.Phone,
-            created_at = u.CreatedAt
-        });
+                var roleName = u.Role?.RoleName ?? "User";
+                var utype = roleName switch
+                {
+                    "SuperAdmin" => "admin",
+                    "Principal" => "principal",
+                    _ => roleName.ToLower()
+                };
 
-        return Ok(response);
+                return new
+                {
+                    id = u.Id,
+                    email = u.Email,
+                    username = u.Username,
+                    first_name = u.FirstName,
+                    last_name = u.LastName,
+                    full_name = $"{u.FirstName} {u.LastName}".Trim(),
+                    role = roleName,
+                    utype = utype,
+                    school_id = u.SchoolId,
+                    school_name = u.School?.Name,
+                    is_active = u.IsActive,
+                    phone = u.Phone,
+                    created_at = u.CreatedAt
+                };
+            });
+
+            return Ok(response);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred while fetching user directory");
+            return StatusCode(500, new { message = "Failed to load user directory", error = ex.Message });
+        }
     }
 
     [HttpPost]
@@ -538,7 +554,7 @@ public class UsersController : ControllerBase
         if (user == null) return NotFound();
 
         var requesterRole = _currentUserService.Role ?? "";
-        var targetRole = user.Role.RoleName;
+        var targetRole = user.Role?.RoleName ?? "User";
 
         Func<string, int> getRoleWeight = (roleName) => roleName.ToLower() switch
         {
@@ -578,7 +594,7 @@ public class UsersController : ControllerBase
         }
         else
         {
-            passwordToSet = user.Role.RoleName switch
+            passwordToSet = (user.Role?.RoleName ?? "") switch
             {
                 "Student" => "123456",
                 "Parent" => "123456",

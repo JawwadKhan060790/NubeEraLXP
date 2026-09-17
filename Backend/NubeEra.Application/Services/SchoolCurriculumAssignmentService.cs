@@ -81,7 +81,11 @@ public class SchoolCurriculumAssignmentService : ISchoolCurriculumAssignmentServ
 
         if (wantUnits)
         {
-            var units = await _moduleRepo.GetAllAsync(q => q.Include(u => u.GradeLevel).Include(u => u.Subject));
+            var units = await _moduleRepo.GetAllAsync(q => q
+                .IgnoreQueryFilters()
+                .Where(u => !u.IsDeleted)
+                .Include(u => u.GradeLevel)
+                .Include(u => u.Subject));
             items.AddRange(units.Select(u => new SchoolCurriculumCatalogItemDto
             {
                 Id                 = u.Id,
@@ -102,7 +106,11 @@ public class SchoolCurriculumAssignmentService : ISchoolCurriculumAssignmentServ
 
         if (wantTopics)
         {
-            var topics = await _lessonRepo.GetAllAsync(q => q.Include(t => t.Module).ThenInclude(m => m.GradeLevel).Include(t => t.Module).ThenInclude(m => m.Subject));
+            var topics = await _lessonRepo.GetAllAsync(q => q
+                .IgnoreQueryFilters()
+                .Where(t => !t.IsDeleted)
+                .Include(t => t.Module).ThenInclude(m => m.GradeLevel)
+                .Include(t => t.Module).ThenInclude(m => m.Subject));
             if (query.UnitId.HasValue)
                 topics = topics.Where(t => t.ModuleId == query.UnitId.Value).ToList();
 
@@ -137,8 +145,9 @@ public class SchoolCurriculumAssignmentService : ISchoolCurriculumAssignmentServ
         }
 
         items = items
-            .OrderBy(i => i.EntityType)
-            .ThenBy(i => i.ParentUnitName)
+            .OrderBy(i => i.GradeLevelName)
+            .ThenBy(i => i.SubjectName)
+            .ThenByDescending(i => i.EntityType) // "Unit" before "Topic"
             .ThenBy(i => i.Name)
             .ToList();
 
@@ -277,7 +286,7 @@ public class SchoolCurriculumAssignmentService : ISchoolCurriculumAssignmentServ
 
         foreach (var unitId in dto.UnitIds.Distinct())
         {
-            var unit = await _moduleRepo.GetByIdAsync(unitId, q => q.Include(m => m.GradeLevel));
+            var unit = await _moduleRepo.GetByIdAsync(unitId, q => q.IgnoreQueryFilters().Where(m => !m.IsDeleted).Include(m => m.GradeLevel));
             if (unit == null)
             {
                 result.Errors.Add(new BulkCurriculumAssignmentErrorDto { Id = unitId, Reason = "Unit not found." });
@@ -352,7 +361,7 @@ public class SchoolCurriculumAssignmentService : ISchoolCurriculumAssignmentServ
 
         foreach (var topicId in dto.TopicIds.Distinct())
         {
-            var topic = await _lessonRepo.GetByIdAsync(topicId, q => q.Include(t => t.Module).ThenInclude(m => m.GradeLevel));
+            var topic = await _lessonRepo.GetByIdAsync(topicId, q => q.IgnoreQueryFilters().Where(t => !t.IsDeleted).Include(t => t.Module).ThenInclude(m => m.GradeLevel));
             if (topic == null)
             {
                 result.Errors.Add(new BulkCurriculumAssignmentErrorDto { Id = topicId, Reason = "Topic not found." });
@@ -381,7 +390,7 @@ public class SchoolCurriculumAssignmentService : ISchoolCurriculumAssignmentServ
 
             if (unitAssignedCount == 0)
             {
-                var parentUnit = await _moduleRepo.GetByIdAsync(topic.ModuleId);
+                var parentUnit = await _moduleRepo.GetByIdAsync(topic.ModuleId, q => q.IgnoreQueryFilters().Where(m => !m.IsDeleted));
                 if (parentUnit != null)
                 {
                     var existingUnitAssign = (await _unitAssignmentRepo.GetAllAsync(q =>
@@ -477,7 +486,7 @@ public class SchoolCurriculumAssignmentService : ISchoolCurriculumAssignmentServ
                 continue;
             }
 
-            var unit = await _moduleRepo.GetByIdAsync(unitId);
+            var unit = await _moduleRepo.GetByIdAsync(unitId, q => q.IgnoreQueryFilters().Where(m => !m.IsDeleted));
 
             // Cascade: a School should never retain a Topic whose parent Unit it no longer has.
             var childTopicAssignments = await _topicAssignmentRepo.GetAllAsync(q =>
@@ -485,7 +494,7 @@ public class SchoolCurriculumAssignmentService : ISchoolCurriculumAssignmentServ
 
             foreach (var topicAssignment in childTopicAssignments)
             {
-                var topic = await _lessonRepo.GetByIdAsync(topicAssignment.TopicId);
+                var topic = await _lessonRepo.GetByIdAsync(topicAssignment.TopicId, q => q.IgnoreQueryFilters().Where(t => !t.IsDeleted));
                 await _topicAssignmentRepo.DeleteAsync(topicAssignment);
                 await WriteAuditLogAsync(
                     dto.SchoolId, "Topic", topicAssignment.TopicId, topic?.SubTopic ?? "Unknown",
@@ -519,7 +528,7 @@ public class SchoolCurriculumAssignmentService : ISchoolCurriculumAssignmentServ
                 continue;
             }
 
-            var topic = await _lessonRepo.GetByIdAsync(topicId);
+            var topic = await _lessonRepo.GetByIdAsync(topicId, q => q.IgnoreQueryFilters().Where(t => !t.IsDeleted));
             await _topicAssignmentRepo.DeleteAsync(existing);
             await WriteAuditLogAsync(dto.SchoolId, "Topic", topicId, topic?.SubTopic ?? "Unknown", "Unassigned", userId, userName, role, dto.Notes);
 

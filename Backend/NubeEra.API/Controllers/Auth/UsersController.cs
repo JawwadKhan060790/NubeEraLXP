@@ -5,6 +5,7 @@ using System.Linq;
 using System.Security.Claims;
 using System.IdentityModel.Tokens.Jwt;
 using NubeEra.Application.Interfaces.Repositories;
+using NubeEra.Application.Interfaces.Services;
 using NubeEra.Domain.Common;
 using NubeEra.Domain.Constants;
 using NubeEra.Domain.Entities;

@@ -86,7 +86,7 @@ const CurriculumAssignment: React.FC = () => {
       const resp = await schoolCurriculumService.getCatalog({
         schoolId: assignSchoolId || '00000000-0000-0000-0000-000000000000',
         page: 1,
-        pageSize: 1000,
+        pageSize: 5000,
       });
       setCatalog(resp.items);
       const newSelected = new Map<string, 'Unit' | 'Topic'>();
@@ -143,18 +143,18 @@ const CurriculumAssignment: React.FC = () => {
 
     return units
       .map((unit) => {
-        const unitTopics = topics.filter((t) => t.parent_unit_id === unit.id);
+        const unitTopics = topics.filter((t) => (t.parent_unit_id || '').toLowerCase() === unit.id.toLowerCase());
         return { unit, topics: unitTopics };
       })
       .filter(({ unit, topics: unitTopics }) => {
         // Filter by Grade Level (Units/Topics are school-agnostic master content
         // keyed only by canonical GradeLevel)
-        if (selectedGradeId && unit.grade_level_id !== selectedGradeId) {
+        if (selectedGradeId && (!unit.grade_level_id || unit.grade_level_id.toLowerCase() !== selectedGradeId.toLowerCase())) {
           return false;
         }
 
         // Filter by Subject
-        if (selectedSubjectId && unit.subject_id !== selectedSubjectId) {
+        if (selectedSubjectId && (!unit.subject_id || unit.subject_id.toLowerCase() !== selectedSubjectId.toLowerCase())) {
           return false;
         }
 
@@ -442,6 +442,7 @@ const CurriculumAssignment: React.FC = () => {
             <GradeLevelSelect
               value={selectedGradeId}
               onChange={(value) => setSelectedGradeId(value)}
+              source={assignSchoolId ? 'allowed' : 'master'}
               schoolId={assignSchoolId || undefined}
               valueAs="id"
               placeholder="All Grades"

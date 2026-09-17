@@ -115,6 +115,16 @@ public class SchoolCurriculumCatalogItemDto
 /// <summary>Query/filter parameters for browsing the curriculum catalog scoped to a School.</summary>
 public class SchoolCurriculumCatalogQueryDto : PagedRequest
 {
+    private int _catalogPageSize = 2000;
+
+    public new int PageSize
+    {
+        get => _catalogPageSize;
+        set => _catalogPageSize = value < 1 ? 2000 : value > 10000 ? 10000 : value;
+    }
+
+    public new int Skip => (Page - 1) * PageSize;
+
     public Guid    SchoolId     { get; set; }
     /// <summary>"Unit", "Topic", or null for both.</summary>
     public string? EntityType   { get; set; }

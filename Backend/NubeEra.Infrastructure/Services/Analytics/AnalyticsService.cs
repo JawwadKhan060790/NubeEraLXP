@@ -359,7 +359,7 @@ public class AnalyticsService : IAnalyticsService
         // school via SchoolUnitAssignment rather than a (removed) Module.SchoolId.
         var totalModules  = await _db.Modules.CountAsync(m => !m.IsDeleted && m.IsActive &&
             m.SchoolAssignments.Any(a => !a.IsDeleted && a.SchoolId == schoolId));
-        var totalEvents   = await _db.Events.CountAsync(ev => !ev.IsDeleted && ev.IsActive && (ev.SchoolId == schoolId || ev.SchoolId == null));
+        var totalEvents   = await _db.Events.CountAsync(ev => !ev.IsDeleted && ev.Status != "Cancelled" && (ev.SchoolId == schoolId || ev.SchoolId == null));
 
         // Avg attendance rate
         var attendStatuses = await _db.Attendances
@@ -1129,7 +1129,7 @@ public class AnalyticsService : IAnalyticsService
 
         var totalCerts    = await _db.Certificates.CountAsync(c => !c.IsDeleted && (noFilter || c.SchoolId == schoolId));
         var totalRCs      = await _db.ReportCards.CountAsync(rc => !rc.IsDeleted && (noFilter || rc.SchoolId == schoolId));
-        var totalEvents   = await _db.Events.CountAsync(e => !e.IsDeleted && e.IsActive && (noFilter || e.SchoolId == schoolId || e.SchoolId == null));
+        var totalEvents   = await _db.Events.CountAsync(e => !e.IsDeleted && e.Status != "Cancelled" && (noFilter || e.SchoolId == schoolId || e.SchoolId == null));
         var newStudents30d = await _db.Students.CountAsync(s => !s.IsDeleted && s.IsActive && s.CreatedAt >= DateTime.UtcNow.AddDays(-30) && (noFilter || s.SchoolId == schoolId));
         var totalDoubts   = await _db.StudentDoubts.CountAsync(d => !d.IsDeleted && (noFilter || d.SchoolId == schoolId));
         var totalUnits    = await _db.Modules.CountAsync(m => !m.IsDeleted && m.IsActive && (noFilter || m.SchoolAssignments.Any(a => !a.IsDeleted && a.SchoolId == schoolId)));
@@ -1169,7 +1169,7 @@ public class AnalyticsService : IAnalyticsService
 
         // Top 8 events by registration count
         var eventPartic = await _db.EventRegistrations
-            .Where(er => !er.IsDeleted && !er.Event.IsDeleted && er.Event.IsActive && (noFilter || er.Event.SchoolId == schoolId))
+            .Where(er => !er.IsDeleted && !er.Event.IsDeleted && er.Event.Status != "Cancelled" && (noFilter || er.Event.SchoolId == schoolId))
             .GroupBy(er => er.Event.Title)
             .Select(g => new { Event = g.Key, Count = (double)g.Count() })
             .OrderByDescending(x => x.Count)

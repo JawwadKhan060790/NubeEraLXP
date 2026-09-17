@@ -111,7 +111,22 @@ public class TeacherService : IGenericService<TeacherCreateDto, TeacherUpdateDto
         if (string.IsNullOrWhiteSpace(dto.Password))
             throw new ArgumentException("Password is required when creating a teacher.");
 
-        var schoolId = _tenantService.GetEffectiveSchoolIdOrEmpty(dto.SchoolId);
+        // Robust SchoolId resolution:
+        // 1. Explicit SchoolId from DTO if valid
+        // 2. First valid school ID from SchoolIds list
+        // 3. Fall back to current tenant context
+        var validSchoolIds = dto.SchoolIds?.Where(id => id != Guid.Empty).Distinct().ToList() ?? new List<Guid>();
+
+        Guid schoolId = Guid.Empty;
+        if (dto.SchoolId.HasValue && dto.SchoolId.Value != Guid.Empty)
+            schoolId = dto.SchoolId.Value;
+        else if (validSchoolIds.Any())
+            schoolId = validSchoolIds.First();
+        else
+            schoolId = _tenantService.GetEffectiveSchoolIdOrEmpty();
+
+        if (schoolId == Guid.Empty)
+            throw new ArgumentException("A valid School is required when creating a teacher.");
 
         // Check for duplicate email
         var existing = await _userRepository.GetByEmailAsync(dto.Email.ToLower().Trim());
@@ -174,17 +189,14 @@ public class TeacherService : IGenericService<TeacherCreateDto, TeacherUpdateDto
 
         await _repository.AddAsync(teacher);
 
-        // Requirement 2: seed the Teacher's multi-school memberships. SchoolIds (if
-        // provided by the Create screen's multi-select) becomes the full set; SchoolId
-        // is always included and treated as the primary/home school.
-        var schoolIds = dto.SchoolIds?.Distinct().ToList() ?? new List<Guid>();
-        if (!schoolIds.Contains(schoolId))
-            schoolIds.Add(schoolId);
+        // Requirement 2: seed the Teacher's multi-school memberships.
+        if (!validSchoolIds.Contains(schoolId))
+            validSchoolIds.Add(schoolId);
 
         await _teacherSchoolService.SyncTeacherSchoolsAsync(new TeacherSchoolAssignmentSetDto
         {
             TeacherId       = teacher.Id,
-            SchoolIds       = schoolIds,
+            SchoolIds       = validSchoolIds,
             PrimarySchoolId = schoolId,
             Notes           = "Initial assignment at Teacher creation."
         });

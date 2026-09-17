@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using System.Linq;
 using System.Security.Claims;
 using System.IdentityModel.Tokens.Jwt;
+using NubeEra.Application.DTOs;
 using NubeEra.Application.Interfaces.Repositories;
 using NubeEra.Application.Interfaces.Services;
 using NubeEra.Domain.Common;
@@ -25,7 +26,7 @@ public class UsersController : ControllerBase
     private readonly IGenericRepository<Teacher> _teacherRepository;
     private readonly IGenericRepository<Role> _roleRepository;
     private readonly IStudentService _studentService;
-    private readonly ITeacherService _teacherService;
+    private readonly IGenericService<TeacherCreateDto, TeacherUpdateDto, TeacherDto> _teacherService;
     private readonly IGenericRepository<NubeEra.Domain.Entities.School> _schoolRepository;
     private readonly Microsoft.Extensions.Logging.ILogger<UsersController> _logger;
 
@@ -38,7 +39,7 @@ public class UsersController : ControllerBase
         IGenericRepository<NubeEra.Domain.Entities.School> schoolRepository,
         ITenantService tenantService,
         IStudentService studentService,
-        ITeacherService teacherService,
+        IGenericService<TeacherCreateDto, TeacherUpdateDto, TeacherDto> teacherService,
         Microsoft.Extensions.Logging.ILogger<UsersController> logger)
     {
         _userRepository = userRepository;
@@ -260,7 +261,7 @@ public class UsersController : ControllerBase
 
 
     [HttpGet]
-    [Authorize(Policy = "StaffOnly")]
+    [Authorize(Policy = AppPolicies.PrincipalOnly)]
     public async Task<IActionResult> GetAll([FromQuery] string? role, [FromQuery] Guid? schoolId)
     {
         try
@@ -322,7 +323,7 @@ public class UsersController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Policy = "StaffOnly")]
+    [Authorize(Policy = AppPolicies.PrincipalOnly)]
     public async Task<IActionResult> Create(UserCreateRequest request)
     {
         if (!ModelState.IsValid)
@@ -397,6 +398,11 @@ public class UsersController : ControllerBase
             var user = new User(request.Email.Trim().ToLower(), passwordHash, roleObj.Id, schoolId, username);
             user.FirstName = request.FirstName;
             user.LastName = request.LastName;
+            user.Phone = request.Phone;
+            if (roleObj.RoleName.Equals("Parent", StringComparison.OrdinalIgnoreCase))
+            {
+                user.IsParent = true;
+            }
 
             await _userRepository.AddAsync(user);
 
@@ -440,7 +446,7 @@ public class UsersController : ControllerBase
     }
 
     [HttpPut("{id}")]
-    [Authorize(Policy = "StaffOnly")]
+    [Authorize(Policy = AppPolicies.PrincipalOnly)]
     public async Task<IActionResult> Update(Guid id, UserUpdateRequest request)
     {
         try
@@ -461,6 +467,10 @@ public class UsersController : ControllerBase
             user.Username = username;
             user.FirstName = request.FirstName;
             user.LastName = request.LastName;
+            if (request.Phone != null)
+            {
+                user.Phone = request.Phone;
+            }
 
             var roleObj = (await _roleRepository.GetAllAsync(q => q.Where(r => r.RoleName == request.Role))).FirstOrDefault();
             if (roleObj == null)
@@ -750,26 +760,57 @@ public class UsersController : ControllerBase
     /// satisfy the "Restore User" requirement without any data loss.
     /// </summary>
     [HttpPost("{id}/restore")]
-    [Authorize(Policy = "AdminOnly")]
+    [Authorize(Policy = AppPolicies.AdminOnly)]
     public async Task<IActionResult> Restore(Guid id)
     {
-        var user = await _userRepository.GetByIdAsync(id);
+        var user = await _userRepository.Query()
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(u => u.Id == id);
         if (user == null) return NotFound();
 
         user.Activate();
+        user.IsDeleted = false;
+        user.DeletedDate = null;
+        user.DeletedBy = null;
+
+        if (!string.IsNullOrWhiteSpace(user.Username) && user.Username.Contains("~del~"))
+        {
+            var cleanUsername = user.Username.Substring(0, user.Username.IndexOf("~del~"));
+            var taken = await _userRepository.Query().IgnoreQueryFilters().AnyAsync(u => u.Id != user.Id && u.Username == cleanUsername && !u.IsDeleted);
+            if (!taken)
+            {
+                user.Username = cleanUsername;
+            }
+        }
+        if (!string.IsNullOrWhiteSpace(user.Email) && user.Email.Contains("~del~"))
+        {
+            var cleanEmail = user.Email.Substring(0, user.Email.IndexOf("~del~"));
+            var taken = await _userRepository.Query().IgnoreQueryFilters().AnyAsync(u => u.Id != user.Id && u.Email == cleanEmail && !u.IsDeleted);
+            if (!taken)
+            {
+                user.UpdateEmail(cleanEmail);
+            }
+        }
+
         await _userRepository.UpdateAsync(user);
 
-        var teachers = await _teacherRepository.GetAllAsync(q => q.Where(t => t.UserId == user.Id));
+        var teachers = await _teacherRepository.Query().IgnoreQueryFilters().Where(t => t.UserId == user.Id).ToListAsync();
         foreach (var t in teachers)
         {
             t.IsActive = true;
+            t.IsDeleted = false;
+            t.DeletedDate = null;
+            t.DeletedBy = null;
             await _teacherRepository.UpdateAsync(t);
         }
 
-        var students = await _studentRepository.GetAllAsync(q => q.Where(s => s.UserId == user.Id));
+        var students = await _studentRepository.Query().IgnoreQueryFilters().Where(s => s.UserId == user.Id).ToListAsync();
         foreach (var s in students)
         {
             s.IsActive = true;
+            s.IsDeleted = false;
+            s.DeletedDate = null;
+            s.DeletedBy = null;
             await _studentRepository.UpdateAsync(s);
         }
 
@@ -827,6 +868,7 @@ public class UserCreateRequest
     public Guid? SchoolId { get; set; }
     public string? FirstName { get; set; }
     public string? LastName { get; set; }
+    public string? Phone { get; set; }
 }
 
 public class UserUpdateRequest
@@ -834,6 +876,7 @@ public class UserUpdateRequest
     public string? FirstName { get; set; }
     public string? LastName { get; set; }
     public string? Username { get; set; }
+    public string? Phone { get; set; }
     public string Role { get; set; } = "Teacher";
     public Guid? SchoolId { get; set; }
     public bool IsActive { get; set; }

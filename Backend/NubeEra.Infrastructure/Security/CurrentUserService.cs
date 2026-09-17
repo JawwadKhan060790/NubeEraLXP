@@ -14,9 +14,15 @@ public class CurrentUserService : ICurrentUserService
     }
 
     public string? UserId => _httpContextAccessor.HttpContext?.User?.FindFirstValue(ClaimTypes.NameIdentifier) 
-                          ?? _httpContextAccessor.HttpContext?.User?.FindFirstValue("UserId");
+                          ?? _httpContextAccessor.HttpContext?.User?.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)
+                          ?? _httpContextAccessor.HttpContext?.User?.FindFirstValue("UserId")
+                          ?? _httpContextAccessor.HttpContext?.User?.FindFirstValue("sub")
+                          ?? _httpContextAccessor.HttpContext?.User?.FindFirstValue("id");
 
-    public string? Role => _httpContextAccessor.HttpContext?.User?.FindFirstValue(ClaimTypes.Role);
+    public string? Role => _httpContextAccessor.HttpContext?.User?.FindFirstValue(ClaimTypes.Role)
+                        ?? _httpContextAccessor.HttpContext?.User?.FindFirstValue("role")
+                        ?? _httpContextAccessor.HttpContext?.User?.FindFirstValue("utype")
+                        ?? _httpContextAccessor.HttpContext?.User?.Claims.FirstOrDefault(c => c.Type.EndsWith("/role", StringComparison.OrdinalIgnoreCase))?.Value;
 
     public Guid? SchoolId => GetGuidClaim("SchoolId");
 
@@ -34,7 +40,13 @@ public class CurrentUserService : ICurrentUserService
 
     private Guid? GetGuidClaim(string claimType)
     {
-        var value = _httpContextAccessor.HttpContext?.User?.FindFirstValue(claimType);
+        var user = _httpContextAccessor.HttpContext?.User;
+        if (user == null) return null;
+
+        var value = user.FindFirstValue(claimType)
+                 ?? user.FindFirstValue(claimType.ToLowerInvariant())
+                 ?? user.Claims.FirstOrDefault(c => string.Equals(c.Type, claimType, StringComparison.OrdinalIgnoreCase))?.Value;
+
         return Guid.TryParse(value, out var guid) ? guid : null;
     }
 }

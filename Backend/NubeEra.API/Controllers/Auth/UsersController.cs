@@ -26,6 +26,7 @@ public class UsersController : ControllerBase
     private readonly IGenericRepository<Role> _roleRepository;
     private readonly IStudentService _studentService;
     private readonly ITeacherService _teacherService;
+    private readonly IGenericRepository<NubeEra.Domain.Entities.School> _schoolRepository;
     private readonly Microsoft.Extensions.Logging.ILogger<UsersController> _logger;
 
     public UsersController(
@@ -34,6 +35,7 @@ public class UsersController : ControllerBase
         IGenericRepository<Student> studentRepository,
         IGenericRepository<Teacher> teacherRepository,
         IGenericRepository<Role> roleRepository, 
+        IGenericRepository<NubeEra.Domain.Entities.School> schoolRepository,
         ITenantService tenantService,
         IStudentService studentService,
         ITeacherService teacherService,
@@ -45,6 +47,7 @@ public class UsersController : ControllerBase
         _studentRepository = studentRepository;
         _teacherRepository = teacherRepository;
         _roleRepository = roleRepository;
+        _schoolRepository = schoolRepository;
         _studentService = studentService;
         _teacherService = teacherService;
         _logger = logger;
@@ -321,192 +324,212 @@ public class UsersController : ControllerBase
             return BadRequest(ModelState);
         }
 
-        Console.WriteLine($"[UserCreate] Role: {request.Role}, Email: {request.Email}, SchoolId: {request.SchoolId}");
-
-        // Student and Parent roles allow simple passwords (minimum 6 characters, e.g. '123456').
-        // Other staff/teacher/admin roles enforce standard policy (8+ chars, uppercase, digit).
-        var isStudentOrParentRole = string.Equals(request.Role, "Student", StringComparison.OrdinalIgnoreCase) ||
-                                    string.Equals(request.Role, "Parent", StringComparison.OrdinalIgnoreCase);
-
-        if (isStudentOrParentRole)
+        try
         {
-            if (string.IsNullOrEmpty(request.Password) || request.Password.Length < 6)
-                return BadRequest(new { message = "Password must be at least 6 characters." });
-        }
-        else
-        {
-            if (string.IsNullOrEmpty(request.Password) || request.Password.Length < 8)
-                return BadRequest(new { message = "Password must be at least 8 characters." });
-            if (!System.Text.RegularExpressions.Regex.IsMatch(request.Password, "[A-Z]"))
-                return BadRequest(new { message = "Password must contain at least one uppercase letter." });
-            if (!System.Text.RegularExpressions.Regex.IsMatch(request.Password, "[0-9]"))
-                return BadRequest(new { message = "Password must contain at least one digit." });
-        }
+            // Student and Parent roles allow simple passwords (minimum 6 characters, e.g. '123456').
+            // Other staff/teacher/admin roles enforce standard policy (8+ chars, uppercase, digit).
+            var isStudentOrParentRole = string.Equals(request.Role, "Student", StringComparison.OrdinalIgnoreCase) ||
+                                        string.Equals(request.Role, "Parent", StringComparison.OrdinalIgnoreCase);
 
-        var schoolId = _tenantService.GetEffectiveSchoolIdOrEmpty(request.SchoolId);
-        var existingUser = await _userRepository.GetByEmailAsync(request.Email.Trim().ToLower(), null);
-        if (existingUser != null)
-            return BadRequest(new { message = "User with this email already exists" });
-
-        var username = request.Username?.Trim();
-        if (!string.IsNullOrWhiteSpace(username))
-        {
-            var existingByUsername = await _userRepository.Query()
-                .IgnoreQueryFilters()
-                .FirstOrDefaultAsync(u => u.Username != null && u.Username.ToLower() == username.ToLower() && !u.IsDeleted);
-            if (existingByUsername != null)
-                return BadRequest(new { message = "User with this username already exists" });
-
-            var deletedUser = await _userRepository.Query()
-                .IgnoreQueryFilters()
-                .FirstOrDefaultAsync(u => u.Username != null && u.Username.ToLower() == username.ToLower() && u.IsDeleted);
-            if (deletedUser != null)
+            if (isStudentOrParentRole)
             {
-                deletedUser.Username = MakeUniqueAfterDelete(deletedUser.Username!, deletedUser.Id, 100);
-                await _userRepository.UpdateAsync(deletedUser);
+                if (string.IsNullOrEmpty(request.Password) || request.Password.Length < 6)
+                    return BadRequest(new { message = "Password must be at least 6 characters." });
             }
-        }
-
-        var passwordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
-
-        var roleObj = (await _roleRepository.GetAllAsync(q => q.Where(r => r.RoleName == request.Role))).FirstOrDefault();
-        if (roleObj == null)
-            return BadRequest(new { message = $"Role '{request.Role}' not found in database." });
-
-        // Student accounts must be created through POST /students (StudentService.CreateAsync),
-        // which captures Grade/Section/StudentId and keeps the User + Student rows linked from
-        // creation. This generic endpoint has no grade-assignment fields, and previously let a
-        // "Student" role user be created with no Student profile at all (silently defaulting to
-        // Grade 1 once one was eventually attached) — a second, disconnected identity that
-        // desyncs from anything edited later on the Students panel. Reject it here as well as
-        // hiding the option in the UI, so any direct API caller hits the same guardrail.
-        if (roleObj.RoleName.Equals("Student", StringComparison.OrdinalIgnoreCase))
-            return BadRequest(new { message = "Student accounts must be created from the Students panel so grade, division and login details stay in sync." });
-
-        // The platform is restricted to a single Admin account (QA requirement).
-        // SuperAdmin is unaffected — this only restricts the "Admin" role itself.
-        if (roleObj.RoleName.Equals("Admin", StringComparison.OrdinalIgnoreCase))
-        {
-            var existingAdmins = await _userRepository.GetAllAsync(q => q.Include(u => u.Role).Where(u => u.Role.RoleName == "Admin"));
-            if (existingAdmins.Any())
-                return BadRequest(new { message = "An Admin account already exists. Only one Admin account is permitted on this platform." });
-        }
-
-        var user = new User(request.Email.Trim().ToLower(), passwordHash, roleObj.Id, schoolId, username);
-        user.FirstName = request.FirstName;
-        user.LastName = request.LastName;
-
-        await _userRepository.AddAsync(user);
-
-        // If the role is Teacher, also create a Teacher profile automatically
-        if (request.Role.Equals("Teacher", StringComparison.OrdinalIgnoreCase))
-        {
-            var teacher = new Teacher
+            else
             {
-                UserId = user.Id,
-                SchoolId = schoolId,
-                FirstName = request.FirstName ?? "",
-                LastName = request.LastName ?? "",
-                Email = request.Email.Trim().ToLower(),
-                EmployeeId = "T-" + DateTime.UtcNow.Ticks.ToString().Substring(10), // Generate a default ID
-                JoiningDate = DateTime.UtcNow,
-                IsActive = true
-            };
-            await _teacherRepository.AddAsync(teacher);
-        }
+                if (string.IsNullOrEmpty(request.Password) || request.Password.Length < 8)
+                    return BadRequest(new { message = "Password must be at least 8 characters." });
+                if (!System.Text.RegularExpressions.Regex.IsMatch(request.Password, "[A-Z]"))
+                    return BadRequest(new { message = "Password must contain at least one uppercase letter." });
+                if (!System.Text.RegularExpressions.Regex.IsMatch(request.Password, "[0-9]"))
+                    return BadRequest(new { message = "Password must contain at least one digit." });
+            }
 
-        return Ok(new { id = user.Id, message = "User created successfully" });
+            var effectiveSchoolId = _tenantService.GetEffectiveSchoolId(request.SchoolId);
+            var schoolId = (effectiveSchoolId == Guid.Empty) ? null : effectiveSchoolId;
+
+            var existingUser = await _userRepository.GetByEmailAsync(request.Email.Trim().ToLower(), null);
+            if (existingUser != null)
+                return BadRequest(new { message = "User with this email already exists" });
+
+            var username = request.Username?.Trim();
+            if (!string.IsNullOrWhiteSpace(username))
+            {
+                var existingByUsername = await _userRepository.Query()
+                    .IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(u => u.Username != null && u.Username.ToLower() == username.ToLower() && !u.IsDeleted);
+                if (existingByUsername != null)
+                    return BadRequest(new { message = "User with this username already exists" });
+
+                var deletedUser = await _userRepository.Query()
+                    .IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(u => u.Username != null && u.Username.ToLower() == username.ToLower() && u.IsDeleted);
+                if (deletedUser != null)
+                {
+                    deletedUser.Username = MakeUniqueAfterDelete(deletedUser.Username!, deletedUser.Id, 100);
+                    await _userRepository.UpdateAsync(deletedUser);
+                }
+            }
+
+            var passwordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
+
+            var roleObj = (await _roleRepository.GetAllAsync(q => q.Where(r => r.RoleName == request.Role))).FirstOrDefault();
+            if (roleObj == null)
+                return BadRequest(new { message = $"Role '{request.Role}' not found in database." });
+
+            if (roleObj.RoleName.Equals("Student", StringComparison.OrdinalIgnoreCase))
+                return BadRequest(new { message = "Student accounts must be created from the Students panel so grade, division and login details stay in sync." });
+
+            if (roleObj.RoleName.Equals("Admin", StringComparison.OrdinalIgnoreCase))
+            {
+                var existingAdmins = await _userRepository.GetAllAsync(q => q.Include(u => u.Role).Where(u => u.Role != null && u.Role.RoleName == "Admin"));
+                if (existingAdmins.Any())
+                    return BadRequest(new { message = "An Admin account already exists. Only one Admin account is permitted on this platform." });
+            }
+
+            var user = new User(request.Email.Trim().ToLower(), passwordHash, roleObj.Id, schoolId, username);
+            user.FirstName = request.FirstName;
+            user.LastName = request.LastName;
+
+            await _userRepository.AddAsync(user);
+
+            // If the role is Teacher, also create a Teacher profile automatically
+            if (request.Role.Equals("Teacher", StringComparison.OrdinalIgnoreCase))
+            {
+                var teacherSchoolId = schoolId;
+                if (!teacherSchoolId.HasValue || teacherSchoolId.Value == Guid.Empty)
+                {
+                    var firstSchool = await _schoolRepository.Query().Where(s => !s.IsDeleted).Select(s => s.Id).FirstOrDefaultAsync();
+                    if (firstSchool != Guid.Empty)
+                    {
+                        teacherSchoolId = firstSchool;
+                    }
+                }
+
+                if (teacherSchoolId.HasValue && teacherSchoolId.Value != Guid.Empty)
+                {
+                    var teacher = new Teacher
+                    {
+                        UserId = user.Id,
+                        SchoolId = teacherSchoolId.Value,
+                        FirstName = request.FirstName ?? "",
+                        LastName = request.LastName ?? "",
+                        Email = request.Email.Trim().ToLower(),
+                        EmployeeId = "T-" + DateTime.UtcNow.Ticks.ToString().Substring(10),
+                        JoiningDate = DateTime.UtcNow,
+                        IsActive = true
+                    };
+                    await _teacherRepository.AddAsync(teacher);
+                }
+            }
+
+            return Ok(new { id = user.Id, message = "User created successfully" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to create user");
+            return StatusCode(500, new { message = "Failed to create user: " + ex.Message });
+        }
     }
 
     [HttpPut("{id}")]
     [Authorize(Policy = "StaffOnly")]
     public async Task<IActionResult> Update(Guid id, UserUpdateRequest request)
     {
-        var user = await _userRepository.GetByIdAsync(id, q => q.Include(u => u.Role));
-        if (user == null) return NotFound();
-
-        var username = request.Username?.Trim();
-        if (!string.IsNullOrWhiteSpace(username) && !string.Equals(user.Username, username, StringComparison.OrdinalIgnoreCase))
+        try
         {
-            var existingByUsername = await _userRepository.Query()
-                .IgnoreQueryFilters()
-                .FirstOrDefaultAsync(u => u.Id != user.Id && u.Username != null && u.Username.ToLower() == username.ToLower() && !u.IsDeleted);
-            if (existingByUsername != null)
-                return BadRequest(new { message = "User with this username already exists" });
-        }
+            var user = await _userRepository.GetByIdAsync(id, q => q.Include(u => u.Role));
+            if (user == null) return NotFound();
 
-        user.Username = username;
-        user.FirstName = request.FirstName;
-        user.LastName = request.LastName;
-
-        var roleObj = (await _roleRepository.GetAllAsync(q => q.Where(r => r.RoleName == request.Role))).FirstOrDefault();
-        if (roleObj == null)
-            return BadRequest(new { message = $"Role '{request.Role}' not found in database." });
-
-        // Same single-Admin restriction as Create() — only enforced when this
-        // update would actually change someone INTO the Admin role.
-        if (roleObj.RoleName.Equals("Admin", StringComparison.OrdinalIgnoreCase) && user.RoleId != roleObj.Id)
-        {
-            var existingAdmins = await _userRepository.GetAllAsync(q => q.Include(u => u.Role).Where(u => u.Role.RoleName == "Admin" && u.Id != user.Id));
-            if (existingAdmins.Any())
-                return BadRequest(new { message = "An Admin account already exists. Only one Admin account is permitted on this platform." });
-        }
-
-        user.SetRole(roleObj.Id);
-        
-        if (_tenantService.CanSelectSchool())
-            user.SchoolId = request.SchoolId;
-        
-        var callerRole = _currentUserService.Role ?? "";
-        bool isAdmin = callerRole.Equals("SuperAdmin", StringComparison.OrdinalIgnoreCase) || callerRole.Equals("Admin", StringComparison.OrdinalIgnoreCase);
-
-        // Only Admin accounts can change active/inactive status
-        if (isAdmin)
-        {
-            if (request.IsActive) user.Activate();
-            else user.Deactivate();
-        }
-
-        await _userRepository.UpdateAsync(user);
-
-        // Sync IsActive and SchoolId to linked Teacher/Student profiles
-        var teachersToSync = await _teacherRepository.GetAllAsync(q => q.Where(t => t.UserId == user.Id));
-        foreach (var t in teachersToSync)
-        {
-            if (user.SchoolId.HasValue) t.SchoolId = user.SchoolId.Value;
-            if (isAdmin) t.IsActive = user.IsActive;
-            await _teacherRepository.UpdateAsync(t);
-        }
-
-        var studentsToSync = await _studentRepository.GetAllAsync(q => q.Where(s => s.UserId == user.Id));
-        foreach (var s in studentsToSync)
-        {
-            if (user.SchoolId.HasValue) s.SchoolId = user.SchoolId.Value;
-            if (isAdmin) s.IsActive = user.IsActive;
-            await _studentRepository.UpdateAsync(s);
-        }
-
-        if (user.SchoolId.HasValue)
-        {
-            // If the role was just changed to Teacher and this user has no linked
-            // Teacher profile yet, create one now
-            if (roleObj.RoleName.Equals("Teacher", StringComparison.OrdinalIgnoreCase) && !teachersToSync.Any())
+            var username = request.Username?.Trim();
+            if (!string.IsNullOrWhiteSpace(username) && !string.Equals(user.Username, username, StringComparison.OrdinalIgnoreCase))
             {
-                var newTeacher = new Teacher
-                {
-                    UserId = user.Id,
-                    SchoolId = user.SchoolId.Value,
-                    FirstName = user.FirstName ?? "",
-                    LastName = user.LastName ?? "",
-                    Email = user.Email,
-                    EmployeeId = "T-" + DateTime.UtcNow.Ticks.ToString().Substring(10),
-                    JoiningDate = DateTime.UtcNow,
-                    IsActive = user.IsActive
-                };
-                await _teacherRepository.AddAsync(newTeacher);
+                var existingByUsername = await _userRepository.Query()
+                    .IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(u => u.Id != user.Id && u.Username != null && u.Username.ToLower() == username.ToLower() && !u.IsDeleted);
+                if (existingByUsername != null)
+                    return BadRequest(new { message = "User with this username already exists" });
             }
+
+            user.Username = username;
+            user.FirstName = request.FirstName;
+            user.LastName = request.LastName;
+
+            var roleObj = (await _roleRepository.GetAllAsync(q => q.Where(r => r.RoleName == request.Role))).FirstOrDefault();
+            if (roleObj == null)
+                return BadRequest(new { message = $"Role '{request.Role}' not found in database." });
+
+            if (roleObj.RoleName.Equals("Admin", StringComparison.OrdinalIgnoreCase) && user.RoleId != roleObj.Id)
+            {
+                var existingAdmins = await _userRepository.GetAllAsync(q => q.Include(u => u.Role).Where(u => u.Role != null && u.Role.RoleName == "Admin" && u.Id != user.Id));
+                if (existingAdmins.Any())
+                    return BadRequest(new { message = "An Admin account already exists. Only one Admin account is permitted on this platform." });
+            }
+
+            user.SetRole(roleObj.Id);
+            
+            if (_tenantService.CanSelectSchool())
+            {
+                user.SchoolId = (request.SchoolId == Guid.Empty) ? null : request.SchoolId;
+            }
+            
+            var callerRole = _currentUserService.Role ?? "";
+            bool isAdmin = callerRole.Equals("SuperAdmin", StringComparison.OrdinalIgnoreCase) || callerRole.Equals("Admin", StringComparison.OrdinalIgnoreCase);
+
+            // Only Admin accounts can change active/inactive status
+            if (isAdmin)
+            {
+                if (request.IsActive) user.Activate();
+                else user.Deactivate();
+            }
+
+            await _userRepository.UpdateAsync(user);
+
+            // Sync IsActive and SchoolId to linked Teacher/Student profiles
+            var teachersToSync = await _teacherRepository.GetAllAsync(q => q.Where(t => t.UserId == user.Id));
+            foreach (var t in teachersToSync)
+            {
+                if (user.SchoolId.HasValue && user.SchoolId.Value != Guid.Empty) t.SchoolId = user.SchoolId.Value;
+                if (isAdmin) t.IsActive = user.IsActive;
+                await _teacherRepository.UpdateAsync(t);
+            }
+
+            var studentsToSync = await _studentRepository.GetAllAsync(q => q.Where(s => s.UserId == user.Id));
+            foreach (var s in studentsToSync)
+            {
+                if (user.SchoolId.HasValue && user.SchoolId.Value != Guid.Empty) s.SchoolId = user.SchoolId.Value;
+                if (isAdmin) s.IsActive = user.IsActive;
+                await _studentRepository.UpdateAsync(s);
+            }
+
+            if (user.SchoolId.HasValue && user.SchoolId.Value != Guid.Empty)
+            {
+                // If the role was just changed to Teacher and this user has no linked
+                // Teacher profile yet, create one now
+                if (roleObj.RoleName.Equals("Teacher", StringComparison.OrdinalIgnoreCase) && !teachersToSync.Any())
+                {
+                    var newTeacher = new Teacher
+                    {
+                        UserId = user.Id,
+                        SchoolId = user.SchoolId.Value,
+                        FirstName = user.FirstName ?? "",
+                        LastName = user.LastName ?? "",
+                        Email = user.Email,
+                        EmployeeId = "T-" + DateTime.UtcNow.Ticks.ToString().Substring(10),
+                        JoiningDate = DateTime.UtcNow,
+                        IsActive = user.IsActive
+                    };
+                    await _teacherRepository.AddAsync(newTeacher);
+                }
+            }
+            return NoContent();
         }
-        return NoContent();
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to update user {UserId}", id);
+            return StatusCode(500, new { message = "Failed to update user: " + ex.Message });
+        }
     }
 
     /// <summary>
@@ -619,56 +642,68 @@ public class UsersController : ControllerBase
 
     /// <summary>
     /// "Deletes" a user. Implemented as a soft delete (deactivation) rather than a
-    /// hard delete: hard-deleting previously cascaded into permanently removing the
-    /// linked Teacher/Student rows, which
-    ///   (a) orphaned dependent records (Attendance, Results, EventRegistrations,
-    ///       LessonCompletions, Tickets, Orders, ...) that still reference the
-    ///       deleted StudentId/TeacherId, risking FK errors and broken reports, and
-    ///   (b) made the "Restore User" capability required by the spec impossible,
-    ///       and was inconsistent with StudentService.DeleteAsync, which already
-    ///       soft-deletes (IsActive = false) for exactly these reasons.
-    /// Deactivating here keeps history intact, keeps parent dashboards / attendance /
-    /// reports consistent, and lets ToggleStatus / Update (IsActive = true) restore
-    /// the account later without data loss.
+    /// hard delete.
     /// </summary>
     [HttpDelete("{id}")]
     [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> Delete(Guid id)
     {
-        var user = await _userRepository.GetByIdAsync(id);
-        if (user == null) return NotFound();
-
-        var currentUserId = _currentUserService?.UserId != null && Guid.TryParse(_currentUserService.UserId, out var uid) ? uid : (Guid?)null;
-
-        // Cascade delete associated Teacher profile(s) if any
-        var teachers = await _teacherRepository.GetAllAsync(q => q.Where(t => t.UserId == user.Id));
-        foreach (var t in teachers)
+        try
         {
-            await _teacherService.DeleteAsync(t.Id);
-        }
+            var user = await _userRepository.GetByIdAsync(id);
+            if (user == null) return NotFound();
 
-        // Cascade delete associated Student profile(s) if any
-        var students = await _studentRepository.GetAllAsync(q => q.Where(s => s.UserId == user.Id));
-        foreach (var s in students)
-        {
-            await _studentService.DeleteAsync(s.Id);
-        }
+            var currentUserId = _currentUserService?.UserId != null && Guid.TryParse(_currentUserService.UserId, out var uid) ? uid : (Guid?)null;
 
-        user.Deactivate();
-        if (!string.IsNullOrWhiteSpace(user.Username))
-        {
-            user.Username = MakeUniqueAfterDelete(user.Username, user.Id, 100);
-        }
-        if (!string.IsNullOrWhiteSpace(user.Email))
-        {
-            user.UpdateEmail(MakeUniqueAfterDelete(user.Email, user.Id, 150));
-        }
-        user.IsDeleted = true;
-        user.DeletedDate = DateTime.UtcNow;
-        user.DeletedBy = currentUserId;
-        await _userRepository.UpdateAsync(user);
+            // Cascade delete associated Teacher profile(s) if any
+            try
+            {
+                var teachers = await _teacherRepository.GetAllAsync(q => q.Where(t => t.UserId == user.Id));
+                foreach (var t in teachers)
+                {
+                    await _teacherService.DeleteAsync(t.Id);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not cascade delete Teacher profile for user {UserId}", user.Id);
+            }
 
-        return NoContent();
+            // Cascade delete associated Student profile(s) if any
+            try
+            {
+                var students = await _studentRepository.GetAllAsync(q => q.Where(s => s.UserId == user.Id));
+                foreach (var s in students)
+                {
+                    await _studentService.DeleteAsync(s.Id);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not cascade delete Student profile for user {UserId}", user.Id);
+            }
+
+            user.Deactivate();
+            if (!string.IsNullOrWhiteSpace(user.Username))
+            {
+                user.Username = MakeUniqueAfterDelete(user.Username, user.Id, 100);
+            }
+            if (!string.IsNullOrWhiteSpace(user.Email))
+            {
+                user.UpdateEmail(MakeUniqueAfterDelete(user.Email, user.Id, 150));
+            }
+            user.IsDeleted = true;
+            user.DeletedDate = DateTime.UtcNow;
+            user.DeletedBy = currentUserId;
+            await _userRepository.UpdateAsync(user);
+
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to delete user {UserId}", id);
+            return StatusCode(500, new { message = "Failed to delete user: " + ex.Message });
+        }
     }
 
     private async Task SyncParentOnUserDeleteAsync(Student student)

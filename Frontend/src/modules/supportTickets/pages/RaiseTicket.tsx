@@ -21,6 +21,7 @@ export const RaiseTicket: React.FC = () => {
   const [priority, setPriority] = useState('Medium'); // Low, Medium, High
   const [attachments, setAttachments] = useState<Omit<Attachment, 'id' | 'createdAt'>[]>([]);
 
+  const [loadingCategories, setLoadingCategories] = useState(true);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const navigate = useNavigate();
@@ -28,11 +29,14 @@ export const RaiseTicket: React.FC = () => {
   useEffect(() => {
     const loadCategories = async () => {
       try {
+        setLoadingCategories(true);
         const data = await supportService.getCategories();
         setCategories(data);
         if (data.length > 0) setCategoryId(data[0].id);
       } catch (e) {
         toast.error('Failed to load support categories.');
+      } finally {
+        setLoadingCategories(false);
       }
     };
     loadCategories();
@@ -161,10 +165,13 @@ export const RaiseTicket: React.FC = () => {
               <select
                 value={categoryId}
                 onChange={(e) => setCategoryId(e.target.value)}
-                className="w-full bg-white dark:bg-[#1e293b] border-slate-200 dark:border-[#334155] rounded-xl px-4 py-3 text-slate-800 dark:text-white text-sm font-semibold focus:outline-none focus:border-blue-500 transition-all cursor-pointer h-[46px] shadow-sm"
+                disabled={loadingCategories || categories.length === 0}
+                className="w-full bg-white dark:bg-[#1e293b] border-slate-200 dark:border-[#334155] rounded-xl px-4 py-3 text-slate-800 dark:text-white text-sm font-semibold focus:outline-none focus:border-blue-500 transition-all cursor-pointer h-[46px] shadow-sm disabled:opacity-60"
               >
-                {categories.length === 0 ? (
+                {loadingCategories ? (
                   <option value="">Loading categories...</option>
+                ) : categories.length === 0 ? (
+                  <option value="">No categories available</option>
                 ) : (
                   categories.map((cat) => (
                     <option key={cat.id} value={cat.id}>{cat.name}</option>

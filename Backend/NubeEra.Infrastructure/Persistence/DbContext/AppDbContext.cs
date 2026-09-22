@@ -237,7 +237,6 @@ public class AppDbContext : Microsoft.EntityFrameworkCore.DbContext
             modelBuilder.Entity<StudentPythonCode>().HasQueryFilter(x => !x.IsDeleted && x.SchoolId == schoolId.Value);
             modelBuilder.Entity<Event>()            .HasQueryFilter(x => !x.IsDeleted && (x.SchoolId == schoolId.Value || x.SchoolId == null));
             modelBuilder.Entity<EventAuditLog>()    .HasQueryFilter(x => !x.IsDeleted && (x.SchoolId == schoolId.Value || x.SchoolId == null));
-            modelBuilder.Entity<TicketCategory>()   .HasQueryFilter(x => !x.IsDeleted && x.SchoolId == schoolId.Value);
             modelBuilder.Entity<GradeSection>()             .HasQueryFilter(x => !x.IsDeleted && x.SchoolId == schoolId.Value);
             modelBuilder.Entity<ReportCard>()               .HasQueryFilter(x => !x.IsDeleted && x.SchoolId == schoolId.Value);
             modelBuilder.Entity<TeacherLessonProgress>()    .HasQueryFilter(x => !x.IsDeleted && x.SchoolId == schoolId.Value);
@@ -269,7 +268,6 @@ public class AppDbContext : Microsoft.EntityFrameworkCore.DbContext
             modelBuilder.Entity<StudentPythonCode>()    .HasQueryFilter(x => !x.IsDeleted);
             modelBuilder.Entity<Event>()                .HasQueryFilter(x => !x.IsDeleted);
             modelBuilder.Entity<EventAuditLog>()        .HasQueryFilter(x => !x.IsDeleted);
-            modelBuilder.Entity<TicketCategory>()       .HasQueryFilter(x => !x.IsDeleted);
             modelBuilder.Entity<GradeSection>()         .HasQueryFilter(x => !x.IsDeleted);
             modelBuilder.Entity<ReportCard>()           .HasQueryFilter(x => !x.IsDeleted);
             modelBuilder.Entity<TeacherLessonProgress>().HasQueryFilter(x => !x.IsDeleted);
@@ -291,6 +289,7 @@ public class AppDbContext : Microsoft.EntityFrameworkCore.DbContext
         modelBuilder.Entity<GradeLevel>()           .HasQueryFilter(x => !x.IsDeleted);
         modelBuilder.Entity<Question>()             .HasQueryFilter(x => !x.IsDeleted);
         modelBuilder.Entity<EventRegistration>()    .HasQueryFilter(x => !x.IsDeleted);
+        modelBuilder.Entity<TicketCategory>()       .HasQueryFilter(x => !x.IsDeleted);
         modelBuilder.Entity<InAppNotification>()    .HasQueryFilter(x => !x.IsDeleted);
         modelBuilder.Entity<WebsiteRegistration>()  .HasQueryFilter(x => !x.IsDeleted);
         modelBuilder.Entity<ProductCategory>()      .HasQueryFilter(x => !x.IsDeleted);

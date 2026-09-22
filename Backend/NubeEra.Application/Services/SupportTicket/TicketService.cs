@@ -74,6 +74,17 @@ public class TicketService : ITicketService
             var user = await _userRepository.GetByIdAsync(userId);
             if (user != null && user.SchoolId.HasValue) return user.SchoolId.Value;
 
+            if (user != null && user.IsParent)
+            {
+                var phone = user.Phone?.Trim();
+                var email = user.Email?.Trim().ToLower();
+                var linkedStudent = (await _studentRepository.GetAllAsync(q => q.Where(s =>
+                    (!string.IsNullOrEmpty(phone) && s.ParentGuardianPhone == phone) ||
+                    (!string.IsNullOrEmpty(email) && s.ParentGuardianEmail == email)
+                ))).FirstOrDefault();
+                if (linkedStudent != null) return linkedStudent.SchoolId;
+            }
+
             var students = await _studentRepository.GetAllAsync(q => q.Where(s => s.UserId == userId));
             var student = students.FirstOrDefault();
             if (student != null) return student.SchoolId;

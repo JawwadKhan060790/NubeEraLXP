@@ -56,6 +56,7 @@ interface Module {
   subject_name?: string | null;
   description?: string;
   pdf_file_url?: string;
+  display_order?: number;
   is_active?: boolean;
   assigned_school_count?: number;
 }
@@ -111,6 +112,7 @@ const Modules: React.FC = () => {
     grade_level_id: '',
     subject_id: '',
     description: '',
+    display_order: 0,
     is_active: true
   });
 
@@ -150,6 +152,8 @@ const Modules: React.FC = () => {
       const params: Record<string, any> = {
         pageNumber: currentPage,
         pageSize: itemsPerPage,
+        sortBy: 'display_order',
+        sortDirection: 'asc'
       };
       if (searchTerm.trim()) params.search = searchTerm.trim();
       if (filterGradeId) params.gradeId = filterGradeId;
@@ -208,6 +212,7 @@ const Modules: React.FC = () => {
       grade_level_id: module.grade_level_id,
       subject_id: module.subject_id || '',
       description: module.description || '',
+      display_order: module.display_order ?? (module as any).displayOrder ?? 0,
       is_active: module.is_active ?? true
     });
     setFormErrors({});
@@ -228,7 +233,7 @@ const Modules: React.FC = () => {
 
   const resetForm = () => {
     setEditingId(null);
-    setFormData({ name: '', grade_level_id: '', subject_id: '', description: '', is_active: true });
+    setFormData({ name: '', grade_level_id: '', subject_id: '', description: '', display_order: 0, is_active: true });
     setFormErrors({});
   };
 
@@ -339,8 +344,13 @@ const Modules: React.FC = () => {
                       {initials}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-xs font-black text-slate-800 dark:text-white tracking-tight truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                        {m.name}
+                      <div className="flex items-center justify-between gap-1">
+                        <div className="text-xs font-black text-slate-800 dark:text-white tracking-tight truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                          {m.name}
+                        </div>
+                        <span className="text-[10px] font-bold text-slate-400 bg-slate-100 dark:bg-[#283548] px-1.5 py-0.5 rounded flex-shrink-0">
+                          Order: {m.display_order ?? (m as any).displayOrder ?? 0}
+                        </span>
                       </div>
                       <div className="text-[10px] text-slate-500 dark:text-[#94a3b8] font-semibold truncate mt-0.5">
                         {m.grade_level_name || 'General Grade'} {m.subject_name ? `· ${m.subject_name}` : ''}
@@ -418,7 +428,8 @@ const Modules: React.FC = () => {
                     <div className="grid grid-cols-2 gap-4">
                       <InfoRow icon={<GraduationCap className="w-4 h-4" />} label="Grade Level" value={selectedModule.grade_level_name} />
                       <InfoRow icon={<BookOpen className="w-4 h-4" />} label="Subject Hierarchy" value={selectedModule.subject_name || 'No Subject (General Unit)'} />
-                      <InfoRow icon={<FileText className="w-4 h-4" />} label="PDF Resource" value={selectedModule.pdf_file_url ? 'Attached' : null} className="col-span-2" />
+                      <InfoRow icon={<BookOpen className="w-4 h-4" />} label="Display Order" value={`Order #${selectedModule.display_order ?? (selectedModule as any).displayOrder ?? 0}`} />
+                      <InfoRow icon={<FileText className="w-4 h-4" />} label="PDF Resource" value={selectedModule.pdf_file_url ? 'Attached' : null} />
                     </div>
                   </div>
 
@@ -493,6 +504,19 @@ const Modules: React.FC = () => {
                   ))}
                 </select>
                 <FieldError message={formErrors.subject_id} />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-gray-500 dark:text-[#94a3b8] uppercase tracking-wider mb-2 ml-1">Display Order (Units sequence)</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={formData.display_order}
+                  onChange={e => setFormData({ ...formData, display_order: parseInt(e.target.value) || 0 })}
+                  placeholder="Set unit display sequence (e.g. 1, 2, 3...)"
+                  className="w-full px-4 py-3 bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-[#334155] rounded-[4px] text-sm outline-none focus:border-indigo-500 transition-all font-bold"
+                />
+                <FieldError message={formErrors.display_order || formErrors.displayOrder} />
               </div>
 
               <div className="space-y-1.5">

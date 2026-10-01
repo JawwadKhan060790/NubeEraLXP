@@ -85,6 +85,7 @@ public class ModuleService : IModuleService
                 }
             }
 
+            query = query.OrderBy(m => m.DisplayOrder).ThenBy(m => m.CreatedAt);
             var modules = await query.ToListAsync();
 
         return modules.Select(m => new ModuleDto
@@ -97,6 +98,7 @@ public class ModuleService : IModuleService
             Name = m.Name,
             Description = m.Description,
             Credits = m.Credits,
+            DisplayOrder = m.DisplayOrder,
             CreatedByTeacherId = m.CreatedByTeacherId,
             CreatedByTeacherName = m.CreatedByTeacher != null
                 ? $"{m.CreatedByTeacher.FirstName} {m.CreatedByTeacher.LastName}" : "System/Admin",
@@ -141,12 +143,17 @@ public class ModuleService : IModuleService
 
         var total = await query.CountAsync();
 
-        // Sorting – default to newest first
+        // Sorting – default to DisplayOrder then CreatedAt
         if (!string.IsNullOrWhiteSpace(request.SortBy))
         {
             var desc = request.SortDirection?.Equals("DESC", StringComparison.OrdinalIgnoreCase) ?? false;
             switch (request.SortBy.ToLower())
             {
+                case "displayorder":
+                case "display_order":
+                case "order":
+                    query = desc ? query.OrderByDescending(m => m.DisplayOrder) : query.OrderBy(m => m.DisplayOrder);
+                    break;
                 case "name":
                     query = desc ? query.OrderByDescending(m => m.Name) : query.OrderBy(m => m.Name);
                     break;
@@ -161,7 +168,7 @@ public class ModuleService : IModuleService
         }
         else
         {
-            query = query.OrderByDescending(m => m.CreatedAt);
+            query = query.OrderBy(m => m.DisplayOrder).ThenBy(m => m.CreatedAt);
         }
 
         var skip = (request.PageNumber - 1) * request.PageSize;
@@ -183,6 +190,7 @@ public class ModuleService : IModuleService
                 Name = m.Name,
                 Description = m.Description,
                 Credits = m.Credits,
+                DisplayOrder = m.DisplayOrder,
                 CreatedByTeacherId = m.CreatedByTeacherId,
                 CreatedByTeacherName = m.CreatedByTeacher != null
                     ? m.CreatedByTeacher.FirstName + " " + m.CreatedByTeacher.LastName : "System/Admin",
@@ -228,6 +236,7 @@ public class ModuleService : IModuleService
             Name = m.Name,
             Description = m.Description,
             Credits = m.Credits,
+            DisplayOrder = m.DisplayOrder,
             CreatedByTeacherId = m.CreatedByTeacherId,
             CreatedByTeacherName = m.CreatedByTeacher != null
                 ? $"{m.CreatedByTeacher.FirstName} {m.CreatedByTeacher.LastName}" : "System/Admin",
@@ -254,6 +263,7 @@ public class ModuleService : IModuleService
             Name = dto.Name,
             Description = dto.Description,
             Credits = dto.Credits,
+            DisplayOrder = dto.DisplayOrder,
             CreatedByTeacherId = dto.CreatedByTeacherId,
             PdfFileUrl = dto.PdfFileUrl,
             IsActive = true
@@ -272,6 +282,7 @@ public class ModuleService : IModuleService
         module.Name = dto.Name;
         module.Description = dto.Description;
         module.Credits = dto.Credits;
+        module.DisplayOrder = dto.DisplayOrder;
         module.CreatedByTeacherId = dto.CreatedByTeacherId;
         module.PdfFileUrl = dto.PdfFileUrl;
         module.IsActive = dto.IsActive;

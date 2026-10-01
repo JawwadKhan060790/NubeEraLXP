@@ -21,6 +21,7 @@ public class Module : BaseEntity
     public string Name { get; set; } = null!;
     public string? Description { get; set; }
     public int Credits { get; set; }
+    public int DisplayOrder { get; set; } = 0;
     public Guid? CreatedByTeacherId { get; set; }
     public string? PdfFileUrl { get; set; }
     public bool IsActive { get; set; } = true;

@@ -13,6 +13,7 @@ public class ModuleCreateDto
     public string Name { get; set; } = null!;
     public string? Description { get; set; }
     public int Credits { get; set; }
+    public int DisplayOrder { get; set; } = 0;
     public Guid? CreatedByTeacherId { get; set; }
     public string? PdfFileUrl { get; set; }
 }
@@ -24,6 +25,7 @@ public class ModuleUpdateDto
     public string Name { get; set; } = null!;
     public string? Description { get; set; }
     public int Credits { get; set; }
+    public int DisplayOrder { get; set; } = 0;
     public Guid? CreatedByTeacherId { get; set; }
     public string? PdfFileUrl { get; set; }
     public bool IsActive { get; set; }
@@ -39,6 +41,7 @@ public class ModuleDto
     public string Name { get; set; } = null!;
     public string? Description { get; set; }
     public int Credits { get; set; }
+    public int DisplayOrder { get; set; }
     public Guid? CreatedByTeacherId { get; set; }
     public string CreatedByTeacherName { get; set; } = "";
     public string? PdfFileUrl { get; set; }

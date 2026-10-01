@@ -14,6 +14,7 @@ public class ModuleConfiguration : IEntityTypeConfiguration<Module>
 
         builder.Property(x => x.Name).IsRequired().HasMaxLength(200);
         builder.Property(x => x.Description).HasMaxLength(1000);
+        builder.Property(x => x.DisplayOrder).HasDefaultValue(0);
         builder.Property(x => x.IsActive).HasDefaultValue(true);
 
         builder.HasOne(x => x.GradeLevel).WithMany(x => x.Modules).HasForeignKey(x => x.GradeLevelId).OnDelete(DeleteBehavior.Restrict);

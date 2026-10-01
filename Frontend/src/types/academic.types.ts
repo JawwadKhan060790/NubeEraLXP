@@ -12,6 +12,7 @@ export interface Module {
   school_id: string;
   description?: string;
   thumbnail_url?: string;
+  display_order?: number;
   is_active: boolean;
   expected_periods?: number;
 }
@@ -20,6 +21,7 @@ export interface ModuleCreatePayload {
   name: string;
   grade_id: string;
   description?: string;
+  display_order?: number;
 }
 
 export type ModuleUpdatePayload = Partial<ModuleCreatePayload>;

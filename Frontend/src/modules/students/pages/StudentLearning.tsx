@@ -185,6 +185,7 @@ const StudentLearning: React.FC = () => {
         name: m.name || m.Name || '',
         pdf_file_url: m.pdf_file_url ?? m.pdfFileUrl ?? '',
         grade_level_id: m.grade_level_id ?? m.gradeLevelId ?? '',
+        display_order: m.display_order ?? m.displayOrder ?? 0,
       });
 
       const normLesson = (l: any) => ({
@@ -223,7 +224,11 @@ const StudentLearning: React.FC = () => {
             if (diff !== 0) return diff;
             return (a.serial_number || 0) - (b.serial_number || 0);
           })
-      })).sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { numeric: true, sensitivity: 'base' }));
+      })).sort((a, b) => {
+        const orderDiff = (a.display_order ?? 0) - (b.display_order ?? 0);
+        if (orderDiff !== 0) return orderDiff;
+        return (a.name || '').localeCompare(b.name || '', undefined, { numeric: true, sensitivity: 'base' });
+      });
 
       setStudentModules(grouped);
 

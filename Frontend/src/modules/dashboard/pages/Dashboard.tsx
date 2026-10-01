@@ -296,6 +296,7 @@ sys.stderr = io.StringIO()
 
                const grouped = filteredMods.map(m => ({
                   ...m,
+                  display_order: m.display_order ?? m.displayOrder ?? 0,
                   lessons: less
                      .filter((l: any) => l.module_id === m.id)
                      .map(normLesson)
@@ -304,7 +305,11 @@ sys.stderr = io.StringIO()
                         if (diff !== 0) return diff;
                         return (a.serial_number || 0) - (b.serial_number || 0);
                      })
-               }));
+               })).sort((a, b) => {
+                  const orderDiff = (a.display_order ?? 0) - (b.display_order ?? 0);
+                  if (orderDiff !== 0) return orderDiff;
+                  return (a.name || '').localeCompare(b.name || '', undefined, { numeric: true, sensitivity: 'base' });
+               });
 
                setStudentModules(grouped);
 

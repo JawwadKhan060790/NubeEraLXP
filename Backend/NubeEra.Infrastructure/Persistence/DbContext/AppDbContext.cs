@@ -314,7 +314,7 @@ public class AppDbContext : Microsoft.EntityFrameworkCore.DbContext
             modelBuilder.Entity<StudentPythonCode>().HasQueryFilter(x => !x.IsDeleted && x.StudentId == studentId.Value);
             modelBuilder.Entity<TeacherRating>()    .HasQueryFilter(x => !x.IsDeleted && x.StudentId == studentId.Value);
             modelBuilder.Entity<StudentDoubt>()     .HasQueryFilter(x => !x.IsDeleted && x.StudentId == studentId.Value);
-            modelBuilder.Entity<Subject>()          .HasQueryFilter(x => !x.IsDeleted && x.StudentSubjects.Any(ss => !ss.IsDeleted && ss.StudentId == studentId.Value));
+            modelBuilder.Entity<Subject>()          .HasQueryFilter(x => !x.IsDeleted && (!x.StudentSubjects.Any(ss => !ss.IsDeleted) || x.StudentSubjects.Any(ss => !ss.IsDeleted && ss.StudentId == studentId.Value)));
 
             if (gradeId.HasValue)
             {
@@ -337,11 +337,11 @@ public class AppDbContext : Microsoft.EntityFrameworkCore.DbContext
                 modelBuilder.Entity<Module>().HasQueryFilter(x => !x.IsDeleted
                     && x.GradeLevelId == gradeLevelId.Value
                     && x.SchoolAssignments.Any(a => !a.IsDeleted && a.SchoolId == schoolId.Value)
-                    && (x.SubjectId == null || x.Subject!.StudentSubjects.Any(ss => !ss.IsDeleted && ss.StudentId == studentId.Value)));
+                    && (x.SubjectId == null || !x.Subject!.StudentSubjects.Any(ss => !ss.IsDeleted) || x.Subject!.StudentSubjects.Any(ss => !ss.IsDeleted && ss.StudentId == studentId.Value)));
                 modelBuilder.Entity<Lesson>().HasQueryFilter(x => !x.IsDeleted
                     && x.Module.GradeLevelId == gradeLevelId.Value
                     && x.SchoolAssignments.Any(a => !a.IsDeleted && a.SchoolId == schoolId.Value)
-                    && (x.Module.SubjectId == null || x.Module.Subject!.StudentSubjects.Any(ss => !ss.IsDeleted && ss.StudentId == studentId.Value)));
+                    && (x.Module.SubjectId == null || !x.Module.Subject!.StudentSubjects.Any(ss => !ss.IsDeleted) || x.Module.Subject!.StudentSubjects.Any(ss => !ss.IsDeleted && ss.StudentId == studentId.Value)));
             }
             else
             {

@@ -66,7 +66,7 @@ public class SubjectService : ISubjectService
         else if (role == "student" && _currentUserService.StudentId.HasValue)
         {
             var studentId = _currentUserService.StudentId.Value;
-            query = query.Where(s => s.StudentSubjects.Any(ss => !ss.IsDeleted && ss.StudentId == studentId));
+            query = query.Where(s => !s.StudentSubjects.Any(ss => !ss.IsDeleted) || s.StudentSubjects.Any(ss => !ss.IsDeleted && ss.StudentId == studentId));
         }
         // School scoping for Principal, etc.
         else
@@ -223,7 +223,7 @@ public class SubjectService : ISubjectService
         else if (role == "student" && _currentUserService.StudentId.HasValue)
         {
             var studentId = _currentUserService.StudentId.Value;
-            query = query.Where(s => s.StudentSubjects.Any(ss => !ss.IsDeleted && ss.StudentId == studentId));
+            query = query.Where(s => !s.StudentSubjects.Any(ss => !ss.IsDeleted) || s.StudentSubjects.Any(ss => !ss.IsDeleted && ss.StudentId == studentId));
         }
         // School scoping for Principal, etc.
         else

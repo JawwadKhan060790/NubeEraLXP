@@ -233,7 +233,6 @@ const StudentLearning: React.FC = () => {
       setStudentModules(grouped);
 
       const allLessons = grouped.flatMap(m => m.lessons);
-      const firstUncompleted = allLessons.find(l => !completed.includes(l.id)) || allLessons[0];
 
       const urlParams = new URLSearchParams(window.location.search);
       const queryLessonId = urlParams.get('lessonId');
@@ -241,21 +240,14 @@ const StudentLearning: React.FC = () => {
       if (queryLessonId) {
         const queryLesson = allLessons.find(l => l.id === queryLessonId);
         if (queryLesson) {
-          const queryLessonIdx = allLessons.findIndex(l => l.id === queryLessonId);
-          const firstUncompletedIdx = allLessons.findIndex(l => !completed.includes(l.id));
-          const isEnabled = completed.includes(queryLessonId) || queryLessonIdx === firstUncompletedIdx || firstUncompletedIdx === -1;
-          
-          if (isEnabled) {
-            setSelectedLesson(queryLesson);
-            setExpandedModules({ [queryLesson.module_id]: true });
-            return;
-          } else {
-            toast.warning('This lesson is locked. Redirecting to your current topic.');
-          }
+          setSelectedLesson(queryLesson);
+          setExpandedModules({ [queryLesson.module_id]: true });
+          return;
         }
       }
 
       if (allLessons.length > 0) {
+        const firstUncompleted = allLessons.find(l => !completed.includes(l.id)) || allLessons[0];
         const defaultLesson = firstUncompleted || allLessons[0];
         setSelectedLesson(defaultLesson);
         setExpandedModules({ [defaultLesson.module_id]: true });
@@ -471,24 +463,13 @@ sys.stderr = io.StringIO()
     }
   };
 
-  const isLessonEnabled = useCallback((lessonId: string): boolean => {
-    const all = studentModules.flatMap(m => m.lessons);
-    if (all.length === 0) return false;
-    const firstUncompletedIdx = all.findIndex(l => !completedLessons.includes(l.id));
-    const lessonIdx = all.findIndex(l => l.id === lessonId);
-    if (lessonIdx === -1) return false;
-    if (completedLessons.includes(lessonId)) return true;
-    if (lessonIdx === firstUncompletedIdx) return true;
-    if (firstUncompletedIdx === -1) return true;
-    return false;
-  }, [studentModules, completedLessons]);
+  const isLessonEnabled = useCallback((_lessonId: string): boolean => {
+    return true;
+  }, []);
 
-  const isModuleEnabled = useCallback((moduleId: string): boolean => {
-    const module = studentModules.find(m => m.id === moduleId);
-    if (!module) return false;
-    if (module.lessons.length === 0) return true;
-    return module.lessons.some(l => isLessonEnabled(l.id));
-  }, [studentModules, isLessonEnabled]);
+  const isModuleEnabled = useCallback((_moduleId: string): boolean => {
+    return true;
+  }, []);
 
   const toggleModule = (id: string) => {
     setExpandedModules(prev => ({ ...prev, [id]: !prev[id] }));
@@ -500,13 +481,9 @@ sys.stderr = io.StringIO()
     const idx = all.findIndex(l => l.id === selectedLesson.id);
     if (idx < all.length - 1) {
       const n = all[idx + 1];
-      if (isLessonEnabled(n.id)) {
-        setSelectedLesson(n);
-        setActiveTab('Attachment');
-        setExpandedModules(p => ({ ...p, [n.module_id]: true }));
-      } else {
-        toast.warning('Please complete the current topic before moving to the next.');
-      }
+      setSelectedLesson(n);
+      setActiveTab('Attachment');
+      setExpandedModules(p => ({ ...p, [n.module_id]: true }));
     }
   };
 
@@ -935,10 +912,8 @@ sys.stderr = io.StringIO()
     if (!selectedLesson || all.length === 0) return { hasNext: false, nextEnabled: false };
     const currentIdx = all.findIndex(l => l.id === selectedLesson.id);
     const hasNext = currentIdx < all.length - 1;
-    const nextLesson = hasNext ? all[currentIdx + 1] : null;
-    const nextEnabled = hasNext && nextLesson ? isLessonEnabled(nextLesson.id) : false;
-    return { hasNext, nextEnabled };
-  }, [studentModules, selectedLesson, isLessonEnabled]);
+    return { hasNext, nextEnabled: hasNext };
+  }, [studentModules, selectedLesson]);
 
   if (loading) {
     return (
@@ -1031,35 +1006,24 @@ sys.stderr = io.StringIO()
                     const isExpanded = expandedModules[module.id];
                     const moduleNum = String(idx + 1).padStart(2, '0');
                     const moduleHasActive = module.lessons.some(l => l.id === selectedLesson?.id);
-                    const enabled = isModuleEnabled(module.id);
 
                     return (
                       <div key={module.id} className="group/mod">
                         <div
                           onClick={() => {
-                            if (!enabled) {
-                              toast.warning('This unit is locked. Please complete the previous topics first.');
-                              return;
-                            }
                             if (!sidebarOpen) setSidebarOpen(true);
                             toggleModule(module.id);
                           }}
-                          className={`p-3 flex items-center gap-3 transition-all ${
-                            enabled 
-                              ? 'cursor-pointer hover:bg-blue-50/60' 
-                              : 'cursor-not-allowed opacity-50 bg-slate-50/30'
-                          } ${isExpanded ? 'bg-blue-50/50' : ''} ${sidebarOpen ? 'justify-between' : 'justify-center'}`}
-                          title={enabled ? module.name : `${module.name} (Locked)`}
+                          className={`p-3 flex items-center gap-3 transition-all cursor-pointer hover:bg-blue-50/60 ${isExpanded ? 'bg-blue-50/50' : ''} ${sidebarOpen ? 'justify-between' : 'justify-center'}`}
+                          title={module.name}
                         >
                           <div className={`flex items-center gap-3 truncate ${sidebarOpen ? '' : 'justify-center'}`}>
                             <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-xs shadow-sm shrink-0 transition-all duration-300 ${
-                              !enabled
-                                ? 'bg-slate-100 text-slate-400'
-                                : isExpanded || moduleHasActive 
-                                  ? 'bg-gradient-to-br from-blue-400 to-teal-400 text-white scale-105 shadow-blue-100' 
-                                  : 'bg-slate-100 text-slate-500 group-hover/mod:bg-blue-100 group-hover/mod:text-blue-600 group-hover/mod:scale-105'
+                              isExpanded || moduleHasActive 
+                                ? 'bg-gradient-to-br from-blue-400 to-teal-400 text-white scale-105 shadow-blue-100' 
+                                : 'bg-slate-100 text-slate-500 group-hover/mod:bg-blue-100 group-hover/mod:text-blue-600 group-hover/mod:scale-105'
                             }`}>
-                              {!enabled ? <Lock className="w-3.5 h-3.5" /> : moduleNum}
+                              {moduleNum}
                             </div>
                             {sidebarOpen && (
                               <span className={`text-sm font-extrabold tracking-tight truncate transition-colors duration-300 ${isExpanded ? 'text-blue-700' : 'text-slate-700 group-hover/mod:text-blue-600'}`}>{module.name}</span>
@@ -1075,33 +1039,24 @@ sys.stderr = io.StringIO()
                             ) : (
                               module.lessons.map((lesson) => {
                                 const isActive = selectedLesson?.id === lesson.id;
-                                const lessonEnabled = isLessonEnabled(lesson.id);
                                 return (
                                   <div
                                     key={lesson.id}
                                     onClick={() => {
-                                      if (!lessonEnabled) {
-                                        toast.warning('Please complete the previous topics first.');
-                                        return;
-                                      }
                                       setSelectedLesson(lesson);
                                       setActiveTab('Attachment');
                                     }}
-                                    className={`relative px-10 py-3 text-xs font-bold transition-all flex items-center gap-3 ${
-                                      !lessonEnabled
-                                        ? 'text-slate-350 cursor-not-allowed opacity-50 bg-slate-50/10'
-                                        : isActive
-                                          ? 'text-blue-700 bg-blue-50 translate-x-1 cursor-pointer'
-                                          : 'text-slate-500 hover:text-blue-600 hover:bg-slate-50 hover:translate-x-1 cursor-pointer'
+                                    className={`relative px-10 py-3 text-xs font-bold transition-all flex items-center gap-3 cursor-pointer ${
+                                      isActive
+                                        ? 'text-blue-700 bg-blue-50 translate-x-1'
+                                        : 'text-slate-500 hover:text-blue-600 hover:bg-slate-50 hover:translate-x-1'
                                     }`}
-                                    title={lessonEnabled ? lesson.sub_topic : `${lesson.sub_topic} (Locked)`}
+                                    title={lesson.sub_topic}
                                   >
                                     {isActive && (
                                       <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-gradient-to-b from-blue-400 to-teal-400 rounded-r-full" />
                                     )}
-                                    {!lessonEnabled ? (
-                                      <Lock className="w-3.5 h-3.5 text-slate-300" />
-                                    ) : lesson.procedure === 'Activity' ? (
+                                    {lesson.procedure === 'Activity' ? (
                                       <Zap className={`w-3.5 h-3.5 ${isActive ? 'text-blue-500' : 'text-slate-300'}`} />
                                     ) : (
                                       <BookOpen className={`w-3.5 h-3.5 ${isActive ? 'text-blue-500' : 'text-slate-300'}`} />
@@ -1149,15 +1104,13 @@ sys.stderr = io.StringIO()
                       </button>
                       <button 
                         onClick={handleNextLesson} 
-                        disabled={nextLessonInfo.hasNext && !nextLessonInfo.nextEnabled}
+                        disabled={!nextLessonInfo.hasNext}
                         className={`w-8 h-8 rounded-lg flex items-center justify-center border transition-all ${
                           !nextLessonInfo.hasNext 
                             ? 'border-slate-100 text-slate-200 cursor-not-allowed opacity-50'
-                            : nextLessonInfo.nextEnabled
-                              ? 'border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-200 cursor-pointer'
-                              : 'border-slate-100 text-slate-200 cursor-not-allowed opacity-50'
+                            : 'border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-200 cursor-pointer'
                         }`} 
-                        title={nextLessonInfo.hasNext ? (nextLessonInfo.nextEnabled ? "Next lesson" : "Next lesson (Locked - complete current first)") : "End of curriculum"}
+                        title={nextLessonInfo.hasNext ? "Next lesson" : "End of curriculum"}
                       >
                         <ChevronRight className="w-4 h-4" />
                       </button>

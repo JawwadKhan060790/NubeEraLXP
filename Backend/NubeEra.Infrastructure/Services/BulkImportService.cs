@@ -157,9 +157,7 @@ namespace NubeEra.Infrastructure.Services
                             continue;
                         }
 
-                        var grade = grades.FirstOrDefault(g => 
-                            g.GradeName.Equals(gradeName, StringComparison.OrdinalIgnoreCase) || 
-                            g.GradeLevel.Equals(gradeName, StringComparison.OrdinalIgnoreCase));
+                        var grade = FindMatchingGrade(grades, gradeName);
 
                         if (grade == null)
                         {
@@ -169,8 +167,18 @@ namespace NubeEra.Infrastructure.Services
 
                         if (!string.IsNullOrEmpty(sectionCode))
                         {
+                            var cleanSectionCode = sectionCode.Trim();
+                            if (cleanSectionCode.StartsWith("Section ", StringComparison.OrdinalIgnoreCase))
+                                cleanSectionCode = cleanSectionCode["Section ".Length..].Trim();
+                            else if (cleanSectionCode.EndsWith(" Section", StringComparison.OrdinalIgnoreCase))
+                                cleanSectionCode = cleanSectionCode[..^" Section".Length].Trim();
+                            else if (cleanSectionCode.StartsWith("Division ", StringComparison.OrdinalIgnoreCase))
+                                cleanSectionCode = cleanSectionCode["Division ".Length..].Trim();
+                            else if (cleanSectionCode.EndsWith(" Division", StringComparison.OrdinalIgnoreCase))
+                                cleanSectionCode = cleanSectionCode[..^" Division".Length].Trim();
+
                             var sections = await _sectionRepository.GetAllAsync(q => q.Where(s => s.SchoolId == schoolId && s.GradeId == grade.Id && s.IsActive));
-                            section = sections.FirstOrDefault(s => s.SectionCode.Equals(sectionCode, StringComparison.OrdinalIgnoreCase));
+                            section = sections.FirstOrDefault(s => s.SectionCode.Equals(cleanSectionCode, StringComparison.OrdinalIgnoreCase));
                             if (section == null)
                             {
                                 // Auto create section
@@ -178,8 +186,8 @@ namespace NubeEra.Infrastructure.Services
                                 {
                                     SchoolId = schoolId,
                                     GradeId = grade.Id,
-                                    SectionCode = sectionCode.ToUpper(),
-                                    SectionName = $"{sectionCode.ToUpper()} Section",
+                                    SectionCode = cleanSectionCode.ToUpper(),
+                                    SectionName = $"{cleanSectionCode.ToUpper()} Section",
                                     Capacity = 40,
                                     IsActive = true
                                 };
@@ -567,9 +575,7 @@ namespace NubeEra.Infrastructure.Services
                         continue;
                     }
 
-                    var grade = grades.FirstOrDefault(g => 
-                        g.GradeName.Equals(gradeName, StringComparison.OrdinalIgnoreCase) || 
-                        g.GradeLevel.Equals(gradeName, StringComparison.OrdinalIgnoreCase));
+                    var grade = FindMatchingGrade(grades, gradeName);
 
                     if (grade == null)
                     {
@@ -580,8 +586,18 @@ namespace NubeEra.Infrastructure.Services
                     GradeSection? section = null;
                     if (!string.IsNullOrEmpty(sectionCode))
                     {
+                        var cleanSectionCode = sectionCode.Trim();
+                        if (cleanSectionCode.StartsWith("Section ", StringComparison.OrdinalIgnoreCase))
+                            cleanSectionCode = cleanSectionCode["Section ".Length..].Trim();
+                        else if (cleanSectionCode.EndsWith(" Section", StringComparison.OrdinalIgnoreCase))
+                            cleanSectionCode = cleanSectionCode[..^" Section".Length].Trim();
+                        else if (cleanSectionCode.StartsWith("Division ", StringComparison.OrdinalIgnoreCase))
+                            cleanSectionCode = cleanSectionCode["Division ".Length..].Trim();
+                        else if (cleanSectionCode.EndsWith(" Division", StringComparison.OrdinalIgnoreCase))
+                            cleanSectionCode = cleanSectionCode[..^" Division".Length].Trim();
+
                         var sections = await _sectionRepository.GetAllAsync(q => q.Where(s => s.SchoolId == schoolId && s.GradeId == grade.Id && s.IsActive));
-                        section = sections.FirstOrDefault(s => s.SectionCode.Equals(sectionCode, StringComparison.OrdinalIgnoreCase));
+                        section = sections.FirstOrDefault(s => s.SectionCode.Equals(cleanSectionCode, StringComparison.OrdinalIgnoreCase));
                     }
 
                     Module? module = null;
@@ -700,9 +716,7 @@ namespace NubeEra.Infrastructure.Services
                         continue;
                     }
 
-                    var grade = grades.FirstOrDefault(g => 
-                        g.GradeName.Equals(gradeName, StringComparison.OrdinalIgnoreCase) || 
-                        g.GradeLevel.Equals(gradeName, StringComparison.OrdinalIgnoreCase));
+                    var grade = FindMatchingGrade(grades, gradeName);
 
                     if (grade == null)
                     {
@@ -713,8 +727,18 @@ namespace NubeEra.Infrastructure.Services
                     GradeSection? section = null;
                     if (!string.IsNullOrEmpty(sectionCode))
                     {
+                        var cleanSectionCode = sectionCode.Trim();
+                        if (cleanSectionCode.StartsWith("Section ", StringComparison.OrdinalIgnoreCase))
+                            cleanSectionCode = cleanSectionCode["Section ".Length..].Trim();
+                        else if (cleanSectionCode.EndsWith(" Section", StringComparison.OrdinalIgnoreCase))
+                            cleanSectionCode = cleanSectionCode[..^" Section".Length].Trim();
+                        else if (cleanSectionCode.StartsWith("Division ", StringComparison.OrdinalIgnoreCase))
+                            cleanSectionCode = cleanSectionCode["Division ".Length..].Trim();
+                        else if (cleanSectionCode.EndsWith(" Division", StringComparison.OrdinalIgnoreCase))
+                            cleanSectionCode = cleanSectionCode[..^" Division".Length].Trim();
+
                         var sections = await _sectionRepository.GetAllAsync(q => q.Where(s => s.SchoolId == schoolId && s.GradeId == grade.Id && s.IsActive));
-                        section = sections.FirstOrDefault(s => s.SectionCode.Equals(sectionCode, StringComparison.OrdinalIgnoreCase));
+                        section = sections.FirstOrDefault(s => s.SectionCode.Equals(cleanSectionCode, StringComparison.OrdinalIgnoreCase));
                     }
 
                     var modules = await _moduleRepository.GetAllAsync(q => q.Where(m => m.Name.Equals(moduleName, StringComparison.OrdinalIgnoreCase) && m.IsActive));
@@ -851,18 +875,7 @@ namespace NubeEra.Infrastructure.Services
                         continue;
                     }
 
-                    var cleanGradeStr = gradeLevelStr.Trim();
-                    GradeLevel? gradeLevel = gradeLevels.FirstOrDefault(gl =>
-                        gl.Name.Equals(cleanGradeStr, StringComparison.OrdinalIgnoreCase));
-
-                    if (gradeLevel == null)
-                    {
-                        var digitsOnly = new string(cleanGradeStr.Where(char.IsDigit).ToArray());
-                        if (int.TryParse(digitsOnly, out var lvlNum))
-                        {
-                            gradeLevel = gradeLevels.FirstOrDefault(gl => gl.LevelNumber == lvlNum);
-                        }
-                    }
+                    GradeLevel? gradeLevel = FindMatchingGradeLevel(gradeLevels, gradeLevelStr);
 
                     if (gradeLevel == null)
                     {
@@ -1244,6 +1257,168 @@ namespace NubeEra.Infrastructure.Services
                     }
                 }
             }
+            return null;
+        }
+
+        private static readonly Dictionary<string, int> RomanToNumber = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["I"] = 1, ["II"] = 2, ["III"] = 3, ["IV"] = 4, ["V"] = 5,
+            ["VI"] = 6, ["VII"] = 7, ["VIII"] = 8, ["IX"] = 9, ["X"] = 10,
+            ["XI"] = 11, ["XII"] = 12
+        };
+
+        private static readonly Dictionary<int, string> NumberToRoman = new()
+        {
+            [1] = "I", [2] = "II", [3] = "III", [4] = "IV", [5] = "V",
+            [6] = "VI", [7] = "VII", [8] = "VIII", [9] = "IX", [10] = "X",
+            [11] = "XI", [12] = "XII"
+        };
+
+        private static Grade? FindMatchingGrade(IEnumerable<Grade> grades, string? rawGradeName)
+        {
+            if (string.IsNullOrWhiteSpace(rawGradeName)) return null;
+
+            var input = rawGradeName.Trim();
+
+            // 1. Direct match on GradeName or GradeLevel
+            var direct = grades.FirstOrDefault(g =>
+                string.Equals(g.GradeName?.Trim(), input, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(g.GradeLevel?.Trim(), input, StringComparison.OrdinalIgnoreCase));
+            if (direct != null) return direct;
+
+            // 2. Normalize by removing common prefixes ("Grade", "Class", "Standard", "Std", "Level")
+            var normalized = input;
+            foreach (var prefix in new[] { "Grade", "Class", "Standard", "Std", "Level" })
+            {
+                if (normalized.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    normalized = normalized[prefix.Length..].Trim(' ', '-', '_', ':');
+                    break;
+                }
+            }
+
+            // Try direct match again after prefix removal
+            direct = grades.FirstOrDefault(g =>
+                string.Equals(g.GradeName?.Trim(), normalized, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(g.GradeLevel?.Trim(), normalized, StringComparison.OrdinalIgnoreCase));
+            if (direct != null) return direct;
+
+            // 3. Special named courses
+            if (input.Contains("Boot", StringComparison.OrdinalIgnoreCase))
+            {
+                var boot = grades.FirstOrDefault(g => g.GradeLevel == "-1" || (g.GradeName != null && g.GradeName.Contains("Boot", StringComparison.OrdinalIgnoreCase)));
+                if (boot != null) return boot;
+            }
+            if (input.Contains("Foundation", StringComparison.OrdinalIgnoreCase))
+            {
+                var found = grades.FirstOrDefault(g => g.GradeLevel == "0" || (g.GradeName != null && g.GradeName.Contains("Foundation", StringComparison.OrdinalIgnoreCase)));
+                if (found != null) return found;
+            }
+
+            // 4. Extract integer level from digits (e.g. "5th", "5", "05")
+            var digitsOnly = new string(normalized.Where(char.IsDigit).ToArray());
+            int? targetNumber = null;
+            if (int.TryParse(digitsOnly, out var parsedNum))
+            {
+                targetNumber = parsedNum;
+            }
+            // 5. Or parse as Roman numeral (e.g. "V", "IV", "X")
+            else if (RomanToNumber.TryGetValue(normalized.Trim(), out var parsedRoman))
+            {
+                targetNumber = parsedRoman;
+            }
+
+            if (targetNumber.HasValue)
+            {
+                var numStr = targetNumber.Value.ToString();
+                NumberToRoman.TryGetValue(targetNumber.Value, out var romanStr);
+
+                return grades.FirstOrDefault(g =>
+                {
+                    if (string.Equals(g.GradeLevel?.Trim(), numStr, StringComparison.OrdinalIgnoreCase))
+                        return true;
+
+                    if (!string.IsNullOrEmpty(g.GradeName))
+                    {
+                        var gn = g.GradeName.Trim();
+                        if (string.Equals(gn, numStr, StringComparison.OrdinalIgnoreCase))
+                            return true;
+                        if (string.Equals(gn, $"Grade {numStr}", StringComparison.OrdinalIgnoreCase))
+                            return true;
+                        if (string.Equals(gn, $"Class {numStr}", StringComparison.OrdinalIgnoreCase))
+                            return true;
+
+                        if (!string.IsNullOrEmpty(romanStr))
+                        {
+                            if (string.Equals(gn, romanStr, StringComparison.OrdinalIgnoreCase))
+                                return true;
+                            if (string.Equals(gn, $"Grade {romanStr}", StringComparison.OrdinalIgnoreCase))
+                                return true;
+                            if (string.Equals(gn, $"Class {romanStr}", StringComparison.OrdinalIgnoreCase))
+                                return true;
+                        }
+                    }
+
+                    return false;
+                });
+            }
+
+            return null;
+        }
+
+        private static GradeLevel? FindMatchingGradeLevel(IEnumerable<GradeLevel> gradeLevels, string? rawGradeLevelStr)
+        {
+            if (string.IsNullOrWhiteSpace(rawGradeLevelStr)) return null;
+
+            var input = rawGradeLevelStr.Trim();
+
+            var direct = gradeLevels.FirstOrDefault(gl =>
+                string.Equals(gl.Name?.Trim(), input, StringComparison.OrdinalIgnoreCase) ||
+                gl.LevelNumber.ToString() == input);
+            if (direct != null) return direct;
+
+            var normalized = input;
+            foreach (var prefix in new[] { "Grade", "Class", "Standard", "Std", "Level" })
+            {
+                if (normalized.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    normalized = normalized[prefix.Length..].Trim(' ', '-', '_', ':');
+                    break;
+                }
+            }
+
+            direct = gradeLevels.FirstOrDefault(gl =>
+                string.Equals(gl.Name?.Trim(), normalized, StringComparison.OrdinalIgnoreCase) ||
+                gl.LevelNumber.ToString() == normalized);
+            if (direct != null) return direct;
+
+            if (input.Contains("Boot", StringComparison.OrdinalIgnoreCase))
+                return gradeLevels.FirstOrDefault(gl => gl.LevelNumber == -1 || gl.Name.Contains("Boot", StringComparison.OrdinalIgnoreCase));
+            if (input.Contains("Foundation", StringComparison.OrdinalIgnoreCase))
+                return gradeLevels.FirstOrDefault(gl => gl.LevelNumber == 0 || gl.Name.Contains("Foundation", StringComparison.OrdinalIgnoreCase));
+
+            var digitsOnly = new string(normalized.Where(char.IsDigit).ToArray());
+            int? targetNumber = null;
+            if (int.TryParse(digitsOnly, out var parsedNum))
+            {
+                targetNumber = parsedNum;
+            }
+            else if (RomanToNumber.TryGetValue(normalized.Trim(), out var parsedRoman))
+            {
+                targetNumber = parsedRoman;
+            }
+
+            if (targetNumber.HasValue)
+            {
+                var num = targetNumber.Value;
+                NumberToRoman.TryGetValue(num, out var romanStr);
+
+                return gradeLevels.FirstOrDefault(gl =>
+                    gl.LevelNumber == num ||
+                    (!string.IsNullOrEmpty(romanStr) && gl.Name.Contains(romanStr, StringComparison.OrdinalIgnoreCase)) ||
+                    gl.Name.Contains(num.ToString(), StringComparison.OrdinalIgnoreCase));
+            }
+
             return null;
         }
     }

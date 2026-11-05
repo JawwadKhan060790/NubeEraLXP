@@ -27,7 +27,11 @@ export default function DataImport() {
   const isTeacher = user?.role === 'teacher' || user?.utype === 'teacher';
 
   const [schools, setSchools] = useState<School[]>([]);
-  const [selectedSchoolId, setSelectedSchoolId] = useState<string>('');
+  const [selectedSchoolId, setSelectedSchoolId] = useState<string>(() => {
+    return localStorage.getItem('selected_school_id') || sessionStorage.getItem('selected_school_id') || '';
+  });
+  const [schoolGrades, setSchoolGrades] = useState<any[]>([]);
+  const [gradesLoading, setGradesLoading] = useState<boolean>(false);
   const [importType, setImportType] = useState<ImportType>(isTeacher ? 'mcqs' : 'students');
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -48,9 +52,12 @@ export default function DataImport() {
         }));
         setSchools(mapped);
 
+        const savedSchoolId = localStorage.getItem('selected_school_id') || sessionStorage.getItem('selected_school_id');
         const teacherSchoolId = user?.school_id || user?.schoolId;
         if (teacherSchoolId && mapped.some((s: any) => s.id === teacherSchoolId)) {
           setSelectedSchoolId(teacherSchoolId);
+        } else if (savedSchoolId && mapped.some((s: any) => s.id === savedSchoolId)) {
+          setSelectedSchoolId(savedSchoolId);
         } else if (mapped.length > 0) {
           setSelectedSchoolId(mapped[0].id);
         }
@@ -62,10 +69,35 @@ export default function DataImport() {
     })();
   }, [user]);
 
+  // Fetch available grades whenever selected school changes
+  useEffect(() => {
+    if (!selectedSchoolId) {
+      setSchoolGrades([]);
+      return;
+    }
+    setGradesLoading(true);
+    api.get(`/grades/by-school/${selectedSchoolId}`)
+      .then(res => {
+        const sorted = [...(res.data || [])].sort((a: any, b: any) => {
+          const av = parseInt(a.grade_level || a.gradeLevel, 10);
+          const bv = parseInt(b.grade_level || b.gradeLevel, 10);
+          return (isNaN(av) ? 0 : av) - (isNaN(bv) ? 0 : bv);
+        });
+        setSchoolGrades(sorted);
+      })
+      .catch(() => setSchoolGrades([]))
+      .finally(() => setGradesLoading(false));
+  }, [selectedSchoolId]);
+
+  const handleSchoolChange = (schoolId: string) => {
+    setSelectedSchoolId(schoolId);
+    localStorage.setItem('selected_school_id', schoolId);
+  };
+
   const templates: Record<ImportType, { title: string; headers: string[]; desc: string; sample: string[][] }> = {
     students: {
       title: 'Students & Parents Template',
-      desc: 'Creates both student and parent user logins (default password: 123456 for both Student and Parent). Will automatically map to matching Grade names and create Sections dynamically if they don\'t exist.',
+      desc: 'Creates both student and parent user logins (default password: 123456 for both Student and Parent). Automatically maps Grade names in any format (e.g. Grade 5, Grade V, 5) and creates Sections dynamically if they don\'t exist.',
       headers: [
         'First Name', 'Last Name', 'Email', 'Student ID', 'Roll No', 'Phone',
         'Grade Name', 'Section Code', 'Parent Guardian Name', 'Parent Guardian Phone',
@@ -245,7 +277,7 @@ export default function DataImport() {
                 <select
                   disabled={schoolsLoading}
                   value={selectedSchoolId}
-                  onChange={(e) => setSelectedSchoolId(e.target.value)}
+                  onChange={(e) => handleSchoolChange(e.target.value)}
                   className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 text-slate-700 dark:text-slate-200 transition-all font-medium"
                 >
                   {schools.map((school) => (
@@ -254,6 +286,33 @@ export default function DataImport() {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              {/* Display available grades in this campus */}
+              <div className="mt-2.5">
+                <div className="flex items-center gap-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  <span>Available Campus Grades:</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5 mt-1.5">
+                  {gradesLoading ? (
+                    <span className="text-xs text-slate-400 italic flex items-center gap-1">
+                      <RefreshCw className="w-3 h-3 animate-spin text-violet-500" /> Loading campus grades...
+                    </span>
+                  ) : schoolGrades.length > 0 ? (
+                    schoolGrades.map((g: any) => (
+                      <span
+                        key={g.id}
+                        className="px-2 py-0.5 rounded-md bg-violet-50 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 font-semibold text-xs border border-violet-200 dark:border-violet-800/40"
+                      >
+                        {g.grade_name || g.gradeName}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+                      No grades currently configured for this campus.
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
